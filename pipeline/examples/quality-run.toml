@@ -1,0 +1,18 @@
+# Maximum-quality profile. Use after a `quick-iter` run has confirmed the
+# capture is viable, when you want the final-quality splat.
+#
+# Wall-time: ~1-2 h depending on capture length and gaussian count.
+# Memory: monitor for OOM — drop resolution_cap to 2000 or 1600 if Brush dies.
+
+[preprocess]
+target_frames = 400
+min_frame_distance_sec = 0.05    # allow up to 20 fps frame extraction
+blur_threshold = 25.0            # permissive — keep what's slightly blurry
+
+[colmap]
+quality = "high"
+
+[brush]
+max_steps = 50000
+densify_until_iter = 25000
+resolution_cap = 2400

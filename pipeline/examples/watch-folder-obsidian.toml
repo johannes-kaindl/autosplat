@@ -1,0 +1,18 @@
+# Watch-folder daemon with Obsidian capture-note auto-generation.
+# Run as:
+#   uv run autosplat watch ~/AutoSplat/inbox --config examples/watch-folder-obsidian.toml
+#
+# Drop videos into ~/AutoSplat/inbox; each successful run writes a Markdown note
+# into your vault under `3D Memories/`. Re-run safe — user notes outside the
+# AUTO-GENERATED markers are preserved.
+
+[obsidian]
+enabled = true
+vault_path = "/Users/you/Documents/MyVault"   # ← change to your vault path
+captures_subdir = "3D Memories"
+filename_pattern = "{capture_date} {video_stem}.md"
+default_tags = ["3d-memory", "gaussian-splat", "auto-splat"]
+frontmatter_type = "capture"                  # adjust to fit your vault's _types
+
+[viewer]
+auto_open = false   # don't pop a browser for every queued capture

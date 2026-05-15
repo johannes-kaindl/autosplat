@@ -1,0 +1,14 @@
+# Auto-compress to SOG + SPZ after every successful pipeline run.
+# Useful when you want web-embeddable splats ready immediately without a
+# separate `autosplat compress` step.
+#
+# Requires Node.js (for npx → splat-transform). `autosplat doctor` should
+# show the `compress` row as OK.
+#
+# Output: `~/AutoSplat/outputs/<capture>/scene.sog` and `.spz` alongside
+# the canonical `.ply`.
+
+[compress]
+enabled = true
+formats = ["sog", "spz"]
+quality = "medium"             # 16s for SOG + 1.3s for SPZ on a 19 MB PLY

@@ -1,0 +1,85 @@
+# auto-splat-pipeline — Default-Konfiguration
+# User-Overrides via:
+#   1. ~/.config/autosplat/config.toml (XDG-style)
+#   2. --config <path> CLI-Flag
+# Siehe docs/CONFIGURATION.md für alle Keys.
+
+[paths]
+captures_dir = "~/AutoSplat/captures"
+watch_folder = "~/AutoSplat/inbox"
+brush_binary = "~/AutoSplat/bin/brush"
+
+[preprocess]
+target_frames = 250
+blur_threshold = 100.0          # Laplacian variance; lower = blurrier filtered out
+min_frame_distance_sec = 0.2    # avoid duplicate frames
+
+[colmap]
+matcher = "sequential"          # "sequential" for video-derived frames; "exhaustive" for unordered
+quality = "medium"              # presets: low | medium | high (affects feature count)
+single_camera = true            # all frames from one drone camera
+
+[brush]
+max_steps = 30000
+resolution_cap = 1600
+sh_degree = 3
+densify_until_iter = 15000
+extra_args = []                 # passthrough for advanced users
+
+[export]
+formats = ["ply"]               # future: ["ply", "splat", "spz"]
+copy_to_outputs = true
+outputs_dir = "~/AutoSplat/outputs"
+
+[viewer]
+auto_open = true
+local_http_port = 8765
+target = "supersplat"           # supersplat | supersplat-local | playcanvas | none
+supersplat_local_port = 3000
+supersplat_dist_path = "target/supersplat/dist"
+notify_on_complete = false       # macOS Notification after training. Opt-in.
+
+[obsidian]
+enabled = false                 # opt-in
+vault_path = ""                 # absolute path to your Obsidian vault. Empty = unset; doctor warns.
+captures_subdir = "Captures"    # folder inside the vault. Adjust to your vault's convention.
+attach_ply = false              # PLY-Files sind groß, default off
+filename_pattern = "{capture_date} {video_stem}.md"
+default_tags = ["3d-memory", "gaussian-splat", "auto-splat"]
+frontmatter_type = "capture"    # Obsidian-Bases-compatible `type:` field; align with your _types/
+
+[logging]
+level = "INFO"
+console = "rich"                # rich | plain
+log_to_file = true
+
+[quality_gate]
+# Validation stage that runs after COLMAP and before Brush. Spec §11.3.
+# Bails out with a structured failure rather than wasting 25-30 min of Brush
+# compute on hopeless SfM output (see docs/PHASE-0-CALIBRATION.md, ice_bird).
+enabled = true
+min_camera_ratio = 0.5          # cameras_registered / frames_kept must be ≥ this
+min_points = 5000               # COLMAP must produce ≥ this many sparse 3D points
+
+[retry]
+# Adaptive-retry policy for the watch-folder daemon. Applies to:
+#   - captures that were `in_progress` when the daemon was killed (reason
+#     "interrupted") — re-enqueued by recover_state()
+#   - quality-gate failures — re-enqueued with a config override that swaps
+#     `colmap.matcher` from sequential to exhaustive
+enabled = true
+max_retries = 3                 # max total attempts per capture (incl. first try)
+
+[status]
+# Status-file pruning. `completed` and `failed` lists are trimmed FIFO once they
+# exceed this many entries — prevents state.json from growing unbounded over
+# weeks of operation.
+max_history = 50
+
+[compress]
+# Phase-5: optional compress stage. Runs after Export when enabled. Produces
+# web-optimal splat formats next to the canonical PLY. Backend is
+# `splat-transform` (PlayCanvas); auto-resolved via `npx` if not globally installed.
+enabled = false
+formats = ["sog"]          # list, can include multiple of: "sog", "spz", "ksplat"
+quality = "medium"         # low | medium | high — controls SOG iterations + SH filter

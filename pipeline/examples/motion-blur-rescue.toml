@@ -1,0 +1,14 @@
+# Use when the default pipeline rejects all frames as too blurry.
+#
+# Symptom: `preprocess.done` event shows `extracted: N, kept: 0, rejected_blur: N`.
+# Cause: continuous-motion captures (drone orbits, fly-throughs) produce per-frame
+#        motion blur. Default blur_threshold = 100 is calibrated for static-pose-ish
+#        captures and rejects everything.
+#
+# Phase-0 calibration (docs/PHASE-0-CALIBRATION.md):
+#   - example_capture_1 (slow low-angle pass): blur=100 → 100% kept
+#   - example_capture_3 (60fps fly-through):   blur=100 →  12% kept
+#   - example_capture_2 (30fps orbit):         blur=100 →   0% kept, blur=25 → 100% kept
+
+[preprocess]
+blur_threshold = 25.0

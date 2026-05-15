@@ -1,0 +1,92 @@
+[project]
+name = "autosplat"
+version = "0.9.0"
+description = "Automated local pipeline for drone-video → Gaussian Splat (Apple Silicon)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "Johannes Kaindl", email = "code.jkaindl@mailbox.org" },
+]
+keywords = ["gaussian-splatting", "3d-reconstruction", "drone", "colmap", "brush"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.7",
+    "watchdog>=4.0",
+    "structlog>=24.1",
+    "rich>=13.7",
+    "opencv-python>=4.9",
+    "tomli>=2.0; python_version < '3.11'",
+    "tomli-w>=1.0",
+    "pyyaml>=6.0.3",
+]
+
+[project.optional-dependencies]
+obsidian = [
+    "python-frontmatter>=1.1",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+autosplat = "autosplat.cli:app"
+
+[project.urls]
+Homepage = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+Issues = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autosplat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "needs_ffmpeg: requires ffmpeg in PATH",
+    "needs_colmap: requires colmap in PATH",
+    "needs_brush: requires brush binary",
+]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # Typer's idiomatic pattern uses typer.Argument()/Option() in defaults
+    "RUF002",  # Unicode minus/multiplication in docstrings — fine in math comments
+    "RUF003",  # Unicode minus/multiplication in inline comments — fine in math comments
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B017"]  # `pytest.raises(Exception)` is fine for "anything raises" tests
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.15.12",
+]

@@ -1,0 +1,13 @@
+# Fast-iteration profile. Use when you're testing a new capture and want
+# to see the result in 5-8 min rather than 35-45 min.
+#
+# Quality is reduced — the splat will look fuzzier than a full-default run.
+# Good enough to validate that SfM works on your footage.
+
+[brush]
+max_steps = 5000
+densify_until_iter = 2500
+resolution_cap = 1200
+
+[viewer]
+auto_open = true
