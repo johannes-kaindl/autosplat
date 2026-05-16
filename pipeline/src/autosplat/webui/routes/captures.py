@@ -44,6 +44,37 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     )
 
 
+@router.get("/{capture_id}/view", response_class=HTMLResponse)
+async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id)
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+
+    # Check if SuperSplat is mounted (app.mount sets it in app.routes)
+    supersplat_available = any(
+        getattr(r, "name", None) == "supersplat" for r in request.app.routes
+    )
+
+    # Build the iframe embed URL — SuperSplat loads the PLY via ?load=
+    embed_url = ""
+    if supersplat_available and capture.has_ply:
+        # Absolute URL so the iframe can resolve the PLY route correctly
+        base = str(request.base_url).rstrip("/")
+        embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/ply"
+
+    return _templates(request).TemplateResponse(
+        request,
+        "capture/view.html",
+        {
+            "version": __version__,
+            "capture": capture,
+            "supersplat_available": supersplat_available,
+            "embed_url": embed_url,
+        },
+    )
+
+
 @router.get("/{capture_id}/log")
 async def capture_log(request: Request, capture_id: str) -> JSONResponse:
     captures_dir = _captures_dir(request)

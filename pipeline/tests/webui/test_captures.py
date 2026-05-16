@@ -32,6 +32,33 @@ def test_list_captures_with_fixture(tmp_path: Path) -> None:
     assert captures[0].ply_size_bytes == 4
 
 
+def test_capture_ply_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = tmp_path / "2026-05-16_ply_smoke"
+    capture_dir.mkdir()
+    output_dir = capture_dir / "output"
+    output_dir.mkdir()
+    ply = output_dir / "scene.ply"
+    ply.write_bytes(b"ply\nformat binary 1.0\n")
+
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-16_ply_smoke/ply")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+
+
+def test_capture_ply_route_returns_404_when_no_ply(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = tmp_path / "2026-05-16_no_ply"
+    capture_dir.mkdir()
+
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-16_no_ply/ply")
+    assert response.status_code == 404
+
+
 def test_capture_detail_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
     capture_dir = tmp_path / "2026-05-16_smoke"
     capture_dir.mkdir()
