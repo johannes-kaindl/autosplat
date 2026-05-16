@@ -44,6 +44,8 @@ autosplat = "autosplat.cli:app"
 
 [project.urls]
 Homepage = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+Repository = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+Documentation = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat#readme"
 Issues = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues"
 
 [build-system]
