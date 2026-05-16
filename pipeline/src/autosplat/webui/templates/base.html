@@ -7,13 +7,12 @@
   <link rel="stylesheet" href="/static/css/tokens.css">
   <link rel="stylesheet" href="/static/css/autosplat.css">
   {% block extra_css %}{% endblock %}
-  {# Anti-flash: restore theme + aspect before first paint #}
+  {# Anti-flash: restore theme before first paint #}
   <script>
     (function () {
       var t = localStorage.getItem('autosplat-theme') || 'dark';
-      var a = localStorage.getItem('autosplat-aspect') || 'shugo';
       if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
-      document.documentElement.setAttribute('data-aspect', a);
+      if (localStorage.getItem('autosplat-aspect')) localStorage.removeItem('autosplat-aspect');
     })();
   </script>
   <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lCLQjLzjalmEu7uMhpWiLmKv+DQMjGj1Yje0F6FvuJCpPKP86iZ0WR0w6Z6" crossorigin="anonymous"></script>
@@ -54,22 +53,12 @@
     </span>
   {% endif %}
 
-  {# TopBar action buttons — placeholders in P0; wired in P7+P8 #}
-  <button class="as-icon-btn" id="as-annot-btn" title="HTMX overlay" aria-pressed="false">{{ icon('activity') }}</button>
-  <div id="as-annot-legend" class="as-annot-legend" hidden>
-    <span style="color:var(--signal-circuit)">━ poll</span>
-    <span style="color:var(--signal-ember)">━ target</span>
-  </div>
-  <button class="as-icon-btn" id="as-theme-btn" title="Toggle theme">{{ icon('moon') }}</button>
-  <div class="as-settings-wrap" style="position:relative">
-    <button class="as-icon-btn" id="as-settings-btn" title="Aspect" aria-haspopup="true" aria-expanded="false">{{ icon('settings') }}</button>
-    <div id="as-aspect-menu" role="menu" hidden style="position:absolute;right:0;top:calc(100% + 6px);z-index:200;min-width:180px;background:var(--surface-overlay);border:1px solid var(--border-default);border-radius:var(--radius-md);box-shadow:var(--shadow-modal);padding:6px">
-      <button class="as-aspect-opt" data-aspect="shugo"   role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-phosphor)"></span>Guardian · shugo</button>
-      <button class="as-aspect-opt" data-aspect="gunshi"  role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-spectre)"></span>Strategist · gunshi</button>
-      <button class="as-aspect-opt" data-aspect="kantoku" role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-crimson)"></span>Taskmaster · kantoku</button>
-      <button class="as-aspect-opt" data-aspect="sensei"  role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-ember)"></span>Mentor · sensei</button>
-    </div>
-  </div>
+  {# Theme-Toggle pill — icons pre-rendered, CSS toggles visibility via data-theme #}
+  <button class="as-theme-toggle" id="as-theme-btn" type="button" title="Switch to light mode">
+    <span class="as-theme-icon-dark">{{ icon('moon', 14) }}</span>
+    <span class="as-theme-icon-light">{{ icon('sun', 14) }}</span>
+    <span class="as-theme-label">Dark</span>
+  </button>
 </header>
 
 {# ── Sidebar ─────────────────────────────────────────────────────────────── #}
@@ -136,73 +125,27 @@
   </div>
 </footer>
 
-{# ── Theme + Aspect + Overlay JS ──────────────────────────────────────────── #}
+{# ── Theme JS ─────────────────────────────────────────────────────────────── #}
 <script>
 (function () {
-  // Theme toggle
-  var themeBtn = document.getElementById('as-theme-btn');
+  var btn = document.getElementById('as-theme-btn');
+  var label = btn.querySelector('.as-theme-label');
   function applyTheme(mode) {
     if (mode === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
-      themeBtn.title = 'Switch to dark mode';
-      themeBtn.innerHTML = '{{ icon("sun") | replace('"', '\\"') }}';
+      label.textContent = 'Light';
+      btn.title = 'Switch to dark mode';
     } else {
       document.documentElement.removeAttribute('data-theme');
-      themeBtn.title = 'Switch to light mode';
-      themeBtn.innerHTML = '{{ icon("moon") | replace('"', '\\"') }}';
+      label.textContent = 'Dark';
+      btn.title = 'Switch to light mode';
     }
     localStorage.setItem('autosplat-theme', mode);
   }
-  var savedTheme = localStorage.getItem('autosplat-theme') || 'dark';
-  applyTheme(savedTheme);
-  themeBtn.addEventListener('click', function () {
-    var cur = localStorage.getItem('autosplat-theme') || 'dark';
-    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  applyTheme(localStorage.getItem('autosplat-theme') || 'dark');
+  btn.addEventListener('click', function () {
+    applyTheme(localStorage.getItem('autosplat-theme') === 'light' ? 'dark' : 'light');
   });
-
-  // Aspect picker
-  var settingsBtn = document.getElementById('as-settings-btn');
-  var aspectMenu  = document.getElementById('as-aspect-menu');
-  function applyAspect(aspect) {
-    document.documentElement.setAttribute('data-aspect', aspect);
-    localStorage.setItem('autosplat-aspect', aspect);
-    document.querySelectorAll('.as-aspect-opt').forEach(function (btn) {
-      btn.style.background = btn.dataset.aspect === aspect ? 'var(--surface-raised)' : '';
-    });
-  }
-  applyAspect(localStorage.getItem('autosplat-aspect') || 'shugo');
-  settingsBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    var hidden = aspectMenu.hidden;
-    aspectMenu.hidden = !hidden;
-    settingsBtn.setAttribute('aria-expanded', String(!hidden));
-  });
-  document.querySelectorAll('.as-aspect-opt').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      applyAspect(btn.dataset.aspect);
-      aspectMenu.hidden = true;
-      settingsBtn.setAttribute('aria-expanded', 'false');
-    });
-  });
-  document.addEventListener('click', function () {
-    aspectMenu.hidden = true;
-    settingsBtn.setAttribute('aria-expanded', 'false');
-  });
-
-  // HTMX annotation overlay
-  var annotBtn = document.getElementById('as-annot-btn');
-  var annotLegend = document.getElementById('as-annot-legend');
-  var annotOn = localStorage.getItem('autosplat-annot') === 'on';
-  function applyAnnot(on) {
-    annotOn = on;
-    document.body.setAttribute('data-annot', on ? 'on' : 'off');
-    annotBtn.setAttribute('aria-pressed', String(on));
-    annotBtn.style.color = on ? 'var(--signal-circuit)' : '';
-    if (annotLegend) annotLegend.hidden = !on;
-    localStorage.setItem('autosplat-annot', on ? 'on' : 'off');
-  }
-  applyAnnot(annotOn);
-  annotBtn.addEventListener('click', function () { applyAnnot(!annotOn); });
 })();
 </script>
 
