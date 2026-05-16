@@ -34,6 +34,22 @@ async def dashboard_partial(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/jobs", response_class=HTMLResponse)
+async def jobs_partial(request: Request) -> HTMLResponse:
+    runner = getattr(request.app.state, "job_runner", None)
+    if runner is None:
+        active, recent = [], []
+    else:
+        jobs = runner.all_jobs()
+        active = [j for j in jobs if j.status in ("queued", "running")]
+        recent = [j for j in jobs if j.status in ("done", "failed", "cancelled")][-20:]
+    return _templates(request).TemplateResponse(
+        request,
+        "partials/jobs_inner.html",
+        {"active_jobs": active, "recent_jobs": recent},
+    )
+
+
 @router.get("/capture/{capture_id}/status", response_class=HTMLResponse)
 async def capture_status_partial(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
