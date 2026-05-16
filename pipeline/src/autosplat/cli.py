@@ -357,6 +357,23 @@ def serve(
 
 
 @app.command()
+def webui(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8080, "--port", "-p", help="HTTP port."),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload (dev mode)."),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
+) -> None:
+    """Start the autosplat WebUI (FastAPI + HTMX). Check http://HOST:PORT/healthz to verify."""
+    import uvicorn
+
+    from .webui import create_app
+
+    cfg = _load_or_die(config)
+    app_instance = create_app(cfg)
+    uvicorn.run(app_instance, host=host, port=port, reload=reload)
+
+
+@app.command()
 def version() -> None:
     """Print the autosplat version."""
     console.print(__version__)
