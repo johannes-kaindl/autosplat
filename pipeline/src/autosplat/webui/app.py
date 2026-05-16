@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from autosplat import __version__
 from autosplat.config import Config
 
-from .routes import captures, dashboard, health, jobs, partials
+from .routes import captures, dashboard, health, jobs, partials, source
 
 _WEBUI_DIR = Path(__file__).parent
 _TEMPLATES_DIR = _WEBUI_DIR / "templates"
@@ -69,6 +69,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     app.include_router(captures.router)
     app.include_router(jobs.router)
     app.include_router(partials.router)
+    app.include_router(source.router)
 
     # Wire up job runner (available for all routes via request.app.state.job_runner)
     from .jobs_runner import JobRunner
