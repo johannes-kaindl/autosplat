@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Unit tests for COLMAP command builders. No real COLMAP invoked."""
 
 from __future__ import annotations

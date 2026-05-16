@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Phase-6 pre-flight tests — ffprobe-validate + plausibility checks."""
 
 from __future__ import annotations

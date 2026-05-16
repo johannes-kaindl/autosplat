@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """End-to-end pipeline test.
 
 Skipped by default. Opt in with `AUTOSPLAT_E2E=1` (and have ffmpeg, colmap,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Phase-4 obsidian capture-note generator tests.
 
 Coverage:

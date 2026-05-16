@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Tests for viewer URL builder, open_in_viewer behaviour, and config roundtrip."""
 
 from __future__ import annotations

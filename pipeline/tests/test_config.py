@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Config loading, merging, and validation."""
 
 from __future__ import annotations

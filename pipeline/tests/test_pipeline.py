@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Pipeline orchestrator — dry-run + capture-name format."""
 
 from __future__ import annotations

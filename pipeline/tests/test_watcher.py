@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Phase-2 watcher tests — state roundtrip, crash-recovery, queue semantics.
 
 Aims to validate spec §11.2 acceptance criteria:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Unit tests for the Brush command builder and dataset staging.
 
 Brush v0.3.x flag surface: source is positional, training params are flags

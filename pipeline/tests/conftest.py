@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Shared test fixtures for the autosplat test suite."""
 
 from __future__ import annotations

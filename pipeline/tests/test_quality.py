@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Phase-3 quality-gate tests — thresholds, retry hints, exception payload."""
 
 from __future__ import annotations

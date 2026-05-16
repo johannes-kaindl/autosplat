@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Doctor: aggregation and required/optional handling."""
 
 from __future__ import annotations
