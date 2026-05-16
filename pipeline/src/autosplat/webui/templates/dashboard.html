@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="card"
+     hx-get="/partials/dashboard"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
+  {% include "partials/dashboard_inner.html" %}
+</div>
+{% endblock %}

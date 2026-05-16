@@ -4,16 +4,23 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from autosplat import __version__
 from autosplat.config import Config
 
-from .routes import health
+from .routes import captures, dashboard, health, partials
+
+_WEBUI_DIR = Path(__file__).parent
+_TEMPLATES_DIR = _WEBUI_DIR / "templates"
+_STATIC_DIR = _WEBUI_DIR / "static"
 
 
 @asynccontextmanager
@@ -24,7 +31,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(cfg: Config | None = None) -> FastAPI:
     """Return a configured FastAPI application.
 
-    `cfg` is optional here so uvicorn --factory mode can call create_app()
+    `cfg` is optional so uvicorn --factory mode can call create_app()
     without arguments; the CLI command passes a loaded Config.
     """
     app = FastAPI(
@@ -40,9 +47,26 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(health.router)
+    # Static files
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-    # Stash config on app.state for route handlers to access.
+    # SuperSplat dist/ — only mount if built
+    if cfg is not None:
+        dist = cfg.viewer.supersplat_dist_path
+        if not dist.is_absolute():
+            dist = Path.cwd() / dist
+        if (dist / "index.html").exists():
+            app.mount("/supersplat", StaticFiles(directory=str(dist)), name="supersplat")
+
+    # Jinja2 templates
+    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    app.state.templates = templates
     app.state.cfg = cfg
+
+    # Routers
+    app.include_router(health.router)
+    app.include_router(dashboard.router)
+    app.include_router(captures.router)
+    app.include_router(partials.router)
 
     return app

@@ -1,0 +1,5 @@
+<span class="badge badge-{{ capture.status }}"
+      id="status-badge"
+      hx-get="/partials/capture/{{ capture.id }}/status"
+      hx-trigger="every 3s"
+      hx-swap="outerHTML">{{ capture.status }}</span>

@@ -1,0 +1,35 @@
+<div class="card"
+     hx-get="/partials/dashboard"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
+  <h2>Pipeline Status</h2>
+  {% if active_capture %}
+  <p><strong>Running:</strong> {{ active_capture.id }} — stage: <strong>{{ active_capture.stage or "starting" }}</strong></p>
+  {% else %}
+  <p class="meta">No active job.</p>
+  {% endif %}
+
+  {% if queued %}
+  <p class="meta" style="margin-top:8px">Queue: {{ queued|length }} capture(s) waiting.</p>
+  {% endif %}
+
+  <div style="margin-top:16px">
+    <h2>Recent Captures</h2>
+    {% if recent %}
+    <table>
+      <thead><tr><th>Capture</th><th>Status</th><th>Finished</th></tr></thead>
+      <tbody>
+        {% for c in recent %}
+        <tr>
+          <td><a href="/captures/{{ c.id }}">{{ c.id }}</a></td>
+          <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
+          <td class="meta">{{ c.finished_at or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="meta">No captures yet. Drop a video in the watch folder to get started.</p>
+    {% endif %}
+  </div>
+</div>

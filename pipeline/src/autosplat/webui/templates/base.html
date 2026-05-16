@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}autosplat{% endblock %} — autosplat WebUI</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lCLQjLzjalmEu7uMhpWiLmKv+DQMjGj1Yje0F6FvuJCpPKP86iZ0WR0w6Z6" crossorigin="anonymous"></script>
+</head>
+<body>
+  <header>
+    <a class="logo" href="/">⬡ autosplat</a>
+    <nav>
+      <a href="/captures/">Captures</a>
+      <a href="/jobs/">Jobs</a>
+      <a href="/healthz">Health</a>
+    </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    autosplat v{{ version }} —
+    Source code available at <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat" target="_blank">Codeberg</a>
+    under <a href="/source">AGPL-3.0-or-later</a>
+  </footer>
+</body>
+</html>

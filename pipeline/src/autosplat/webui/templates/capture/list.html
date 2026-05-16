@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Captures{% endblock %}
+{% block content %}
+<h1>Captures</h1>
+
+{% if captures %}
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Status</th>
+        <th>Stage</th>
+        <th>PLY</th>
+        <th>Finished</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in captures %}
+      <tr>
+        <td><a href="/captures/{{ c.id }}">{{ c.id }}</a></td>
+        <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
+        <td class="meta">{{ c.stage or "—" }}</td>
+        <td class="meta">
+          {% if c.has_ply %}
+            {% if c.ply_size_bytes %}{{ "%.1f"|format(c.ply_size_bytes / 1048576) }} MB{% else %}✓{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="meta">{{ c.finished_at or "—" }}</td>
+        <td>
+          {% if c.has_ply %}
+          <a href="/captures/{{ c.id }}/view" class="btn btn-ghost" style="font-size:12px;padding:3px 10px">View ▶</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <p>No captures found in <code>{{ captures_dir }}</code>.</p>
+  <p class="meta" style="margin-top:8px">Drop a video file into the watch folder or run <code>autosplat process &lt;video&gt;</code>.</p>
+</div>
+{% endif %}
+{% endblock %}
