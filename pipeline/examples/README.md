@@ -6,6 +6,8 @@ Drop-in `--config` overlays for common use cases. None of these are the *full* c
 uv run autosplat process import/video.mp4 --config examples/quality-run.toml
 ```
 
+*Note: `import/video.mp4` is illustrative — any DJI drone clip or video with sufficient camera motion works. See `examples/quick-iter.toml` for typical capture parameters.*
+
 | File                      | Use case                                                            |
 | ------------------------- | ------------------------------------------------------------------- |
 | `quick-iter.toml`         | Fast iteration — 5000 Brush steps, smaller resolution_cap           |
