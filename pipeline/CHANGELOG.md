@@ -6,6 +6,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.0.0] — 2026-05-16 — WebUI Release
+
+First production-ready release. Adds a full browser-based control interface (FastAPI + HTMX + Jinja2) for the autosplat pipeline.
+
+### Added — WebUI (Phase 10)
+
+- **`autosplat webui --port 8080`** — new CLI command that starts the WebUI via uvicorn. Shares the same config as the CLI pipeline.
+- **Dashboard** (`/`) — live queue overview + recent captures, auto-refreshing via HTMX polling every 5 s.
+- **Capture list** (`/captures/`) — filesystem-backed discovery of all capture directories, status overlay from WatcherState, PLY size display.
+- **Capture detail** (`/captures/{id}`) — stage timeline (preprocess → sfm → train → export), PLY info, process/cancel/retry buttons, live log tail via HTMX polling.
+- **SuperSplat embed** (`/captures/{id}/view`) — serves `target/supersplat/dist/` as StaticFiles, embeds SuperSplat in an iframe with `?load=` pointing at the local PLY route. Falls back gracefully when dist/ not built.
+- **PLY streaming** (`/captures/{id}/ply`) — `FileResponse` with `Accept-Ranges` + CORS headers for direct browser access.
+- **Job runner** (`webui/jobs_runner.py`) — async background executor for `run_pipeline()`, in-memory job registry, cancel via `proc.terminate()`, log ringbuffer (500 lines).
+- **Jobs view** (`/jobs/`) — active + recent job list, HTMX polling every 2 s.
+- **AGPL §13 compliance** — `/source` route + footer on every page, links to Codeberg source repository.
+- **`GET /healthz`** — liveness check returning `{"status":"ok","version":"1.0.0"}`.
+
+### Added — Infrastructure
+
+- Dependencies: `fastapi>=0.111`, `uvicorn[standard]>=0.29`, `jinja2>=3.1` (runtime); `httpx>=0.27` (dev/test).
+- Test suite extended: `tests/webui/` (11 tests) covering healthz, /source, capture discovery, PLY route (200 + 404), detail view, job runner enqueue + cancel.
+- New pytest marker: `needs_supersplat_dist`.
+
+### Fixed
+
+- `src/autosplat/__init__.py` had `__version__ = "0.1.0"` (drift from initial scaffold) — corrected to `0.9.0` in P1, bumped to `1.0.0` in this release.
+
+### Pre-1.0 Polish (committed between v0.9.0 and v1.0.0)
+
+- `3a85a81` — AGPL-3.0 license headers added to all `src/autosplat/` Python sources
+- `bcef4f6` — AGPL-3.0 license headers added to all `tests/` Python sources
+- `61fea53` — `pyproject.toml`: Repository + Documentation URLs added to `[project.urls]`
+- `2334170` — docs: example capture filenames clarified as illustrative (not real capture names)
+
+### Tests
+
+185 unit tests (183 passed, 2 opt-in E2E skipped). WebUI tests use `starlette.testclient.TestClient` against real ASGI app — no mock HTTP stack.
+
+### Validated
+
+Gate-1 (healthz browser smoke) + Gate-2 (full WebUI browser smoke: dashboard, captures, /source, footer) verified by Jay 2026-05-16.
+
+---
+
 ## [v0.9.0] — 2026-05-15 — Initial Public Release
 
 First public release of the video-to-3d-gaussian-splat pipeline. CLI-complete, locally validated on real-world drone footage.
