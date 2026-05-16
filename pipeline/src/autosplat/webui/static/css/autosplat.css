@@ -79,9 +79,9 @@
                  0 0 18px -6px var(--accent-glow);
   --glow-focus:  0 0 0 2px color-mix(in oklab, var(--accent) 50%, transparent);
 }
-[data-theme="light"] [data-aspect="gunshi"]   { --accent: var(--signal-spectre);  --accent-soft: color-mix(in oklab, var(--signal-spectre)  14%, transparent); --accent-glow: color-mix(in oklab, var(--signal-spectre)  32%, transparent); }
-[data-theme="light"] [data-aspect="kantoku"]  { --accent: var(--signal-crimson);  --accent-soft: color-mix(in oklab, var(--signal-crimson)  14%, transparent); --accent-glow: color-mix(in oklab, var(--signal-crimson)  32%, transparent); }
-[data-theme="light"] [data-aspect="sensei"]   { --accent: var(--signal-ember);    --accent-soft: color-mix(in oklab, var(--signal-ember)    14%, transparent); --accent-glow: color-mix(in oklab, var(--signal-ember)    32%, transparent); }
+[data-theme="light"][data-aspect="gunshi"]   { --accent: var(--signal-spectre);  --accent-soft: color-mix(in oklab, var(--signal-spectre)  14%, transparent); --accent-glow: color-mix(in oklab, var(--signal-spectre)  32%, transparent); }
+[data-theme="light"][data-aspect="kantoku"]  { --accent: var(--signal-crimson);  --accent-soft: color-mix(in oklab, var(--signal-crimson)  14%, transparent); --accent-glow: color-mix(in oklab, var(--signal-crimson)  32%, transparent); }
+[data-theme="light"][data-aspect="sensei"]   { --accent: var(--signal-ember);    --accent-soft: color-mix(in oklab, var(--signal-ember)    14%, transparent); --accent-glow: color-mix(in oklab, var(--signal-ember)    32%, transparent); }
 
 /* Light-mode spot tweaks where dark-bias rules need to be unwound */
 [data-theme="light"] .as-frame::before { opacity: 0; }   /* no chamber grain on paper */
@@ -183,6 +183,7 @@
   padding: 0 var(--space-4);
   background: var(--surface-primary);
   border-bottom: 1px solid var(--border-subtle);
+  z-index: 20;
 }
 .as-brand {
   display: flex; align-items: center; gap: var(--space-2);
@@ -981,18 +982,18 @@
 .as-viewer-iconbtn svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ====== HTMX polling annotation overlay ================================== */
-.as-poll {
+[hx-trigger*="every"] {
   position: relative;
 }
-.as-frame[data-annot="on"] .as-poll {
+.as-frame[data-annot="on"] [hx-trigger*="every"] {
   outline: 1px dashed color-mix(in oklab, var(--signal-circuit) 65%, transparent);
   outline-offset: 4px;
   border-radius: var(--radius-lg);
 }
-.as-poll::after { display: none; }
-.as-frame[data-annot="on"] .as-poll::after {
+[hx-trigger*="every"]::after { display: none; }
+.as-frame[data-annot="on"] [hx-trigger*="every"]::after {
   display: inline-flex;
-  content: 'hx-trigger=every ' attr(data-poll);
+  content: attr(hx-trigger);
   position: absolute;
   top: -10px; right: 12px;
   background: var(--void-100);
@@ -1006,14 +1007,14 @@
   pointer-events: none;
   white-space: nowrap;
 }
-.as-frame[data-annot="on"] [data-target] {
+.as-frame[data-annot="on"] [hx-target] {
   outline: 1px dashed color-mix(in oklab, var(--signal-ember) 55%, transparent);
   outline-offset: 2px;
   border-radius: var(--radius-md);
   position: relative;
 }
-.as-frame[data-annot="on"] [data-target]::before {
-  content: '#' attr(data-target);
+.as-frame[data-annot="on"] [hx-target]::before {
+  content: '#' attr(hx-target);
   position: absolute;
   bottom: -8px; left: 8px;
   background: var(--void-100);
@@ -1024,6 +1025,18 @@
   padding: 1px 5px;
   border-radius: var(--radius-sm);
   z-index: 4;
+  pointer-events: none;
+}
+
+/* ====== Annotation legend pill =========================================== */
+.as-annot-legend {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  background: var(--void-100);
+  border: 1px dashed color-mix(in oklab, var(--signal-circuit) 45%, transparent);
+  border-radius: var(--radius-sm);
   pointer-events: none;
 }
 

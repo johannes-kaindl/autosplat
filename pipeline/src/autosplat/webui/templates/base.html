@@ -56,6 +56,10 @@
 
   {# TopBar action buttons — placeholders in P0; wired in P7+P8 #}
   <button class="as-icon-btn" id="as-annot-btn" title="HTMX overlay" aria-pressed="false">{{ icon('activity') }}</button>
+  <div id="as-annot-legend" class="as-annot-legend" hidden>
+    <span style="color:var(--signal-circuit)">━ poll</span>
+    <span style="color:var(--signal-ember)">━ target</span>
+  </div>
   <button class="as-icon-btn" id="as-theme-btn" title="Toggle theme">{{ icon('moon') }}</button>
   <div class="as-settings-wrap" style="position:relative">
     <button class="as-icon-btn" id="as-settings-btn" title="Aspect" aria-haspopup="true" aria-expanded="false">{{ icon('settings') }}</button>
@@ -187,12 +191,14 @@
 
   // HTMX annotation overlay
   var annotBtn = document.getElementById('as-annot-btn');
+  var annotLegend = document.getElementById('as-annot-legend');
   var annotOn = localStorage.getItem('autosplat-annot') === 'on';
   function applyAnnot(on) {
     annotOn = on;
     document.body.setAttribute('data-annot', on ? 'on' : 'off');
     annotBtn.setAttribute('aria-pressed', String(on));
     annotBtn.style.color = on ? 'var(--signal-circuit)' : '';
+    if (annotLegend) annotLegend.hidden = !on;
     localStorage.setItem('autosplat-annot', on ? 'on' : 'off');
   }
   applyAnnot(annotOn);
