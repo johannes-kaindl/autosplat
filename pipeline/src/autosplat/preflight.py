@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Pre-flight checks per video (Phase 6 / Spec §5 + §9.2).
 
 Runs *before* preprocess so a corrupt or implausible video doesn't waste

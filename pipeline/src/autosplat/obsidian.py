@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Obsidian capture-note generator (Phase 4 — spec §11.4 + §13).
 
 Produces a Markdown file in the user's Obsidian vault with:

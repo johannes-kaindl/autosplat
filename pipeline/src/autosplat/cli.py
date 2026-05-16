@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """autosplat — Typer-based CLI.
 
 Commands (spec §7):

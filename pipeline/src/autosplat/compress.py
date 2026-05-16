@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Compress stage — shrink a Brush PLY into a web-optimal splat format.
 
 Phase-5: single backend (`splat-transform` from PlayCanvas, run via `npx` so

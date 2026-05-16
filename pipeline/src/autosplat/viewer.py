@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Local HTTP server + browser-open for SuperSplat / PlayCanvas viewing.
 
 Opens the configured viewer in the user's default browser, pointed at a local

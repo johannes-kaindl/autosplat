@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Preflight checks for system dependencies.
 
 Run via `autosplat doctor`. Returns non-zero exit if any required dep is missing.

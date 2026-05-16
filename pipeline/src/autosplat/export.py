@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """PLY validation, output copying, and metadata bundling."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Quality-Gate stage — Phase-3 validation between SfM and Brush (spec §11.3).
 
 Bails out *before* the expensive Brush stage when the COLMAP output is too thin

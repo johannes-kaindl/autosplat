@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """End-to-end pipeline orchestrator.
 
 Glues the per-stage modules into a single `run_pipeline(...)` call used by

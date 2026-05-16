@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Watch-folder daemon (Phase 2).
 
 Spec §11.2 acceptance:

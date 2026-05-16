@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Structured logging — Rich for console, JSON for the per-capture pipeline.log.
 
 Each capture run writes structured JSON events to `<capture>/pipeline.log`, and

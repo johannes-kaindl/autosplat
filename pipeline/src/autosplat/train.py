@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Gaussian Splat training via Brush.
 
 Brush is a Rust binary using WebGPU — Mac-native, no CUDA stack required.

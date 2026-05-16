@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """macOS Notification Center integration for autosplat pipeline events."""
 from __future__ import annotations
 
