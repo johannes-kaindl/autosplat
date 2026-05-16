@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
-{% block content %}
-<h1>Dashboard</h1>
 
-<div class="card"
+{% block crumbs %}
+<span class="sep">/</span><span class="cur">dashboard</span>
+{% endblock %}
+
+{% block content %}
+{%- from "_macros.html" import stat_tile -%}
+<div class="as-main-inner"
      hx-get="/partials/dashboard"
-     hx-trigger="every 5s"
+     hx-trigger="every 3s"
      hx-swap="outerHTML">
   {% include "partials/dashboard_inner.html" %}
 </div>

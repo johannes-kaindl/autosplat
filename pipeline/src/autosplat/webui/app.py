@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -60,6 +61,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     # Jinja2 templates
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    templates.env.globals["version"] = __version__
+    templates.env.globals["now"] = datetime.datetime.now
     app.state.templates = templates
     app.state.cfg = cfg
 

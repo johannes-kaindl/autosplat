@@ -27,10 +27,16 @@ async def dashboard_partial(request: Request) -> HTMLResponse:
     active = next((c for c in captures if c.status == "running"), None)
     queued = [c for c in captures if c.status == "queued"]
     recent = [c for c in captures if c.status in ("done", "failed")][:10]
+    stats = {
+        "total": len(captures),
+        "done": sum(1 for c in captures if c.status == "done"),
+        "running": 1 if active else 0,
+        "failed": sum(1 for c in captures if c.status == "failed"),
+    }
     return _templates(request).TemplateResponse(
         request,
         "partials/dashboard_inner.html",
-        {"version": __version__, "active_capture": active, "queued": queued, "recent": recent},
+        {"active_capture": active, "queued": queued, "recent": recent, "stats": stats},
     )
 
 

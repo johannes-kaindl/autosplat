@@ -1,30 +1,205 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-aspect="shugo">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}autosplat{% endblock %} — autosplat WebUI</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}autosplat{% endblock %} — autosplat</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/autosplat.css">
+  {% block extra_css %}{% endblock %}
+  {# Anti-flash: restore theme + aspect before first paint #}
+  <script>
+    (function () {
+      var t = localStorage.getItem('autosplat-theme') || 'dark';
+      var a = localStorage.getItem('autosplat-aspect') || 'shugo';
+      if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.setAttribute('data-aspect', a);
+    })();
+  </script>
   <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lCLQjLzjalmEu7uMhpWiLmKv+DQMjGj1Yje0F6FvuJCpPKP86iZ0WR0w6Z6" crossorigin="anonymous"></script>
 </head>
-<body>
-  <header>
-    <a class="logo" href="/">⬡ autosplat</a>
-    <nav>
-      <a href="/captures/">Captures</a>
-      <a href="/jobs/">Jobs</a>
-      <a href="/healthz">Health</a>
-    </nav>
-  </header>
+<body class="as-frame {% block frame_class %}{% endblock %}">
 
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+{# ── Imports ─────────────────────────────────────────────────────────────── #}
+{%- from "_icons.html" import icon -%}
+{%- from "_macros.html" import capture_badge -%}
 
-  <footer>
-    autosplat v{{ version }} —
-    Source code available at <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat" target="_blank">Codeberg</a>
-    under <a href="/source">AGPL-3.0-or-later</a>
-  </footer>
+{# ── Top bar ─────────────────────────────────────────────────────────────── #}
+<header class="as-top">
+  <a href="/" class="as-brand" style="text-decoration:none">
+    <div class="as-brand-mark">A·</div>
+    <div class="as-brand-wm">autosplat</div>
+    <span class="as-brand-ver">v{{ version }}</span>
+  </a>
+
+  <nav class="as-crumbs" aria-label="breadcrumbs">
+    <span>vault</span>
+    {% block crumbs %}{% endblock %}
+  </nav>
+
+  <div class="as-top-spacer"></div>
+
+  {# Live pip — shows when a capture is running #}
+  {% if active_capture is defined and active_capture %}
+    {%- from "_macros.html" import STAGE_MAP -%}
+    {%- set mapped = STAGE_MAP.get(active_capture.stage or 'starting', {'slot': 'preflight'}) -%}
+    <span class="as-pip live {{ mapped.slot }}" title="{{ active_capture.id }} · {{ mapped.slot }}">
+      <span class="dot"></span>
+      <span>{{ mapped.slot }} · running</span>
+    </span>
+  {% else %}
+    <span class="as-pip idle">
+      <span class="dot"></span>
+      <span>chamber quiet</span>
+    </span>
+  {% endif %}
+
+  {# TopBar action buttons — placeholders in P0; wired in P7+P8 #}
+  <button class="as-icon-btn" id="as-annot-btn" title="HTMX overlay" aria-pressed="false">{{ icon('activity') }}</button>
+  <button class="as-icon-btn" id="as-theme-btn" title="Toggle theme">{{ icon('moon') }}</button>
+  <div class="as-settings-wrap" style="position:relative">
+    <button class="as-icon-btn" id="as-settings-btn" title="Aspect" aria-haspopup="true" aria-expanded="false">{{ icon('settings') }}</button>
+    <div id="as-aspect-menu" role="menu" hidden style="position:absolute;right:0;top:calc(100% + 6px);z-index:200;min-width:180px;background:var(--surface-overlay);border:1px solid var(--border-default);border-radius:var(--radius-md);box-shadow:var(--shadow-modal);padding:6px">
+      <button class="as-aspect-opt" data-aspect="shugo"   role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-phosphor)"></span>Guardian · shugo</button>
+      <button class="as-aspect-opt" data-aspect="gunshi"  role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-spectre)"></span>Strategist · gunshi</button>
+      <button class="as-aspect-opt" data-aspect="kantoku" role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-crimson)"></span>Taskmaster · kantoku</button>
+      <button class="as-aspect-opt" data-aspect="sensei"  role="menuitem" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:none;background:none;color:var(--fg-primary);font-family:var(--font-mono);font-size:11px;border-radius:var(--radius-sm);cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-ember)"></span>Mentor · sensei</button>
+    </div>
+  </div>
+</header>
+
+{# ── Sidebar ─────────────────────────────────────────────────────────────── #}
+<aside class="as-side">
+  <div class="as-side-title"><span>Surfaces</span></div>
+  <nav class="as-nav" aria-label="main navigation">
+    <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
+      <span class="ic">{{ icon('layout-grid', 15) }}</span>
+      <span class="lbl">Dashboard</span>
+    </a>
+    <a href="/captures/" class="{% if '/captures' in request.url.path %}active{% endif %}">
+      <span class="ic">{{ icon('layers', 15) }}</span>
+      <span class="lbl">Captures</span>
+      {% if stats is defined and stats %}<span class="ct">{{ stats.total }}</span>{% endif %}
+    </a>
+    <a href="/jobs/" class="{% if request.url.path.startswith('/jobs') %}active{% endif %}">
+      <span class="ic">{{ icon('cpu', 15) }}</span>
+      <span class="lbl">Jobs</span>
+      {% if stats is defined and stats and stats.running %}<span class="ct">{{ stats.running }}</span>{% endif %}
+    </a>
+    <a href="/source" class="{% if request.url.path == '/source' %}active{% endif %}">
+      <span class="ic">{{ icon('book', 15) }}</span>
+      <span class="lbl">Source</span>
+    </a>
+  </nav>
+
+  {% if stats is defined and stats %}
+  <div class="as-side-title"><span>Throughput</span><span class="ct">all</span></div>
+  <div class="as-side-card">
+    <div class="lbl">Pipeline</div>
+    <div class="row"><span>captures</span><span class="v">{{ stats.total }}</span></div>
+    <div class="row"><span>done</span><span class="v">{{ stats.done }}</span></div>
+    <div class="row"><span>failed</span><span class="v" style="color:var(--stage-failed)">{{ stats.failed }}</span></div>
+    <div class="row"><span>running</span><span class="v {% if stats.running %}brush{% endif %}">{{ stats.running }}</span></div>
+  </div>
+  {% endif %}
+
+  <div class="as-side-spacer"></div>
+
+  {% block sidebar_extras %}{% endblock %}
+
+  <div class="as-side-foot">
+    <span>autosplat <b style="color:var(--accent)">v{{ version }}</b></span>
+    <span class="host">local · single-user</span>
+  </div>
+</aside>
+
+{# ── Main content ─────────────────────────────────────────────────────────── #}
+<main class="as-main">
+  {% block content %}{% endblock %}
+</main>
+
+{# ── Footer ───────────────────────────────────────────────────────────────── #}
+<footer class="as-foot">
+  <span style="color:var(--fg-secondary)">autosplat</span>
+  <span class="sep">·</span>
+  <span>AGPL-3.0-or-later</span>
+  <span class="sep">·</span>
+  <a href="/source">Source on Codeberg</a>
+  <span class="sep">·</span>
+  <span>complies with AGPL §13 network clause</span>
+  <div class="right">
+    <span>local · single-user · {{ now().strftime('%Y-%m-%d') }}</span>
+  </div>
+</footer>
+
+{# ── Theme + Aspect + Overlay JS ──────────────────────────────────────────── #}
+<script>
+(function () {
+  // Theme toggle
+  var themeBtn = document.getElementById('as-theme-btn');
+  function applyTheme(mode) {
+    if (mode === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+      themeBtn.title = 'Switch to dark mode';
+      themeBtn.innerHTML = '{{ icon("sun") | replace('"', '\\"') }}';
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      themeBtn.title = 'Switch to light mode';
+      themeBtn.innerHTML = '{{ icon("moon") | replace('"', '\\"') }}';
+    }
+    localStorage.setItem('autosplat-theme', mode);
+  }
+  var savedTheme = localStorage.getItem('autosplat-theme') || 'dark';
+  applyTheme(savedTheme);
+  themeBtn.addEventListener('click', function () {
+    var cur = localStorage.getItem('autosplat-theme') || 'dark';
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+
+  // Aspect picker
+  var settingsBtn = document.getElementById('as-settings-btn');
+  var aspectMenu  = document.getElementById('as-aspect-menu');
+  function applyAspect(aspect) {
+    document.documentElement.setAttribute('data-aspect', aspect);
+    localStorage.setItem('autosplat-aspect', aspect);
+    document.querySelectorAll('.as-aspect-opt').forEach(function (btn) {
+      btn.style.background = btn.dataset.aspect === aspect ? 'var(--surface-raised)' : '';
+    });
+  }
+  applyAspect(localStorage.getItem('autosplat-aspect') || 'shugo');
+  settingsBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var hidden = aspectMenu.hidden;
+    aspectMenu.hidden = !hidden;
+    settingsBtn.setAttribute('aria-expanded', String(!hidden));
+  });
+  document.querySelectorAll('.as-aspect-opt').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      applyAspect(btn.dataset.aspect);
+      aspectMenu.hidden = true;
+      settingsBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+  document.addEventListener('click', function () {
+    aspectMenu.hidden = true;
+    settingsBtn.setAttribute('aria-expanded', 'false');
+  });
+
+  // HTMX annotation overlay
+  var annotBtn = document.getElementById('as-annot-btn');
+  var annotOn = localStorage.getItem('autosplat-annot') === 'on';
+  function applyAnnot(on) {
+    annotOn = on;
+    document.body.setAttribute('data-annot', on ? 'on' : 'off');
+    annotBtn.setAttribute('aria-pressed', String(on));
+    annotBtn.style.color = on ? 'var(--signal-circuit)' : '';
+    localStorage.setItem('autosplat-annot', on ? 'on' : 'off');
+  }
+  applyAnnot(annotOn);
+  annotBtn.addEventListener('click', function () { applyAnnot(!annotOn); });
+})();
+</script>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>

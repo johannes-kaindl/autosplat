@@ -1,0 +1,101 @@
+{%- from "_icons.html" import icon -%}
+
+{#
+  Stage mapping: backend pipeline stage name → visual slot in the 6-slot timeline.
+  Pipeline code is not changed; only the visual representation maps here.
+  Backend stage values: starting, preflight, preprocess, sfm, sfm_validation, train, export
+#}
+{%- set STAGE_MAP = {
+  'starting':       {'slot': 'preflight',  'index': 0},
+  'preflight':      {'slot': 'preflight',  'index': 0},
+  'preprocess':     {'slot': 'preprocess', 'index': 1},
+  'sfm':            {'slot': 'colmap',     'index': 2},
+  'sfm_validation': {'slot': 'quality',    'index': 3},
+  'train':          {'slot': 'brush',      'index': 4},
+  'export':         {'slot': 'export',     'index': 5},
+} -%}
+
+{%- set STAGE_SLOTS = [
+  {'id': 'preflight',  'label': 'preflight',  'desc': 'sanity · disk · binaries'},
+  {'id': 'preprocess', 'label': 'preprocess', 'desc': 'ffmpeg · frame extract'},
+  {'id': 'colmap',     'label': 'colmap',     'desc': 'sfm · feature · solve'},
+  {'id': 'quality',    'label': 'quality',    'desc': 'reproj · coverage gate'},
+  {'id': 'brush',      'label': 'brush',      'desc': 'gaussian · ~40 min'},
+  {'id': 'export',     'label': 'export',     'desc': 'ply · sog · spz'},
+] -%}
+
+
+{# ── Capture status badge ─────────────────────────────────────────────────── #}
+{%- macro capture_badge(capture) -%}
+  {%- if capture.status == 'running' -%}
+    {%- set mapped = STAGE_MAP.get(capture.stage or 'starting', {'slot': 'preflight', 'index': 0}) -%}
+    <span class="as-stage-badge s-{{ mapped.slot }} live"><span class="dot"></span>{{ mapped.slot }}</span>
+  {%- elif capture.status == 'done' -%}
+    <span class="as-stage-badge s-done"><span class="dot"></span>done</span>
+  {%- elif capture.status == 'failed' -%}
+    {%- set mapped = STAGE_MAP.get(capture.stage or 'preflight', {'slot': 'preflight', 'index': 0}) -%}
+    <span class="as-stage-badge s-failed"><span class="dot"></span>failed · {{ mapped.slot }}</span>
+  {%- else -%}
+    <span class="as-stage-badge s-ready"><span class="dot"></span>ready</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+
+{# ── Explicit badge by slot name ──────────────────────────────────────────── #}
+{%- macro stage_badge(slot, live=False, label=None) -%}
+<span class="as-stage-badge s-{{ slot }}{% if live %} live{% endif %}"><span class="dot"></span>{{ label if label else slot }}</span>
+{%- endmacro -%}
+
+
+{# ── 6-slot stage timeline ────────────────────────────────────────────────── #}
+{%- macro stage_timeline(backend_stage, status='running') -%}
+  {%- set current = STAGE_MAP.get(backend_stage or 'starting', {'slot': 'preflight', 'index': 0}) -%}
+  {%- set ci = current.index -%}
+  <div class="as-timeline s-{{ current.slot }}">
+    {%- for slot in STAGE_SLOTS -%}
+      {%- set li = loop.index0 -%}
+      {%- if status == 'done' -%}
+        {%- set sclass = 'done' -%}
+      {%- elif status == 'failed' -%}
+        {%- if li < ci -%}{%- set sclass = 'done' -%}
+        {%- elif li == ci -%}{%- set sclass = 'failed' -%}
+        {%- else -%}{%- set sclass = 'pending' -%}
+        {%- endif -%}
+      {%- elif status == 'running' -%}
+        {%- if li < ci -%}{%- set sclass = 'done' -%}
+        {%- elif li == ci -%}{%- set sclass = 'active' -%}
+        {%- else -%}{%- set sclass = 'pending' -%}
+        {%- endif -%}
+      {%- else -%}
+        {%- set sclass = 'pending' -%}
+      {%- endif -%}
+      <div class="as-tl-stage {{ sclass }}">
+        <div class="as-tl-node">
+          {%- if sclass == 'done' -%}{{ icon('check', 14) }}
+          {%- elif sclass == 'failed' -%}{{ icon('x', 14) }}
+          {%- elif sclass == 'active' -%}{{ icon('circle-dot', 14) }}
+          {%- else -%}{{ '%02d' | format(loop.index) }}
+          {%- endif -%}
+        </div>
+        <div class="as-tl-name">{{ slot.label }}</div>
+        <div class="as-tl-meta">{{ slot.desc }}</div>
+      </div>
+    {%- endfor -%}
+  </div>
+{%- endmacro -%}
+
+
+{# ── Stat tile (Dashboard) ────────────────────────────────────────────────── #}
+{%- macro stat_tile(label, value, sub_meta='', klass='', icon_name='layers') -%}
+<div class="as-stat {{ klass }}">
+  <div class="lbl">{{ icon(icon_name, 12) }} {{ label }}</div>
+  <div class="num">{{ value }}</div>
+  {%- if sub_meta %}<div class="delta">{{ sub_meta }}</div>{%- endif %}
+</div>
+{%- endmacro -%}
+
+
+{# ── Key-value info row ───────────────────────────────────────────────────── #}
+{%- macro kv_row(key, value, klass='') -%}
+<div class="row"><span class="k">{{ key }}</span><span class="v {{ klass }}">{{ value }}</span></div>
+{%- endmacro -%}
