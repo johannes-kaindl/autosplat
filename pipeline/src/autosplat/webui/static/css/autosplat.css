@@ -366,6 +366,9 @@
   overflow-y: auto;
   position: relative;
 }
+/* .as-poll-region — outer HTMX-polling wrapper without padding.
+   Inner content uses .as-main-inner for layout-padding.
+   Pattern: Page-Template outer = as-poll-region, Partial inner = as-main-inner. */
 .as-main-inner { padding: var(--space-6) var(--space-7) var(--space-6) var(--space-8); max-width: 1280px; }
 
 .as-page-head { margin-bottom: var(--space-6); }
