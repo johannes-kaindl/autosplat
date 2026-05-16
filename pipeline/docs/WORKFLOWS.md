@@ -208,3 +208,52 @@ autosplat process video.mp4 --config /tmp/no-gate.toml
 ```
 
 (Don't do this in the daemon's TOML — you'll burn Brush time on every bad capture.)
+
+---
+
+## 10. Web-UI control (v1.0.0+)
+
+Start the browser interface:
+
+```bash
+autosplat webui --port 8080
+# → open http://127.0.0.1:8080
+```
+
+### Main flows
+
+**1. Dashboard**
+
+The landing page shows the capture queue, recent captures with their status, and any active job. HTMX auto-refreshes every 5 seconds — no manual reload needed.
+
+**2. Select a capture + trigger processing**
+
+Go to **Captures** (or click a row on the dashboard). Find the capture you want to process — the status badge shows its current state (`pending`, `running`, `done`, `failed`). Click **Process** to enqueue it. You get redirected to the capture detail view.
+
+**3. Watch the stage timeline**
+
+The detail view shows a stage timeline (`preprocess → sfm → quality_gate → train → export`). Each badge auto-refreshes every 3 seconds. The log tail updates in place — no page reload.
+
+**4. Cancel a running job**
+
+The **Cancel** button is on the detail view. Use it during the Brush training stage (~40 min) if you need to stop early. The pipeline subprocess is terminated and the job is marked `cancelled`.
+
+**5. Open SuperSplat when done**
+
+Once a PLY is available, the **View** button appears on the detail view. It opens the SuperSplat embed (`/captures/{id}/view`) — an iframe with the local PLY loaded via `/captures/{id}/ply`. No separate server needed.
+
+**6. AGPL §13 source link**
+
+Every page has a footer with a link to `/source`, which in turn links to the [Codeberg repository](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat). This satisfies the AGPL Network Clause for WebUI users.
+
+### LAN access
+
+```bash
+autosplat webui --host 0.0.0.0 --port 8080
+```
+
+Binds to all interfaces so other devices on your local network can reach the WebUI. The CLI flag `--host` defaults to `127.0.0.1` (loopback only).
+
+### Parallel with CLI
+
+The WebUI and the CLI share the same `captures_dir` and `~/.autosplat/state.json`. You can run `autosplat watch` alongside `autosplat webui` — the watch daemon handles processing while the WebUI provides a read-only view of the queue and finished captures.

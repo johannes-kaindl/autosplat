@@ -80,6 +80,28 @@ In SuperSplat: orbit with the left mouse, zoom with scroll. Welcome to your firs
 
 ---
 
+## Option B: Use the WebUI
+
+If you prefer a browser interface over the terminal, start the WebUI instead:
+
+```bash
+uv run autosplat webui --port 8080
+# Open http://127.0.0.1:8080 in your browser.
+```
+
+From the dashboard:
+
+1. **Dashboard** — see the capture queue, recent runs, and active jobs at a glance.
+2. **Captures list** — every capture in your `captures_dir` with its current status badge.
+3. **Capture detail** — click a capture to see the stage timeline. Hit **Process** to start a pipeline run.
+4. **Live progress** — the stage timeline auto-refreshes every few seconds via HTMX polling.
+5. **Cancel** — hit **Cancel** on a running job (useful during the ~40-minute Brush stage).
+6. **View** — once a PLY is ready, the **View** button opens the SuperSplat embed directly in the browser.
+
+The CLI (`autosplat process`, `autosplat watch`) continues to work alongside the WebUI — they share the same state file and captures directory.
+
+---
+
 ## What's good vs. what's bad
 
 A few minutes after the run finishes, you'll probably see:

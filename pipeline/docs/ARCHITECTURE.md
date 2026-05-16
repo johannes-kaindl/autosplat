@@ -170,7 +170,7 @@ Retry-hint matrix (in `quality._retry_hint_for` + `quality.retry_hint_for_brush_
 ## Why this module split
 
 - **One stage = one module = one subprocess wrapper.** Easy to test in isolation, easy to swap (e.g. Brush → msplat in Phase 6+).
-- **No module imports `cli.py`.** The CLI is a thin shell; everything else is pure library code that can be driven from tests, the watcher, or a future web UI.
+- **No module imports `cli.py`.** The CLI is a thin shell; everything else is pure library code that can be driven from tests, the watcher, or the WebUI (src/autosplat/webui/, Phase 10).
 - **Config is centralised + override-friendly.** `apply_override()` lets the watcher rewrite any TOML key before a per-attempt run — that's how Phase-3 swaps the matcher without mutating the user's config.
 - **Watcher knows about pipeline failures, not pipeline details.** It catches `QualityGateFailure` and generic `Exception`; the gate's own knowledge of "what should I retry with?" lives in `quality._retry_hint_for`. New retry policies are one function-edit away.
 
@@ -186,8 +186,28 @@ Convention: `event` names follow `<module>.<thing_happened>` (e.g. `preprocess.d
 
 Per-capture file at `<capture-dir>/pipeline.log` mirrors the JSON stream so a finished run is forensically inspectable later.
 
+## WebUI module (Phase 10)
+
+```
+src/autosplat/webui/
+  __init__.py          re-exports create_app
+  app.py               FastAPI factory — CORSMiddleware, StaticFiles mounts, lifespan
+  state.py             WatcherState adapter (read-only): list_captures(), get_capture(), read_log_tail()
+  jobs_runner.py       Async background executor: JobRunner, cancel via subprocess handle
+  routes/
+    health.py          GET /healthz → {"status":"ok","version":"..."}
+    dashboard.py       GET / → dashboard.html (HTMX 5s poll)
+    captures.py        GET+POST /captures/ and /captures/{id}; GET /captures/{id}/ply (FileResponse)
+    jobs.py            GET /jobs/ (HTMX 2s poll)
+    partials.py        GET /partials/* — HTMX fragments
+    source.py          GET /source — AGPL §13 Network Clause
+  templates/           Jinja2 templates — base.html with HTMX CDN + AGPL footer
+  static/style.css     Minimal dark-mode CSS (no framework)
+```
+
+SuperSplat `dist/` is served via a `/supersplat/` StaticFiles mount (only mounted when `dist/index.html` exists). PLY files stream via `FileResponse` with `Accept-Ranges` + CORS headers so the SuperSplat iframe can load them cross-origin.
+
 ## Open architectural decisions
 
-1. **Compress backend choice** — Phase 5 skeleton waits for the user's downstream-tooling decision (SOG via SuperSplat / SPZ via Niantic / KSPLAT via Three.js). All three are CLI shells today; pick one and the rest is plumbing.
+1. **Compress backend choice** — Phase 5 implemented SOG + SPZ via `splat-transform`. KSPLAT output is not supported by `splat-transform`; use `mkkellogg/GaussianSplats3D` directly for KSPLAT.
 2. **Brush versioning** — currently `latest` with override via `BRUSH_VERSION=v0.x.y`. Pin once we hit a regression.
-3. **Pre-flight checks per video** — spec §5 mentions "Video-Länge, Auflösung, FPS plausibel?" but isn't an §11.x acceptance criterion. Slot for Phase 6.

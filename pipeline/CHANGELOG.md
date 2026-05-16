@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.0.1] — 2026-05-16 — Docs Sync Patch
+
+Documentation-only release. Brings README + docs/ in sync with the v1.0.0 WebUI release state. No code changes.
+
+### Changed
+
+- `README.md` — status badge updated to v1.0.1 CLI + WebUI; phase table extended with Phase 10 WebUI row; quick-start gained `autosplat webui` block; CLI section now covers WebUI with short subsection and workflow pointer; test count updated to 185; module count updated to 16.
+- `docs/GETTING-STARTED.md` — added "Option B: Use the WebUI" alternative path in 15-minute walkthrough.
+- `docs/WORKFLOWS.md` — new section "Web-UI control (v1.0.0+)" documenting browser flows (dashboard, trigger, cancel, SuperSplat embed, LAN access, parallel with CLI).
+- `docs/ARCHITECTURE.md` — "future web UI" reference replaced with implemented Phase 10 module reference; WebUI module section added; stale Phase 6 "Open architectural decisions" item resolved.
+
+### Added
+
+- `docs/PHASE-10-WEBUI.md` — plan-style snapshot for Phase 10 WebUI, analogous to existing PHASE-N-*.md files. Includes routes inventory, sub-phase log with commit hashes, architecture, risks/mitigations, test strategy.
+
+---
+
 ## [v1.0.0] — 2026-05-16 — WebUI Release
 
 First production-ready release. Adds a full browser-based control interface (FastAPI + HTMX + Jinja2) for the autosplat pipeline.

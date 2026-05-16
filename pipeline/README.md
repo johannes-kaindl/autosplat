@@ -4,8 +4,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: Pre-1.0 — CLI Release.** WebUI as v1.0.0 in preparation.
-> Demo: see v1.0.0 release with full WebUI and charmbracelet/vhs demo.
+> **Status: v1.0.1 — CLI + WebUI Release.** Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -48,6 +47,7 @@ drop *.mp4 / *.mov  →  watch-folder
 | 8     | Obsidian polish (vault-agnostic defaults + frontmatter user-key-preservation) | ✅ done                       |
 | 9     | Local SuperSplat auto-open                       | ✅ done — serves PLY over HTTP, auto-opens browser, CORS fix            |
 | 9.7   | splat CLI (real executable)                      | ✅ done — `~/.local/bin/splat`, caffeinate-wrap, nohup/tmux-compatible  |
+| 10    | WebUI (FastAPI + HTMX + Jinja2) — full browser control | ✅ done — `autosplat webui --port 8080`, dashboard, captures, jobs, viewer, AGPL §13 /source |
 
 ---
 
@@ -71,6 +71,10 @@ uv run autosplat process path/to/video.mp4
 
 # 6. Or watch a folder
 uv run autosplat watch ~/AutoSplat/inbox
+
+# 7. Or use the WebUI (full browser control)
+uv run autosplat webui --port 8080
+# then open http://127.0.0.1:8080
 ```
 
 See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the per-task user guide.
@@ -82,14 +86,24 @@ See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the per-task user guide.
 ```
 autosplat process <video> [--config PATH] [--output-dir PATH] [--skip-stage STAGE] [--dry-run]
 autosplat watch <folder>  [--config PATH] [--once]
+autosplat webui           [--host HOST] [--port PORT] [--reload]   # WebUI (Phase 10)
 autosplat status                                              # queue + completed + failed tables
 autosplat config show | init
 autosplat doctor                                              # ffmpeg / colmap / brush / compress
-autosplat compress <ply> [--format sog|spz|ksplat]            # Phase-5 skeleton
+autosplat compress <ply> [--format sog|spz|ksplat]
 autosplat version
 ```
 
 Exit codes: `0` success · `1` user error · `2` pipeline failure · `3` dependency missing.
+
+### WebUI (`autosplat webui`)
+
+```bash
+autosplat webui --port 8080        # start on default port
+autosplat webui --host 0.0.0.0 --port 8080   # LAN-accessible
+```
+
+Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features: live capture queue + dashboard, per-capture stage timeline, process/cancel/retry buttons, SuperSplat iframe embed for finished splats, AGPL §13 `/source` route. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
 
 ---
 
@@ -113,7 +127,7 @@ Every key is documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 ## Test suite
 
 ```bash
-uv run pytest -q                    # ~175 unit tests, ~3s
+uv run pytest -q                    # 185 unit tests, ~3s
 AUTOSPLAT_E2E=1 uv run pytest      # +1 opt-in end-to-end test (needs ffmpeg+colmap+brush)
 AUTOSPLAT_COMPRESS_E2E=1 uv run pytest tests/test_compress.py  # +1 opt-in compress smoke
 uv run ruff check src/ tests/      # lint — currently passes cleanly
@@ -125,13 +139,14 @@ uv run ruff check src/ tests/      # lint — currently passes cleanly
 
 ```
 auto-splat-pipeline/
-├── src/autosplat/        # 15 modules: config, logging, doctor, preflight,
+├── src/autosplat/        # 16 modules (+ webui/): config, logging, doctor, preflight,
 │                         #   preprocess, sfm, quality, train, export,
 │                         #   viewer, watcher, obsidian, compress,
 │                         #   pipeline, cli
+│   └── webui/            #   FastAPI + HTMX WebUI (Phase 10)
 ├── config/default.toml   # All defaults, all sections
 ├── scripts/              # install_deps.sh, fetch_brush.sh, install_splat.sh
-├── tests/                # ~175 unit + 2 opt-in E2E (see tests/README.md)
+├── tests/                # 185 unit + 2 opt-in E2E (see tests/README.md)
 ├── examples/             # ready-made --config overlays for common use cases
 ├── docs/                 # spec, architecture, configuration, workflows,
 │                         # concepts, getting-started, ply-output-format,
@@ -163,6 +178,7 @@ auto-splat-pipeline/
 - [`PHASE-3-RETRY.md`](docs/PHASE-3-RETRY.md) — quality-gate + adaptive retry
 - [`PHASE-9-PLAN.md`](docs/PHASE-9-PLAN.md) — Local SuperSplat auto-open design
 - [`PHASE-9-RECON.md`](docs/PHASE-9-RECON.md) — Phase-9 recon findings
+- [`PHASE-10-WEBUI.md`](docs/PHASE-10-WEBUI.md) — Phase 10 WebUI plan snapshot (FastAPI + HTMX)
 
 ### Tooling
 - [`tests/README.md`](tests/README.md) — how to run unit + opt-in E2E tests
