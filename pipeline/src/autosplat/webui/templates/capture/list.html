@@ -1,47 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Captures{% endblock %}
-{% block content %}
-<h1>Captures</h1>
 
-{% if captures %}
-<div class="card">
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Status</th>
-        <th>Stage</th>
-        <th>PLY</th>
-        <th>Finished</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in captures %}
-      <tr>
-        <td><a href="/captures/{{ c.id }}">{{ c.id }}</a></td>
-        <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
-        <td class="meta">{{ c.stage or "—" }}</td>
-        <td class="meta">
-          {% if c.has_ply %}
-            {% if c.ply_size_bytes %}{{ "%.1f"|format(c.ply_size_bytes / 1048576) }} MB{% else %}✓{% endif %}
-          {% else %}—{% endif %}
-        </td>
-        <td class="meta">{{ c.finished_at or "—" }}</td>
-        <td>
-          {% if c.has_ply %}
-          <a href="/captures/{{ c.id }}/view" class="btn btn-ghost" style="font-size:12px;padding:3px 10px">View ▶</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{% block crumbs %}
+<span class="sep">/</span><span class="cur">captures</span>
+{% endblock %}
+
+{% block content %}
+{%- from "_icons.html" import icon -%}
+<div class="as-main-inner">
+
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span>
+      <span class="sep">·</span>
+      <span>{{ captures|length }} captures</span>
+    </div>
+    <h1 class="as-h1">Captures
+      <span style="color:var(--fg-tertiary);font-family:var(--font-mono);font-weight:500;font-size:24px;margin-left:12px">· {{ captures|length }}</span>
+    </h1>
+    <p class="as-sub">Every capture you have tended. Mono-id, status, the path it took.</p>
+  </div>
+
+  {# Filter bar — UI stub in v1.1.0, server-filter out of scope #}
+  <div class="as-filter" style="margin-bottom:var(--space-4)">
+    <div class="as-search">
+      {{ icon('search', 14) }}
+      <input placeholder="search · id · stage · status" style="background:none;border:none;outline:none;font-family:var(--font-mono);font-size:12px;color:var(--fg-primary);flex:1">
+    </div>
+    <a href="/captures/" class="as-chip on">all <span class="ct">{{ captures|length }}</span></a>
+    <span class="as-chip">done <span class="ct">{{ captures|selectattr('status','eq','done')|list|length }}</span></span>
+    <span class="as-chip">running <span class="ct">{{ captures|selectattr('status','eq','running')|list|length }}</span></span>
+    <span class="as-chip">failed <span class="ct">{{ captures|selectattr('status','eq','failed')|list|length }}</span></span>
+    <span class="as-filter-spacer"></span>
+    <a href="/captures/" class="as-btn primary">{{ icon('plus', 13) }} New capture</a>
+  </div>
+
+  {# Captures table — HTMX-polled every 5s #}
+  {% include "partials/captures_list_inner.html" %}
+
 </div>
-{% else %}
-<div class="empty-state">
-  <p>No captures found in <code>{{ captures_dir }}</code>.</p>
-  <p class="meta" style="margin-top:8px">Drop a video file into the watch folder or run <code>autosplat process &lt;video&gt;</code>.</p>
-</div>
-{% endif %}
 {% endblock %}

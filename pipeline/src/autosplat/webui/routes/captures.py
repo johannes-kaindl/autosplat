@@ -24,10 +24,17 @@ def _captures_dir(request: Request):
 async def captures_list(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
     captures = list_captures(captures_dir)
+    active = next((c for c in captures if c.status == "running"), None)
+    stats = {
+        "total": len(captures),
+        "done": sum(1 for c in captures if c.status == "done"),
+        "running": 1 if active else 0,
+        "failed": sum(1 for c in captures if c.status == "failed"),
+    }
     return _templates(request).TemplateResponse(
         request,
         "capture/list.html",
-        {"version": __version__, "captures": captures, "captures_dir": str(captures_dir)},
+        {"captures": captures, "captures_dir": str(captures_dir), "stats": stats, "active_capture": active},
     )
 
 

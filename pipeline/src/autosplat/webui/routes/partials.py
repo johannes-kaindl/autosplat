@@ -56,6 +56,18 @@ async def jobs_partial(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/captures", response_class=HTMLResponse)
+async def captures_list_partial(request: Request) -> HTMLResponse:
+    captures_dir = _captures_dir(request)
+    from autosplat.webui.state import list_captures as _list
+    captures = _list(captures_dir)
+    return _templates(request).TemplateResponse(
+        request,
+        "partials/captures_list_inner.html",
+        {"captures": captures, "captures_dir": captures_dir},
+    )
+
+
 @router.get("/capture/{capture_id}/status", response_class=HTMLResponse)
 async def capture_status_partial(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
