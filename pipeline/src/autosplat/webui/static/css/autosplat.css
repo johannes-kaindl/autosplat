@@ -172,6 +172,16 @@
   opacity: 0.03;
 }
 .as-frame > * { position: relative; z-index: 1; }
+/* Viewer frame — sidebar hidden, full-width main */
+.as-frame--viewer {
+  grid-template-columns: 1fr;
+  grid-template-areas: "topbar" "main" "footer";
+}
+.as-frame--viewer .as-side { display: none; }
+/* Fullscreen: hide chrome, viewer fills window */
+.as-frame--viewer.viewer-fullscreen .as-top,
+.as-frame--viewer.viewer-fullscreen .as-foot { display: none; }
+.as-frame--viewer.viewer-fullscreen .as-main { overflow: hidden; }
 
 /* ====== Top bar ========================================================== */
 .as-top {
