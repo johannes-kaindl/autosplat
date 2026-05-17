@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import compress as compress_mod
 from . import export as export_mod
@@ -24,6 +25,9 @@ from . import train as train_mod
 from . import viewer as viewer_mod
 from .config import Config, apply_override
 from .logging import configure_logging, get_logger
+
+if TYPE_CHECKING:
+    from .watcher import WatcherState
 
 logger = get_logger(__name__)
 
@@ -53,6 +57,7 @@ def run_pipeline(
     skip_stages: set[str] | None = None,
     dry_run: bool = False,
     config_override: dict | None = None,
+    state: WatcherState | None = None,
 ) -> PipelineResult:
     """Run the full pipeline on a single video.
 
@@ -61,6 +66,13 @@ def run_pipeline(
 
     `config_override` is a nested dict (e.g. `{"colmap": {"matcher": "exhaustive"}}`)
     deep-merged into `config` before any work — used by Phase-3 adaptive retry.
+
+    `state`, when given, is a WatcherState the pipeline reports progress into:
+    in_progress at start, the stage on each transition, and a completed entry on
+    success — all keyed by the capture directory so the WebUI can track the run
+    regardless of trigger path (CLI-direct, watch-daemon, WebUI). On failure the
+    in_progress entry is left intact (stage = the failing stage) for the caller
+    to resolve (retry vs. mark_failed).
     """
     if config_override:
         config = apply_override(config, config_override)
@@ -112,12 +124,18 @@ def run_pipeline(
 
     t0 = time.monotonic()
 
+    if state is not None:
+        state.begin(capture_dir, source_video=video)
+        state.update_stage("preflight")
+
     # ── Pre-flight (Phase 6 / Spec §5 + §9.2) ──────────────────────────
     # ffprobe-validate + duration/resolution/fps plausibility. Fails fast
     # on corrupt or implausible inputs before any extraction work.
     preflight_mod.run_preflight(video)
 
     # ── Preprocess ─────────────────────────────────────────────────────
+    if state is not None:
+        state.update_stage("preprocess")
     if "preprocess" in skip:
         kept = len(list(frames_dir.glob("frame_*.jpg")))
         extracted = kept
@@ -128,6 +146,8 @@ def run_pipeline(
         kept = pp.kept_count
 
     # ── SfM ────────────────────────────────────────────────────────────
+    if state is not None:
+        state.update_stage("sfm")
     if "sfm" in skip:
         cams = points = 0
         logger.info("pipeline.skip", stage="sfm")
@@ -145,6 +165,8 @@ def run_pipeline(
         )
 
     # ── Training ───────────────────────────────────────────────────────
+    if state is not None:
+        state.update_stage("train")
     if "train" in skip:
         steps = 0
         training_duration = 0.0
@@ -214,6 +236,8 @@ def run_pipeline(
         )
 
     # ── Export ─────────────────────────────────────────────────────────
+    if state is not None:
+        state.update_stage("export")
     if "export" in skip:
         raise ValueError("Cannot skip the final export stage")
     exp = export_mod.export_capture(
@@ -288,6 +312,11 @@ def run_pipeline(
 
     duration = time.monotonic() - t0
     logger.info("pipeline.done", duration_s=duration, output_ply=str(exp.output_ply))
+
+    if state is not None:
+        state.mark_done(
+            exp.output_ply, duration, max_history=config.status.max_history
+        )
 
     return PipelineResult(
         capture_name=capture_name,

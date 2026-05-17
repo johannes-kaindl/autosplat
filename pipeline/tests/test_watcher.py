@@ -206,9 +206,13 @@ def test_daemon_processes_existing_files_sequentially(tmp_path: Path, monkeypatc
     process_lock = threading.Lock()
 
     def fake_process(p: Path, *, config_override=None) -> dict:
+        # Stand in for run_pipeline: it now reports status into WatcherState.
         with process_lock:
             processed.append(p)
-        return {"output_ply": str(p.with_suffix(".ply")), "duration_s": 0.01}
+        state.begin(p, source_video=p)
+        ply = p.with_suffix(".ply")
+        state.mark_done(ply, duration_s=0.01)
+        return {"output_ply": str(ply), "duration_s": 0.01}
 
     state = WatcherState(state_file=tmp_path / "state.json")
     daemon = WatchDaemon(folder, state, fake_process)
@@ -239,9 +243,14 @@ def test_daemon_survives_processing_failure(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr("autosplat.watcher.STABILITY_CHECK_INTERVAL_S", 0.01)
 
     def fake_process(p: Path, *, config_override=None) -> dict:
+        # Stand in for run_pipeline: begin() sets in_progress; on failure it is
+        # left intact for reconcile_failure; on success mark_done() records it.
+        state.begin(p, source_video=p)
         if p.name == "bad.mp4":
             raise RuntimeError("simulated SfM failure")
-        return {"output_ply": str(p.with_suffix(".ply")), "duration_s": 0.01}
+        ply = p.with_suffix(".ply")
+        state.mark_done(ply, duration_s=0.01)
+        return {"output_ply": str(ply), "duration_s": 0.01}
 
     state = WatcherState(state_file=tmp_path / "state.json")
     daemon = WatchDaemon(folder, state, fake_process)
@@ -490,7 +499,9 @@ def test_daemon_retries_quality_gate_failure(tmp_path: Path, monkeypatch) -> Non
     calls: list[dict] = []
 
     def fake_process(p: Path, *, config_override=None) -> dict:
+        # Stand in for run_pipeline: reports status into WatcherState.
         calls.append({"path": str(p), "override": config_override})
+        state.begin(p, source_video=p)
         if config_override is None:
             raise QualityGateFailure(
                 reason="low_camera_ratio: 0.04 < 0.5",
@@ -498,7 +509,9 @@ def test_daemon_retries_quality_gate_failure(tmp_path: Path, monkeypatch) -> Non
                 retry_hint={"colmap": {"matcher": "exhaustive"}},
                 metrics={"cameras_registered": 4, "frames_kept": 106, "matcher": "sequential"},
             )
-        return {"output_ply": str(p.with_suffix(".ply")), "duration_s": 0.01}
+        ply = p.with_suffix(".ply")
+        state.mark_done(ply, duration_s=0.01)
+        return {"output_ply": str(ply), "duration_s": 0.01}
 
     state = WatcherState(state_file=tmp_path / "state.json")
     daemon = WatchDaemon(

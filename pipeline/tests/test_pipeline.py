@@ -101,12 +101,14 @@ def _cfg_with_viewer_target(target: str, obsidian_enabled: bool, tmp_path: Path)
 # ─── embed_url tests ─────────────────────────────────────────────────────────
 
 
-def _run_with_mocks(video: Path, cfg, patches: dict, tmp_path: Path):
+def _run_with_mocks(video: Path, cfg, patches: dict, tmp_path: Path, state=None):
     """Run run_pipeline with all stage functions mocked via nested patch contexts.
 
     Returns a tuple ``(result, mock_write)`` where *result* is the
     ``PipelineResult`` returned by ``run_pipeline`` and *mock_write* is the
     ``MagicMock`` standing in for ``obsidian_mod.write_capture_note``.
+
+    `state`, when given, is passed through to run_pipeline for status reporting.
     """
     with patch("autosplat.pipeline.preflight_mod.run_preflight", patches["preflight"]):
         with patch("autosplat.pipeline.preprocess_mod.extract_frames", patches["preprocess"]):
@@ -117,7 +119,11 @@ def _run_with_mocks(video: Path, cfg, patches: dict, tmp_path: Path):
                             with patch("autosplat.pipeline.obsidian_mod.read_ply_header", patches["ply_header"]):
                                 with patch("autosplat.pipeline.obsidian_mod.write_capture_note") as mock_write:
                                     with patch("autosplat.pipeline.viewer_mod.open_in_viewer"):
-                                        result = run_pipeline(video, cfg, output_dir_override=tmp_path / "captures")
+                                        result = run_pipeline(
+                                            video, cfg,
+                                            output_dir_override=tmp_path / "captures",
+                                            state=state,
+                                        )
                                         return result, mock_write
 
 
@@ -176,3 +182,65 @@ def test_embed_url_none_when_obsidian_disabled(tmp_path: Path) -> None:
     # which means embed_url was never built either.
     mock_note_data.assert_not_called()
     mock_write.assert_not_called()
+
+
+# ─── SF-G2-9-PART-2 — run_pipeline reports WatcherState ─────────────────────
+
+
+def test_run_pipeline_reports_watcher_state_on_success(tmp_path: Path) -> None:
+    """run_pipeline writes capture-dir-keyed WatcherState so the WebUI can
+    track the run regardless of trigger path (SF-G2-9-PART-2)."""
+    from autosplat.watcher import WatcherState
+
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    fake_ply = _fake_ply(tmp_path)
+    cfg = _cfg_with_viewer_target("none", obsidian_enabled=False, tmp_path=tmp_path)
+    patches = _mock_pipeline_stages(tmp_path, fake_ply)
+    state = WatcherState(state_file=tmp_path / "state.json")
+    capture_dir = tmp_path / "captures" / _make_capture_name(video)
+
+    # Preflight runs right after begin() + update_stage — snapshot in_progress.
+    seen: dict = {}
+
+    def _record(*_a, **_k) -> None:
+        ip = state.in_progress
+        seen["path"] = ip.path if ip else None
+        seen["stage"] = ip.stage if ip else None
+        seen["source_video"] = ip.source_video if ip else None
+
+    patches["preflight"].side_effect = _record
+
+    _run_with_mocks(video, cfg, patches, tmp_path, state=state)
+
+    # in_progress was set during the run, keyed by the capture directory
+    assert seen["path"] == str(capture_dir)
+    assert seen["stage"] == "preflight"
+    assert seen["source_video"] == str(video)
+    # after success: completed keyed by capture_dir, in_progress cleared
+    assert state.in_progress is None
+    assert len(state.completed) == 1
+    assert state.completed[0].path == str(capture_dir)
+
+
+def test_run_pipeline_leaves_in_progress_on_failure(tmp_path: Path) -> None:
+    """A failing stage leaves in_progress set at that stage for the caller to
+    resolve (retry vs. mark_failed) — SF-G2-9-PART-2."""
+    from autosplat.watcher import WatcherState
+
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    fake_ply = _fake_ply(tmp_path)
+    cfg = _cfg_with_viewer_target("none", obsidian_enabled=False, tmp_path=tmp_path)
+    patches = _mock_pipeline_stages(tmp_path, fake_ply)
+    patches["sfm"].side_effect = RuntimeError("simulated SfM failure")
+    state = WatcherState(state_file=tmp_path / "state.json")
+    capture_dir = tmp_path / "captures" / _make_capture_name(video)
+
+    with pytest.raises(RuntimeError, match="simulated SfM failure"):
+        _run_with_mocks(video, cfg, patches, tmp_path, state=state)
+
+    assert state.in_progress is not None
+    assert state.in_progress.path == str(capture_dir)
+    assert state.in_progress.stage == "sfm"
+    assert state.completed == []

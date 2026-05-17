@@ -58,11 +58,17 @@ def _now_iso() -> str:
 @dataclass
 class InProgress:
     """Snapshot of the currently-executing capture. Persisted so a crash leaves
-    a trail. Stage is updated by the worker as it advances."""
+    a trail. Stage is updated by run_pipeline as it advances.
+
+    `path` is the capture *directory* once run_pipeline has called begin() —
+    that is what the WebUI matches against. `source_video` keeps the original
+    input path so the retry/recovery machinery can re-enqueue it.
+    """
 
     path: str
     started_at: str
     stage: str = "starting"
+    source_video: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -73,6 +79,7 @@ class InProgress:
             path=d["path"],
             started_at=d.get("started_at") or d.get("started") or _now_iso(),
             stage=d.get("stage", "starting"),
+            source_video=d.get("source_video"),
         )
 
 
@@ -244,7 +251,12 @@ class WatcherState:
             if not self.queue:
                 return None
             path = self.queue.pop(0)
-            self.in_progress = InProgress(path=path, started_at=_now_iso())
+            # Crash-safety net between pop and run_pipeline's begin(): keep the
+            # video path in both fields. run_pipeline.begin() then re-keys
+            # `path` to the capture directory, leaving source_video intact.
+            self.in_progress = InProgress(
+                path=path, started_at=_now_iso(), source_video=path
+            )
             override = None
             record = self.retry_state.get(path)
             if record is not None and record.next_override:
@@ -260,6 +272,21 @@ class WatcherState:
                 self.retry_state[path] = RetryRecord(attempts=1)
             self.save()
         return (path, override)
+
+    def begin(self, capture_dir: Path, source_video: Path | None = None) -> None:
+        """Mark `capture_dir` as the in-progress capture.
+
+        Called by run_pipeline so every trigger path (CLI-direct, watch-daemon,
+        WebUI) reports status keyed by the capture directory — the key the
+        WebUI matches against. Overwrites any prior in_progress (single-slot).
+        """
+        with self.lock:
+            self.in_progress = InProgress(
+                path=str(capture_dir),
+                started_at=_now_iso(),
+                source_video=str(source_video) if source_video is not None else None,
+            )
+            self.save()
 
     def update_stage(self, stage: str) -> None:
         with self.lock:
@@ -322,7 +349,9 @@ class WatcherState:
         with self.lock:
             if self.in_progress is None:
                 return
-            path = self.in_progress.path
+            # Queue + retry_state are keyed by the source video; in_progress.path
+            # is the capture directory once run_pipeline has re-keyed it.
+            path = self.in_progress.source_video or self.in_progress.path
             record = self.retry_state.setdefault(path, RetryRecord())
             record.next_override = override
             # in_progress.attempts was set by pop_next; we leave it as the
@@ -358,8 +387,11 @@ def recover_state(
         if orphan is None:
             return 0
 
-        path = orphan.path
-        record = state.retry_state.get(path) or RetryRecord()
+        # Queue + retry_state are keyed by the source video; the failed-entry
+        # is keyed by the capture directory so the WebUI can match it.
+        video = orphan.source_video or orphan.path
+        capture_path = orphan.path
+        record = state.retry_state.get(video) or RetryRecord()
         retries_remaining = (
             retry_cfg is not None
             and retry_cfg.enabled
@@ -371,14 +403,14 @@ def recover_state(
             # if all retries are exhausted.
             record.last_reason = "interrupted"
             record.next_override = record.next_override  # preserve any pending hint
-            state.retry_state[path] = record
+            state.retry_state[video] = record
             state.in_progress = None
-            if path not in state.queue:
-                state.queue.append(path)
+            if video not in state.queue:
+                state.queue.append(video)
             state.save()
             logger.warning(
                 "watcher.recovered",
-                path=path,
+                path=video,
                 stage=orphan.stage,
                 action="re_enqueued",
                 attempts_so_far=record.attempts,
@@ -390,7 +422,7 @@ def recover_state(
         reason = "interrupted_max_retries" if retry_cfg and retry_cfg.enabled else "interrupted"
         state.failed.append(
             FailedEntry(
-                path=path,
+                path=capture_path,
                 failed_at=_now_iso(),
                 reason=reason,
                 stage=orphan.stage,
@@ -424,7 +456,8 @@ def reconcile_failure(
     """
     if state.in_progress is None:
         return "noop"
-    path = state.in_progress.path
+    # Keyed by source video — see schedule_retry.
+    path = state.in_progress.source_video or state.in_progress.path
     record = state.retry_state.get(path) or RetryRecord()
     record.last_reason = reason
 
@@ -543,12 +576,9 @@ class WatchDaemon:
                 continue
             path, override = popped
             try:
-                result = self._process_fn(Path(path), config_override=override)
-                self._state.mark_done(
-                    output_ply=Path(result.get("output_ply", "")),
-                    duration_s=float(result.get("duration_s", 0.0)),
-                    max_history=self._status_cfg.max_history,
-                )
+                # run_pipeline reports status into self._state itself (begin /
+                # update_stage / mark_done), so the worker no longer marks done.
+                self._process_fn(Path(path), config_override=override)
                 logger.info("watcher.done", path=path)
             except QualityGateFailure as e:
                 outcome = reconcile_failure(

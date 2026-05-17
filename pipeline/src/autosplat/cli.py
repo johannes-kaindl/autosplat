@@ -93,6 +93,8 @@ def process(
     cfg = _load_or_die(config)
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
 
+    # Report status into WatcherState so the WebUI can track this CLI-direct run.
+    state = WatcherState.load()
     try:
         result = run_pipeline(
             video,
@@ -100,11 +102,17 @@ def process(
             output_dir_override=output_dir,
             skip_stages=set(skip_stage) if skip_stage else None,
             dry_run=dry_run,
+            state=state,
         )
     except FileNotFoundError as e:
         err_console.print(f"[red]Missing input:[/red] {e}")
         raise typer.Exit(EXIT_USER_ERROR) from e
-    except RuntimeError as e:
+    except Exception as e:
+        # Any pipeline failure (RuntimeError, quality-gate, Brush OOM, …):
+        # record it in WatcherState before exiting so the run doesn't linger
+        # as a stale in_progress entry in the WebUI.
+        if state.in_progress is not None:
+            state.mark_failed(reason=str(e), stage=state.in_progress.stage)
         err_console.print(f"[red]Pipeline failure:[/red] {e}")
         raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
 
@@ -137,7 +145,7 @@ def watch(
             )
         else:
             console.print(f"[blue]Processing:[/blue] {video}")
-        result = run_pipeline(video, cfg, config_override=config_override)
+        result = run_pipeline(video, cfg, config_override=config_override, state=state)
         return {"output_ply": str(result.output_ply), "duration_s": result.duration_s}
 
     daemon = WatchDaemon(
