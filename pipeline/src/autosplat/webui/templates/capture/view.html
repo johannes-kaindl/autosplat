@@ -45,6 +45,11 @@
       </button>
     </div>
 
+    {# Floating close button — hidden by default, CSS shows it in viewer-fullscreen mode #}
+    <button class="as-viewer-fs-close as-viewer-iconbtn" id="as-fs-close-btn" type="button" title="Exit fullscreen (Esc)">
+      {{ icon('x', 14) }}
+    </button>
+
   </div>
 
   {% elif capture.has_ply %}
@@ -96,18 +101,23 @@
 <script>
 (function () {
   var btn = document.getElementById('as-fs-btn');
+  var closeBtn = document.getElementById('as-fs-close-btn');
   if (!btn) return;
   var frame = document.body;
-  var icon_max = btn.querySelector('svg');
+  function exitFs() {
+    frame.classList.remove('viewer-fullscreen');
+    btn.title = 'Toggle fullscreen';
+  }
+  function enterFs() {
+    frame.classList.add('viewer-fullscreen');
+    btn.title = 'Exit fullscreen';
+  }
   btn.addEventListener('click', function () {
-    var isFs = frame.classList.toggle('viewer-fullscreen');
-    btn.title = isFs ? 'Exit fullscreen' : 'Toggle fullscreen';
+    if (frame.classList.contains('viewer-fullscreen')) { exitFs(); } else { enterFs(); }
   });
+  if (closeBtn) { closeBtn.addEventListener('click', exitFs); }
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && frame.classList.contains('viewer-fullscreen')) {
-      frame.classList.remove('viewer-fullscreen');
-      btn.title = 'Toggle fullscreen';
-    }
+    if (e.key === 'Escape' && frame.classList.contains('viewer-fullscreen')) { exitFs(); }
   });
 })();
 </script>

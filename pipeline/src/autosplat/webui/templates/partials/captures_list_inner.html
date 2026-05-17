@@ -1,62 +1,93 @@
 {%- from "_icons.html" import icon -%}
 {%- from "_macros.html" import capture_badge, STAGE_MAP -%}
-<div class="as-tbl-wrap"
+<div class="as-main-inner"
      hx-get="/partials/captures"
-     hx-trigger="every 5s"
+     hx-trigger="every 3s"
      hx-swap="outerHTML">
-  {% if captures %}
-  <table class="as-tbl">
-    <thead>
-      <tr>
-        <th>capture id</th>
-        <th>status</th>
-        <th>stage</th>
-        <th>created</th>
-        <th style="text-align:right">ply</th>
-        <th style="text-align:right">actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in captures %}
-      <tr>
-        <td class="mono"><a href="/captures/{{ c.id }}" style="color:var(--fg-primary);text-decoration:none">{{ c.id }}</a></td>
-        <td>{{ capture_badge(c) }}</td>
-        <td class="dim mono" style="font-size:11px">
-          {%- if c.stage -%}
-            {%- set mapped = STAGE_MAP.get(c.stage, {'slot': c.stage}) -%}
-            {{ mapped.slot }}
-          {%- else -%}—{%- endif -%}
-        </td>
-        <td class="dim mono" style="font-size:11px">{{ c.id[:10] }}</td>
-        <td class="num" style="{% if not c.has_ply %}color:var(--fg-disabled){% endif %}">
-          {% if c.has_ply %}
-            {% if c.ply_size_bytes %}{{ '%.0f'|format(c.ply_size_bytes / 1048576) }} mb{% else %}✓{% endif %}
-          {% else %}— —{% endif %}
-        </td>
-        <td class="actions">
-          {% if c.has_ply %}
-          <a href="/captures/{{ c.id }}/view" class="as-icon-btn" title="View splat">{{ icon('eye') }}</a>
-          {% endif %}
-          {% if c.status in ('idle', 'failed', 'queued') %}
-          <form method="post" action="/captures/{{ c.id }}/process" style="display:inline">
-            <button type="submit" class="as-icon-btn" title="Process">{{ icon('play') }}</button>
-          </form>
-          {% endif %}
-          {% if c.status == 'running' %}
-          <form method="post" action="/captures/{{ c.id }}/cancel" style="display:inline">
-            <button type="submit" class="as-icon-btn" title="Cancel" style="color:var(--stage-failed)">{{ icon('square') }}</button>
-          </form>
-          {% endif %}
-          <a href="/captures/{{ c.id }}" class="as-icon-btn" title="Open">{{ icon('chevron-right') }}</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty-state" style="text-align:center;padding:48px;color:var(--fg-tertiary);font-family:var(--font-mono);font-size:12px">
-    <p>No captures found in <code style="color:var(--signal-circuit)">{{ captures_dir }}</code>.</p>
-    <p style="margin-top:8px;color:var(--fg-disabled)">Drop a video file into the watch folder to get started.</p>
+
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span>
+      <span class="sep">·</span>
+      <span>{{ captures|length }} captures</span>
+    </div>
+    <h1 class="as-h1">Captures
+      <span style="color:var(--fg-tertiary);font-family:var(--font-mono);font-weight:500;font-size:24px;margin-left:12px">· {{ captures|length }}</span>
+    </h1>
+    <p class="as-sub">Every capture you have tended. Mono-id, status, the path it took.</p>
   </div>
-  {% endif %}
+
+  {# Filter bar — UI stub in v1.1.0, server-filter out of scope #}
+  <div class="as-filter" style="margin-bottom:var(--space-4)">
+    <div class="as-search">
+      {{ icon('search', 14) }}
+      <input placeholder="search · id · stage · status" style="background:none;border:none;outline:none;font-family:var(--font-mono);font-size:12px;color:var(--fg-primary);flex:1">
+    </div>
+    <a href="/captures/" class="as-chip on">all <span class="ct">{{ captures|length }}</span></a>
+    <span class="as-chip">done <span class="ct">{{ captures|selectattr('status','eq','done')|list|length }}</span></span>
+    <span class="as-chip">running <span class="ct">{{ captures|selectattr('status','eq','running')|list|length }}</span></span>
+    <span class="as-chip">failed <span class="ct">{{ captures|selectattr('status','eq','failed')|list|length }}</span></span>
+    <span class="as-filter-spacer"></span>
+    <a href="/captures/" class="as-btn primary">{{ icon('plus', 13) }} New capture</a>
+  </div>
+
+  {# Captures table #}
+  <div class="as-tbl-wrap">
+    {% if captures %}
+    <table class="as-tbl">
+      <thead>
+        <tr>
+          <th>capture id</th>
+          <th>status</th>
+          <th>stage</th>
+          <th>created</th>
+          <th style="text-align:right">ply</th>
+          <th style="text-align:right">actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in captures %}
+        <tr>
+          <td class="mono"><a href="/captures/{{ c.id }}" style="color:var(--fg-primary);text-decoration:none">{{ c.id }}</a></td>
+          <td>{{ capture_badge(c) }}</td>
+          <td class="dim mono" style="font-size:11px">
+            {%- if c.stage -%}
+              {%- set mapped = STAGE_MAP.get(c.stage, {'slot': c.stage}) -%}
+              {{ mapped.slot }}
+            {%- else -%}—{%- endif -%}
+          </td>
+          <td class="dim mono" style="font-size:11px">{{ c.id[:10] }}</td>
+          <td class="num" style="{% if not c.has_ply %}color:var(--fg-disabled){% endif %}">
+            {% if c.has_ply %}
+              {% if c.ply_size_bytes %}{{ '%.0f'|format(c.ply_size_bytes / 1048576) }} mb{% else %}✓{% endif %}
+            {% else %}— —{% endif %}
+          </td>
+          <td class="actions">
+            {% if c.has_ply %}
+            <a href="/captures/{{ c.id }}/view" class="as-icon-btn" title="View splat">{{ icon('eye') }}</a>
+            {% endif %}
+            {% if c.status in ('idle', 'failed', 'queued') %}
+            <form method="post" action="/captures/{{ c.id }}/process" style="display:inline">
+              <button type="submit" class="as-icon-btn" title="Process">{{ icon('play') }}</button>
+            </form>
+            {% endif %}
+            {% if c.status == 'running' %}
+            <form method="post" action="/captures/{{ c.id }}/cancel" style="display:inline">
+              <button type="submit" class="as-icon-btn" title="Cancel" style="color:var(--stage-failed)">{{ icon('square') }}</button>
+            </form>
+            {% endif %}
+            <a href="/captures/{{ c.id }}" class="as-icon-btn" title="Open">{{ icon('chevron-right') }}</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="text-align:center;padding:48px;color:var(--fg-tertiary);font-family:var(--font-mono);font-size:12px">
+      <p>No captures found in <code style="color:var(--signal-circuit)">{{ captures_dir }}</code>.</p>
+      <p style="margin-top:8px;color:var(--fg-disabled)">Drop a video file into the watch folder to get started.</p>
+    </div>
+    {% endif %}
+  </div>
+
 </div>

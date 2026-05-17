@@ -6,37 +6,10 @@
 {% endblock %}
 
 {% block content %}
-{%- from "_icons.html" import icon -%}
-<div class="as-main-inner">
-
-  <div class="as-page-head">
-    <div class="as-eyebrow">
-      <span>chamber</span>
-      <span class="sep">·</span>
-      <span>{{ captures|length }} captures</span>
-    </div>
-    <h1 class="as-h1">Captures
-      <span style="color:var(--fg-tertiary);font-family:var(--font-mono);font-weight:500;font-size:24px;margin-left:12px">· {{ captures|length }}</span>
-    </h1>
-    <p class="as-sub">Every capture you have tended. Mono-id, status, the path it took.</p>
-  </div>
-
-  {# Filter bar — UI stub in v1.1.0, server-filter out of scope #}
-  <div class="as-filter" style="margin-bottom:var(--space-4)">
-    <div class="as-search">
-      {{ icon('search', 14) }}
-      <input placeholder="search · id · stage · status" style="background:none;border:none;outline:none;font-family:var(--font-mono);font-size:12px;color:var(--fg-primary);flex:1">
-    </div>
-    <a href="/captures/" class="as-chip on">all <span class="ct">{{ captures|length }}</span></a>
-    <span class="as-chip">done <span class="ct">{{ captures|selectattr('status','eq','done')|list|length }}</span></span>
-    <span class="as-chip">running <span class="ct">{{ captures|selectattr('status','eq','running')|list|length }}</span></span>
-    <span class="as-chip">failed <span class="ct">{{ captures|selectattr('status','eq','failed')|list|length }}</span></span>
-    <span class="as-filter-spacer"></span>
-    <a href="/captures/" class="as-btn primary">{{ icon('plus', 13) }} New capture</a>
-  </div>
-
-  {# Captures table — HTMX-polled every 5s #}
+<div class="as-poll-region"
+     hx-get="/partials/captures"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML">
   {% include "partials/captures_list_inner.html" %}
-
 </div>
 {% endblock %}

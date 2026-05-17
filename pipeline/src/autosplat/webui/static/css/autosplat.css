@@ -181,7 +181,18 @@
 /* Fullscreen: hide chrome, viewer fills window */
 .as-frame--viewer.viewer-fullscreen .as-top,
 .as-frame--viewer.viewer-fullscreen .as-foot { display: none; }
-.as-frame--viewer.viewer-fullscreen .as-main { overflow: hidden; }
+.as-frame--viewer.viewer-fullscreen .as-main {
+  overflow: hidden;
+  grid-area: 1 / 1 / -1 / -1;
+}
+/* Floating close button — hidden by default, shown in fullscreen */
+.as-viewer-fs-close {
+  display: none;
+}
+.viewer-fullscreen .as-viewer-fs-close {
+  display: inline-flex;
+  position: fixed; top: 16px; right: 16px; z-index: 1000;
+}
 
 /* ====== Top bar ========================================================== */
 .as-top {
@@ -374,6 +385,7 @@
   grid-area: main;
   background: var(--surface-vault);
   overflow-y: auto;
+  overflow-x: auto;
   position: relative;
 }
 /* .as-poll-region — outer HTMX-polling wrapper without padding.
@@ -527,7 +539,7 @@
 .as-tl-node {
   width: 36px; height: 36px; border-radius: 50%;
   border: 2px solid var(--border-default);
-  background: var(--surface-inset);
+  background: var(--surface-raised);
   display: grid; place-items: center;
   font-family: var(--font-mono); font-size: 11px; font-weight: 600;
   color: var(--fg-tertiary);
@@ -537,7 +549,7 @@
 }
 .as-tl-stage.done .as-tl-node {
   border-color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 18%, var(--surface-inset));
+  background: color-mix(in oklab, var(--accent) 18%, var(--surface-raised));
   color: var(--accent);
 }
 .as-tl-stage.active .as-tl-node {
