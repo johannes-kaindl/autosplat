@@ -1,26 +1,52 @@
 {% extends "base.html" %}
 {% block title %}Source Code{% endblock %}
+
+{% block crumbs %}
+<span class="sep">/</span><span class="cur">source</span>
+{% endblock %}
+
 {% block content %}
-<h1>Source Code</h1>
+{%- from "_icons.html" import icon -%}
+<div class="as-main-inner">
 
-<div class="card">
-  <p>autosplat is free software released under the
-     <strong>GNU Affero General Public License, version 3 or later</strong> (AGPL-3.0-or-later).</p>
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span>
+      <span class="sep">·</span>
+      <span>license · agpl-3.0-or-later</span>
+    </div>
+    <h1 class="as-h1">Source Code</h1>
+    <p class="as-sub"><span class="kuro-quote">Open code. Open evolution.</span></p>
+  </div>
 
-  <p style="margin-top:12px">
-    As required by AGPL §13, the complete corresponding source code is publicly available at:
-  </p>
+  <div class="as-card" style="max-width:640px">
+    <div class="as-card-body">
+      <p style="font-family:var(--font-body);font-size:13px;color:var(--fg-secondary);line-height:1.6;margin:0">
+        autosplat is free software released under the
+        <strong style="color:var(--fg-primary)">GNU Affero General Public License, version 3 or later</strong>
+        (<code style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">AGPL-3.0-or-later</code>).
+      </p>
 
-  <p style="margin-top:12px;font-size:16px">
-    <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat" target="_blank">
-      codeberg.org/jkaindl/video-to-3d-gaussian-splat
-    </a>
-  </p>
+      <p style="font-family:var(--font-body);font-size:13px;color:var(--fg-secondary);line-height:1.6;margin:var(--space-4) 0 0">
+        As required by AGPL §13, the complete corresponding source code is publicly available at:
+      </p>
 
-  <p class="meta" style="margin-top:16px">
-    You may copy, distribute and modify the software as long as you track changes/dates in source files.
-    Any modifications to or software including (via compiler) GPL-licensed code must also be made available
-    under the GPL along with build and install instructions.
-  </p>
+      <p style="margin:var(--space-4) 0 0">
+        <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+           target="_blank" rel="noopener"
+           class="as-btn primary">
+          {{ icon('external', 13) }} codeberg.org/jkaindl/video-to-3d-gaussian-splat
+        </a>
+      </p>
+
+      <p style="font-family:var(--font-body);font-size:11px;color:var(--fg-tertiary);line-height:1.6;margin:var(--space-5) 0 0">
+        You may copy, distribute and modify the software as long as you track
+        changes/dates in source files. Any modifications to or software including
+        (via compiler) GPL-licensed code must also be made available under the GPL
+        along with build and install instructions.
+      </p>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
