@@ -25,7 +25,7 @@ Real-world validated on 11 captures: **8/11 (73%) trained successfully** in an o
 ## What it does
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[Drop .mp4 / .mov] --> B[watch-folder]
     B --> C[FFmpeg + Laplacian blur]
     C --> D[COLMAP SfM]
