@@ -1,5 +1,9 @@
 # video-to-3d-gaussian-splat
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.1.1-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
+[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
+
 Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running locally on Apple Silicon.
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
@@ -8,9 +12,9 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 ---
 
-## Über
+## About
 
-DJI Neo 2 drone footage (or any `.mp4`/`.mov`) goes in. A trained 3D Gaussian Splat comes out — ready to open directly in SuperSplat for trimming, camera animation, and publishing.
+Video footage — drone, handheld, anything with enough motion parallax — goes in as `.mp4` or `.mov`. A trained 3D Gaussian Splat comes out — ready to open directly in SuperSplat for trimming, camera animation, and publishing.
 
 No cloud. No GPU server. No CUDA stack. Everything runs locally on a Mac with Apple Silicon using WebGPU-native tooling. The pipeline handles preprocessing, Structure-from-Motion via COLMAP, quality gating with adaptive retry, Gaussian Splat training via Brush, compression, Obsidian capture-note generation, and automatic SuperSplat launch.
 
@@ -20,14 +24,16 @@ Real-world validated on 11 captures: **8/11 (73%) trained successfully** in an o
 
 ## What it does
 
-```
-drop *.mp4 / *.mov  →  watch-folder
-        │
-        ▼
-   ffmpeg + Laplacian-blur-filter   →  COLMAP SfM   →  quality-gate   →  Brush training   →  PLY export   →  Obsidian capture-note
-                                                                                                                  │
-                                                                                                                  ▼
-                                                                                                       SuperSplat (cleanup, publish)
+```mermaid
+flowchart LR
+    A[Drop .mp4 / .mov] --> B[watch-folder]
+    B --> C[FFmpeg + Laplacian blur]
+    C --> D[COLMAP SfM]
+    D --> E[quality gate]
+    E --> F[Brush training]
+    F --> G[PLY export]
+    G --> H[Obsidian capture-note]
+    G --> I[SuperSplat: cleanup + publish]
 ```
 
 ---
@@ -78,7 +84,7 @@ uv run autosplat webui --port 8080
 # then open http://127.0.0.1:8080
 ```
 
-See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the per-task user guide.
+See [`docs/WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) for the per-task user guide.
 
 ---
 
@@ -104,7 +110,7 @@ autosplat webui --port 8080        # start on default port
 autosplat webui --host 0.0.0.0 --port 8080   # LAN-accessible
 ```
 
-Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features: live capture queue + dashboard, per-capture stage timeline, process/cancel/retry buttons, SuperSplat iframe embed for finished splats, AGPL §13 `/source` route. The interface uses the **Kuro Signal Protocol** design system (v1.1.0) with a dark/light theme toggle (anti-flash, persisted in `localStorage`) and live HTMX polling on every surface. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
+Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features: live capture queue + dashboard, per-capture stage timeline, process/cancel/retry buttons, SuperSplat iframe embed for finished splats, AGPL §13 `/source` route. The interface uses the **Kuro Signal Protocol** design system (v1.1.0) with a dark/light theme toggle (anti-flash, persisted in `localStorage`) and live HTMX polling on every surface. See [`docs/WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
 
 ---
 
@@ -116,12 +122,12 @@ Nerfstudio's `gsplat` rasterization kernels are CUDA-only. Brush is a Rust binar
 
 ## Configuration
 
-Defaults live in [`config/default.toml`](config/default.toml). User overrides:
+Defaults live in [`config/default.toml`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/config/default.toml). User overrides:
 
 1. `~/.config/autosplat/config.toml` (XDG-style)
 2. `--config <path>` CLI flag
 
-Every key is documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+Every key is documented in [`docs/CONFIGURATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONFIGURATION.md).
 
 ---
 
@@ -131,7 +137,7 @@ Every key is documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 uv run pytest -q                    # 200 unit tests, ~7s
 AUTOSPLAT_E2E=1 uv run pytest      # +1 opt-in end-to-end test (needs ffmpeg+colmap+brush)
 AUTOSPLAT_COMPRESS_E2E=1 uv run pytest tests/test_compress.py  # +1 opt-in compress smoke
-uv run ruff check src/ tests/      # lint — currently passes cleanly
+uv run ruff check src/ tests/      # lint
 ```
 
 ---
@@ -161,29 +167,29 @@ auto-splat-pipeline/
 
 ## Documentation index
 
-**New here?** Start with [`GETTING-STARTED.md`](docs/GETTING-STARTED.md).
-**Curious about the moving parts?** Read [`CONCEPTS.md`](docs/CONCEPTS.md).
+**New here?** Start with [`GETTING-STARTED.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/GETTING-STARTED.md).
+**Curious about the moving parts?** Read [`CONCEPTS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONCEPTS.md).
 
 ### Reference
-- [`AUTO-SPLAT PIPELINE — Spec & Implementation Plan.md`](docs/AUTO-SPLAT%20PIPELINE%20%E2%80%94%20Spec%20%26%20Implementation%20Plan.md) — authoritative spec
-- [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module map, capture-dir layout, stage I/O
-- [`CONFIGURATION.md`](docs/CONFIGURATION.md) — every TOML key, with example overlays in [`examples/`](examples/)
-- [`WORKFLOWS.md`](docs/WORKFLOWS.md) — user-facing recipes (one-shot, watch, status, viewer, Obsidian, smoke-test)
-- [`PLY-OUTPUT-FORMAT.md`](docs/PLY-OUTPUT-FORMAT.md) — INRIA/Kerbl 3DGS PLY reference + viewer compat matrix + measured compression ratios
-- [`TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — failure-modes + recovery
+- [`AUTO-SPLAT PIPELINE — Spec & Implementation Plan.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/AUTO-SPLAT%20PIPELINE%20%E2%80%94%20Spec%20%26%20Implementation%20Plan.md) — authoritative spec
+- [`ARCHITECTURE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/ARCHITECTURE.md) — module map, capture-dir layout, stage I/O
+- [`CONFIGURATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONFIGURATION.md) — every TOML key, with example overlays in [`examples/`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/examples)
+- [`WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) — user-facing recipes (one-shot, watch, status, viewer, Obsidian, smoke-test)
+- [`PLY-OUTPUT-FORMAT.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PLY-OUTPUT-FORMAT.md) — INRIA/Kerbl 3DGS PLY reference + viewer compat matrix + measured compression ratios
+- [`TROUBLESHOOTING.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/TROUBLESHOOTING.md) — failure-modes + recovery
 
 ### Phase notes (release history)
-- [`CHANGELOG.md`](CHANGELOG.md) — per-phase release entries (Keep-A-Changelog format)
-- [`PHASE-0-CALIBRATION.md`](docs/PHASE-0-CALIBRATION.md) — first end-to-end run findings
-- [`PHASE-2-WATCHER.md`](docs/PHASE-2-WATCHER.md) — daemon schema + lifecycle
-- [`PHASE-3-RETRY.md`](docs/PHASE-3-RETRY.md) — quality-gate + adaptive retry
-- [`PHASE-9-PLAN.md`](docs/PHASE-9-PLAN.md) — Local SuperSplat auto-open design
-- [`PHASE-9-RECON.md`](docs/PHASE-9-RECON.md) — Phase-9 recon findings
-- [`PHASE-10-WEBUI.md`](docs/PHASE-10-WEBUI.md) — Phase 10 WebUI plan snapshot (FastAPI + HTMX)
+- [`CHANGELOG.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CHANGELOG.md) — per-phase release entries (Keep-A-Changelog format)
+- [`PHASE-0-CALIBRATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-0-CALIBRATION.md) — first end-to-end run findings
+- [`PHASE-2-WATCHER.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-2-WATCHER.md) — daemon schema + lifecycle
+- [`PHASE-3-RETRY.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-3-RETRY.md) — quality-gate + adaptive retry
+- [`PHASE-9-PLAN.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-9-PLAN.md) — Local SuperSplat auto-open design
+- [`PHASE-9-RECON.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-9-RECON.md) — Phase-9 recon findings
+- [`PHASE-10-WEBUI.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-10-WEBUI.md) — Phase 10 WebUI plan snapshot (FastAPI + HTMX)
 
 ### Tooling
-- [`tests/README.md`](tests/README.md) — how to run unit + opt-in E2E tests
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — bug reports + PR workflow
+- [`tests/README.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/tests/README.md) — how to run unit + opt-in E2E tests
+- [`CONTRIBUTING.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CONTRIBUTING.md) — bug reports + PR workflow
 
 ---
 
@@ -197,7 +203,7 @@ This build methodology is visible in the repository history and docs. It is part
 
 ## Expected Behavior
 
-**Overnight run 2026-05-15 — 11 captures, Apple M5 32 GB:**
+**Overnight run 2026-05-15 — 11 captures (DJI Neo 2 drone footage), Apple M5 32 GB:**
 
 | Result | Count | Notes |
 |--------|-------|-------|
@@ -209,15 +215,27 @@ This build methodology is visible in the repository history and docs. It is part
 - Quality-gate rejection after exhaustive retry — low Gaussian count even with relaxed parameters. Pipeline classifies explicitly as `quality_gate.failed`.
 - Compress backend unavailable — graceful skip, PLY still exported. Logged as warning, not error.
 
-All failures produce structured JSON events in `state.json` and are visible via `autosplat status`. The 73% success rate is the honest baseline for real-world drone footage on Apple Silicon without manual SfM parameter tuning.
+All failures produce structured JSON events in `state.json` and are visible via `autosplat status`. The 73% success rate is the honest baseline for real-world footage on Apple Silicon without manual SfM parameter tuning.
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome at [codeberg.org/jkaindl/video-to-3d-gaussian-splat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat). For larger changes, open an issue first to discuss the approach. See [`CONTRIBUTING.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CONTRIBUTING.md) for bug-report and PR conventions.
+
+---
+
+## Project status
+
+Actively maintained by a single maintainer ([@jkaindl](https://codeberg.org/jkaindl)). Apple-Silicon focus. Pull requests for cross-platform support are welcome but not actively pursued by the maintainer.
 
 ---
 
 ## License
 
-**Code:** GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) — see [LICENSE](LICENSE).
+**Code:** GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) — see [LICENSE](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/LICENSE).
 
-**Documentation** (README, `docs/`): Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) — see [LICENSE-DOCS](LICENSE-DOCS).
+**Documentation** (README, `docs/`): Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) — see [LICENSE-DOCS](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/LICENSE-DOCS).
 
 ### Why AGPL?
 
