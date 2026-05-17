@@ -34,7 +34,7 @@
 
     {# HUD — top-right: PLY download + open new tab #}
     <div class="as-viewer-hud-tr">
-      <a href="/captures/{{ capture.id }}/ply" class="as-viewer-pill" download title="Download PLY" style="text-decoration:none">
+      <a href="/captures/{{ capture.id }}/scene.ply" class="as-viewer-pill" download title="Download PLY" style="text-decoration:none">
         {{ icon('download', 11) }} PLY
       </a>
       <a href="{{ embed_url }}" target="_blank" rel="noopener" class="as-viewer-iconbtn" title="Open SuperSplat in new tab">
@@ -68,7 +68,7 @@
           The local SuperSplat build was not found at <code style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">target/supersplat/dist/</code>.
           Run <code style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">bash scripts/setup_supersplat.sh</code> and restart the WebUI.
         </p>
-        <a href="/captures/{{ capture.id }}/ply" class="as-btn primary" download>{{ icon('download', 13) }} Download PLY</a>
+        <a href="/captures/{{ capture.id }}/scene.ply" class="as-btn primary" download>{{ icon('download', 13) }} Download PLY</a>
       </div>
     </div>
   </div>

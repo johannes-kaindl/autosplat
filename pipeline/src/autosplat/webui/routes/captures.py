@@ -77,7 +77,7 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
     if supersplat_available and capture.has_ply:
         # Absolute URL so the iframe can resolve the PLY route correctly
         base = str(request.base_url).rstrip("/")
-        embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/ply"
+        embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/scene.ply"
 
     return _templates(request).TemplateResponse(
         request,
@@ -101,7 +101,10 @@ async def capture_log(request: Request, capture_id: str) -> JSONResponse:
     return JSONResponse({"lines": lines})
 
 
-@router.get("/{capture_id}/ply")
+# Served at a `.ply`-suffixed URL so the embedded SuperSplat viewer can detect
+# the file type from the URL extension (it has no `.ply` to parse otherwise —
+# closes SF-PIPE-1). The `.ply` suffix also gives browser downloads a real name.
+@router.get("/{capture_id}/scene.ply")
 async def capture_ply(request: Request, capture_id: str) -> FileResponse:
     captures_dir = _captures_dir(request)
     capture = get_capture(captures_dir, capture_id)

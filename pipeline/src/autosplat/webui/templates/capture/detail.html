@@ -36,7 +36,7 @@
       </div>
       <div style="display:flex;gap:var(--space-2);margin-top:4px;flex-shrink:0">
         {% if capture.status == 'done' and capture.has_ply %}
-        <a href="/captures/{{ capture.id }}/ply" class="as-btn ghost" download>{{ icon('download', 13) }} PLY</a>
+        <a href="/captures/{{ capture.id }}/scene.ply" class="as-btn ghost" download>{{ icon('download', 13) }} PLY</a>
         <a href="/captures/{{ capture.id }}/view" class="as-btn primary">{{ icon('eye', 14) }} View splat</a>
         {% elif capture.status in ('idle', 'failed', 'queued') %}
         <form method="post" action="/captures/{{ capture.id }}/process">
@@ -91,7 +91,7 @@
               {% if capture.ply_size_bytes %}<div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">{{ '%.0f'|format(capture.ply_size_bytes / 1048576) }} mb</div>{% endif %}
             </div>
             <p style="margin:8px 0 12px;font-family:var(--font-body);font-size:12px;color:var(--fg-secondary);line-height:1.5">Standard splat · readable everywhere</p>
-            <a href="/captures/{{ capture.id }}/ply" class="as-btn sm ghost" download style="display:flex;justify-content:center">{{ icon('download', 11) }} Download</a>
+            <a href="/captures/{{ capture.id }}/scene.ply" class="as-btn sm ghost" download style="display:flex;justify-content:center">{{ icon('download', 11) }} Download</a>
           </div>
         </div>
       </div>

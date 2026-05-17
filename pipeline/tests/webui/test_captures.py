@@ -43,7 +43,7 @@ def test_capture_ply_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
     app.state.cfg.paths.captures_dir = tmp_path
 
     with TestClient(app) as client:
-        response = client.get("/captures/2026-05-16_ply_smoke/ply")
+        response = client.get("/captures/2026-05-16_ply_smoke/scene.ply")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/octet-stream"
 
@@ -55,7 +55,7 @@ def test_capture_ply_route_returns_404_when_no_ply(app: FastAPI, tmp_path: Path)
     app.state.cfg.paths.captures_dir = tmp_path
 
     with TestClient(app) as client:
-        response = client.get("/captures/2026-05-16_no_ply/ply")
+        response = client.get("/captures/2026-05-16_no_ply/scene.ply")
     assert response.status_code == 404
 
 
