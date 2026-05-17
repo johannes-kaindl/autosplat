@@ -71,6 +71,29 @@ async def test_cancel_job_sets_cancelled(tmp_path: Path) -> None:
     assert job.status == "cancelled"
 
 
+@pytest.mark.anyio
+async def test_all_jobs_keeps_history_per_capture(tmp_path: Path) -> None:
+    """SF-G3-3: re-triggering a capture keeps both runs in all_jobs().
+
+    `_jobs` still holds only the current job per capture (for get_job/cancel),
+    but `all_jobs()` returns the full history so the jobs view shows every run.
+    """
+    from autosplat.config import load_config
+
+    runner = JobRunner()
+    capture_path = tmp_path / "2026-05-17_g3_3"
+    capture_path.mkdir()
+    (capture_path / "clip.mp4").write_bytes(b"fake")
+    cfg = load_config(include_xdg=False)
+
+    with patch("autosplat.webui.jobs_runner._run_pipeline_thread"):
+        await runner.start_job("2026-05-17_g3_3", capture_path, cfg)
+        await runner.start_job("2026-05-17_g3_3", capture_path, cfg)
+
+    assert len(runner.all_jobs()) == 2
+    assert runner.get_job("2026-05-17_g3_3") is runner.all_jobs()[-1]
+
+
 def test_list_captures_overlays_running_jobrunner_state(tmp_path: Path) -> None:
     """SF-G2-9: a WebUI job running via JobRunner must show as running.
 

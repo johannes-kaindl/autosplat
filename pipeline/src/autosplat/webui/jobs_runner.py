@@ -50,18 +50,22 @@ class JobRunner:
     """In-memory job registry for the WebUI.
 
     One job runs per capture_id; starting a new job for the same id
-    cancels any existing one first.
+    cancels any existing one first. `_jobs` holds the *current* job per
+    capture; `_history` keeps every job ever started so the jobs view can
+    show all runs of a re-triggered capture (SF-G3-3).
     """
 
     def __init__(self) -> None:
         self._jobs: dict[str, JobState] = {}
+        self._history: list[JobState] = []
         self._lock = asyncio.Lock()
 
     def get_job(self, capture_id: str) -> JobState | None:
         return self._jobs.get(capture_id)
 
     def all_jobs(self) -> list[JobState]:
-        return list(self._jobs.values())
+        """Every job ever started, in start order — multiple runs per capture."""
+        return list(self._history)
 
     async def start_job(self, capture_id: str, capture_path: Path, cfg: Config) -> JobState:
         async with self._lock:
@@ -71,6 +75,7 @@ class JobRunner:
 
             job = JobState(capture_id=capture_id, status="queued")
             self._jobs[capture_id] = job
+            self._history.append(job)
 
         # Find the source video — look for any video file in capture_path
         video = _find_source_video(capture_path)
