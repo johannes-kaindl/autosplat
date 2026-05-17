@@ -12,7 +12,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autosplat.webui.jobs_runner import JobRunner, _find_source_video
+from autosplat.webui.jobs_runner import JobRunner, JobState, _find_source_video
+from autosplat.webui.state import list_captures
 
 
 def test_find_source_video_returns_none_for_empty(tmp_path: Path) -> None:
@@ -68,3 +69,37 @@ async def test_cancel_job_sets_cancelled(tmp_path: Path) -> None:
     cancelled = await runner.cancel_job("2026-05-16_cancel")
     assert cancelled is True
     assert job.status == "cancelled"
+
+
+def test_list_captures_overlays_running_jobrunner_state(tmp_path: Path) -> None:
+    """SF-G2-9: a WebUI job running via JobRunner must show as running.
+
+    WebUI jobs run `run_pipeline()` in a thread and never write
+    WatcherState/state.json — without the JobRunner overlay the capture
+    would resolve to 'idle'.
+    """
+    capture_dir = tmp_path / "2026-05-17_g2_9"
+    capture_dir.mkdir()
+
+    runner = JobRunner()
+    runner._jobs["2026-05-17_g2_9"] = JobState(
+        capture_id="2026-05-17_g2_9", status="running"
+    )
+
+    assert list_captures(tmp_path)[0].status == "idle"
+    assert list_captures(tmp_path, runner)[0].status == "running"
+
+
+def test_list_captures_overlays_failed_jobrunner_state(tmp_path: Path) -> None:
+    """SF-G2-9: a failed WebUI job surfaces its status + error reason."""
+    capture_dir = tmp_path / "2026-05-17_g2_9_fail"
+    capture_dir.mkdir()
+
+    runner = JobRunner()
+    runner._jobs["2026-05-17_g2_9_fail"] = JobState(
+        capture_id="2026-05-17_g2_9_fail", status="failed", error="boom"
+    )
+
+    capture = list_captures(tmp_path, runner)[0]
+    assert capture.status == "failed"
+    assert capture.reason == "boom"

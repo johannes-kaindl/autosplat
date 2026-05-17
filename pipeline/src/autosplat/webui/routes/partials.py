@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from autosplat import __version__
 from autosplat.webui.state import get_capture, list_captures, read_log_tail
 
 router = APIRouter(prefix="/partials")
@@ -20,10 +19,14 @@ def _captures_dir(request: Request):
     return cfg.paths.captures_dir
 
 
+def _job_runner(request: Request):
+    return getattr(request.app.state, "job_runner", None)
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_partial(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    captures = list_captures(captures_dir)
+    captures = list_captures(captures_dir, _job_runner(request))
     active = next((c for c in captures if c.status == "running"), None)
     queued = [c for c in captures if c.status == "queued"]
     recent = [c for c in captures if c.status in ("done", "failed")][:10]
@@ -60,7 +63,7 @@ async def jobs_partial(request: Request) -> HTMLResponse:
 async def captures_list_partial(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
     from autosplat.webui.state import list_captures as _list
-    captures = _list(captures_dir)
+    captures = _list(captures_dir, _job_runner(request))
     return _templates(request).TemplateResponse(
         request,
         "partials/captures_list_inner.html",
@@ -71,7 +74,7 @@ async def captures_list_partial(request: Request) -> HTMLResponse:
 @router.get("/capture/{capture_id}/status", response_class=HTMLResponse)
 async def capture_status_partial(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    capture = get_capture(captures_dir, capture_id)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     return _templates(request).TemplateResponse(

@@ -7,9 +7,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from autosplat.watcher import WatcherState
+
+if TYPE_CHECKING:
+    from autosplat.webui.jobs_runner import JobRunner
 
 CaptureStatus = Literal["idle", "queued", "running", "done", "failed"]
 
@@ -50,8 +53,20 @@ def _load_watcher_state() -> WatcherState:
     return WatcherState.load()
 
 
-def list_captures(captures_dir: Path) -> list[CaptureInfo]:
-    """Discover all capture directories and overlay WatcherState for live status."""
+def list_captures(
+    captures_dir: Path, job_runner: JobRunner | None = None
+) -> list[CaptureInfo]:
+    """Discover all capture directories and overlay live status.
+
+    Status is resolved from two sources, JobRunner first:
+      1. The in-memory JobRunner (WebUI-triggered jobs) — authoritative for
+         running/queued/failed WebUI jobs.
+      2. WatcherState (`state.json`) — the CLI `watch` daemon's queue.
+
+    The JobRunner overlay closes SF-G2-9: WebUI jobs run `run_pipeline()` in a
+    thread and never touch WatcherState, so a running WebUI job would otherwise
+    be misreported as idle/done.
+    """
     if not captures_dir.exists():
         return []
 
@@ -74,9 +89,32 @@ def list_captures(captures_dir: Path) -> list[CaptureInfo]:
         ply = _find_ply(entry)
         log_path = entry / "pipeline.log"
 
-        # Determine status + metadata via WatcherState overlay
-        if in_progress_path == path_str:
+        # Determine status + metadata. JobRunner (in-memory, WebUI jobs) wins
+        # over WatcherState — see SF-G2-9 in the docstring.
+        job = job_runner.get_job(entry.name) if job_runner is not None else None
+        if job is not None and job.status == "running":
             status: CaptureStatus = "running"
+            stage = None
+            started_at = None
+            finished_at = None
+            duration_s = None
+            reason = None
+        elif job is not None and job.status == "queued":
+            status = "queued"
+            stage = None
+            started_at = None
+            finished_at = None
+            duration_s = None
+            reason = None
+        elif job is not None and job.status == "failed":
+            status = "failed"
+            stage = None
+            started_at = None
+            finished_at = None
+            duration_s = None
+            reason = job.error
+        elif in_progress_path == path_str:
+            status = "running"
             stage = state.in_progress.stage if state.in_progress else None
             started_at = state.in_progress.started_at if state.in_progress else None
             finished_at = None
@@ -140,13 +178,15 @@ def list_captures(captures_dir: Path) -> list[CaptureInfo]:
     return captures
 
 
-def get_capture(captures_dir: Path, capture_id: str) -> CaptureInfo | None:
+def get_capture(
+    captures_dir: Path, capture_id: str, job_runner: JobRunner | None = None
+) -> CaptureInfo | None:
     """Return a single CaptureInfo by id, or None if not found."""
     capture_path = captures_dir / capture_id
     if not capture_path.is_dir() or not _CAPTURE_DIR_RE.match(capture_id):
         return None
 
-    all_captures = list_captures(captures_dir)
+    all_captures = list_captures(captures_dir, job_runner)
     for c in all_captures:
         if c.id == capture_id:
             return c

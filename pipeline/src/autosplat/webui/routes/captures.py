@@ -22,10 +22,14 @@ def _captures_dir(request: Request):
     return cfg.paths.captures_dir
 
 
+def _job_runner(request: Request):
+    return getattr(request.app.state, "job_runner", None)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def captures_list(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    captures = list_captures(captures_dir)
+    captures = list_captures(captures_dir, _job_runner(request))
     active = next((c for c in captures if c.status == "running"), None)
     stats = {
         "total": len(captures),
@@ -43,7 +47,7 @@ async def captures_list(request: Request) -> HTMLResponse:
 @router.get("/{capture_id}", response_class=HTMLResponse)
 async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    capture = get_capture(captures_dir, capture_id)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     log_lines: list[str] = []
@@ -59,7 +63,7 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
 @router.get("/{capture_id}/view", response_class=HTMLResponse)
 async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    capture = get_capture(captures_dir, capture_id)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
 
@@ -138,7 +142,7 @@ async def capture_cancel(request: Request, capture_id: str) -> RedirectResponse:
 @router.post("/{capture_id}/delete")
 async def capture_delete(request: Request, capture_id: str) -> RedirectResponse:
     captures_dir = _captures_dir(request)
-    capture = get_capture(captures_dir, capture_id)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     if capture.status == "running":
