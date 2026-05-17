@@ -4,7 +4,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.1.0 — WebUI Restyle (Kuro Signal Protocol).** Mac Silicon, AGPL-3.0.
+> **Status: v1.1.1 — WebUI Restyle + Hotfix.** Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -128,7 +128,7 @@ Every key is documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 ## Test suite
 
 ```bash
-uv run pytest -q                    # 195 unit tests, ~5s
+uv run pytest -q                    # 200 unit tests, ~7s
 AUTOSPLAT_E2E=1 uv run pytest      # +1 opt-in end-to-end test (needs ffmpeg+colmap+brush)
 AUTOSPLAT_COMPRESS_E2E=1 uv run pytest tests/test_compress.py  # +1 opt-in compress smoke
 uv run ruff check src/ tests/      # lint — currently passes cleanly
@@ -147,7 +147,7 @@ auto-splat-pipeline/
 │   └── webui/            #   FastAPI + HTMX WebUI (Phase 10)
 ├── config/default.toml   # All defaults, all sections
 ├── scripts/              # install_deps.sh, fetch_brush.sh, install_splat.sh
-├── tests/                # 195 unit + 2 opt-in E2E (see tests/README.md)
+├── tests/                # 200 unit + 2 opt-in E2E (see tests/README.md)
 ├── examples/             # ready-made --config overlays for common use cases
 ├── docs/                 # spec, architecture, configuration, workflows,
 │                         # concepts, getting-started, ply-output-format,

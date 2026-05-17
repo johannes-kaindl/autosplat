@@ -6,6 +6,48 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.1.1] — 2026-05-18 — Hotfix Release
+
+Resolves all three v1.1.0 known issues plus four polish findings from cowork smoke-testing. WebUI-and-pipeline fixes only — no change to the capture/train/export algorithm.
+
+### Fixed
+
+- **[SF-G2-9]** Backend status-write sync — the WebUI now tracks runs from every trigger path (CLI-direct `autosplat process`, watch-daemon, WebUI Process-button). Live monitoring shows correct running/stage/done/failed states.
+  - Part 1 (`6420aec`) — `list_captures`/`get_capture` overlay the in-memory `JobRunner` status for WebUI-button-triggered jobs.
+  - Part 2 (`a9e1976`) — `run_pipeline()` reports status into an optional `WatcherState` (begin / update_stage / mark_done), keyed by the capture directory, for the CLI-direct and watch-daemon paths. `InProgress` gained a `source_video` field so the Phase-3 retry/recovery machinery still re-enqueues by video path.
+- **[SF-PIPE-1]** Embedded SuperSplat viewer URL-loading — the PLY route moved from `/captures/{id}/ply` to `/captures/{id}/scene.ply` (`9e82a2f`). SuperSplat detects the file type from the URL extension, so it now recognizes the `.ply` suffix. The `Unrecognized file type` error is resolved. Bonus: browser downloads are named `scene.ply`.
+- **[SF-G3-3]** Recent-jobs single-run-per-capture — `JobRunner` now keeps an in-memory `_history` list (`3eacf4c`); `all_jobs()` exposes the full history so re-triggering a capture no longer hides earlier runs.
+- **[SF-PIPE-2]** Log-box width — raw log lines render only a `.msg` cell, which was being placed into the 56px time column of `.as-log-row`'s 3-column grid; JSON wrapped at ~7 chars. A `.msg:only-child` now spans the full row (`0c7d5a4`).
+- **[SF-PIPE-3]** REASON-card text overflow — `.as-kv .v` gets `min-width: 0; overflow-wrap: anywhere` (`0c7d5a4`); long whitespace-free error strings now wrap inside the card.
+- **[SF-PIPE-4]** Vertical scroll — there was no `html, body { height: 100% }` rule, so `<body>` (`.as-frame`) collapsed to content height, its `overflow: hidden` propagated to the viewport, and the page could not scroll (`13ddad9`).
+- **[SF-PIPE-5]** Viewer-iframe full-height — same root cause as SF-PIPE-4: without the height chain the viewer's `flex:1` / `height:100%` subtree had no parent height, so the SuperSplat iframe collapsed to a strip (`13ddad9`).
+
+### Changed (Internal Improvement)
+
+- The CLI `process` command broadened its exception handling from `except RuntimeError` to `except Exception` — domain errors (QualityGateFailure, BrushOOMError) now exit cleanly via `EXIT_PIPELINE_FAILURE` and record a failed entry instead of raising an untrapped traceback. (SF-G2-9-PART-3, a side-effect of the Part-2 work.)
+
+### Design Notes
+
+- **JobRunner history is in-memory** — a WebUI server restart resets it. Persistent per-capture history (e.g. a `runs.jsonl` append-log) is a v1.2 candidate.
+- **`WatcherState.in_progress` is single-slot** — running `autosplat watch` and `autosplat process` in parallel, or starting a second `autosplat process` while a first is running, makes the UI flicker / show only the most recent job. autosplat is a single-user Mac tool; use one trigger path at a time. A multi-slot model is a v1.2 candidate.
+- **PLY URL renamed** from `/captures/{id}/ply` to `/captures/{id}/scene.ply` — externally saved links to the old path will 404. Pre-v1.1.0 had no public users, so external impact is unlikely.
+
+### Known Issues
+
+- **Recent-captures ordering within a single day** uses filesystem order, not wall-clock time — related to SF-G3-1 (`JobState.finished_at` is a `time.monotonic()` value, not a wall-clock timestamp). Multiple captures on the same day may sort non-deterministically. A v1.1.2 candidate (needs a wall-clock timestamp field on the capture model + a secondary sort key).
+
+### Tests
+
+200 unit tests (198 passed, 2 opt-in E2E skipped) — +5 over v1.1.0 (3 SF-G2-9 regression tests, 2 SF-G2-9-PART-2 regression tests). The touched source files pass `ruff check`.
+
+### Internal Notes
+
+- 6 atomic fix-commits + 1 release commit across the v1.1.1-hotfix session; 7 pre/post tag-pairs for granular rollback.
+- v1.1.2 backlog: SF-G3-1 / SF-NEW-3 (wall-clock timestamps + secondary sort key), SF-H1-1 (~23 pre-existing `ruff` findings — `ruff check src/ tests/` is not clean despite the README claim).
+- v1.2 backlog: multi-slot `WatcherState` (or a JobRunner extension) for parallel-run tracking; persistent JobRunner history.
+
+---
+
 ## [v1.1.0] — 2026-05-17 — Kuro Signal Protocol WebUI Restyle
 
 Full visual restyle of the WebUI. All seven browser surfaces migrated to the **Kuro Signal Protocol** design system. No pipeline behaviour changes — the capture/train/export flow is byte-identical to v1.0.1.
