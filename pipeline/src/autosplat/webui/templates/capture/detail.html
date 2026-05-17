@@ -1,94 +1,197 @@
 {% extends "base.html" %}
 {% block title %}{{ capture.id }}{% endblock %}
+
+{% block crumbs %}
+<span class="sep">/</span>
+<a href="/captures/" style="color:var(--fg-tertiary);text-decoration:none">captures</a>
+<span class="sep">/</span>
+<span class="cur">{{ capture.id[:10] }}</span>
+{% endblock %}
+
 {% block content %}
-<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-  <a href="/captures/" class="meta">← Captures</a>
-  <h1 style="margin:0">{{ capture.id }}</h1>
-  <span class="badge badge-{{ capture.status }}"
-        id="status-badge"
-        hx-get="/partials/capture/{{ capture.id }}/status"
-        hx-trigger="every 3s"
-        hx-swap="outerHTML">{{ capture.status }}</span>
-</div>
+{%- from "_icons.html" import icon -%}
+{%- from "_macros.html" import capture_badge, stage_timeline, kv_row -%}
+<div class="as-main-inner">
 
-<div class="card">
-  <h2>Pipeline Stages</h2>
-  <div class="stage-timeline">
-    {% set stages = ["preprocess", "sfm", "train", "export"] %}
-    {% for s in stages %}
-      {% if capture.status == "done" %}
-        <div class="stage-step done" title="{{ s }}"></div>
-      {% elif capture.status == "running" and capture.stage == s %}
-        <div class="stage-step active" title="{{ s }}"></div>
-      {% elif capture.status == "running" and stages.index(s) < stages.index(capture.stage or "preprocess") %}
-        <div class="stage-step done" title="{{ s }}"></div>
-      {% elif capture.status == "failed" and capture.stage == s %}
-        <div class="stage-step failed" title="{{ s }}"></div>
-      {% else %}
-        <div class="stage-step" title="{{ s }}"></div>
-      {% endif %}
-    {% endfor %}
-  </div>
-  <p class="meta" style="margin-top:4px">
-    {{ stages | join(" → ") }}
-  </p>
-</div>
-
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-  <div class="card">
-    <h2>Output</h2>
-    {% if capture.has_ply %}
-    <p>✓ scene.ply
-      {% if capture.ply_size_bytes %}
-        <span class="meta">({{ "%.1f"|format(capture.ply_size_bytes / 1048576) }} MB)</span>
-      {% endif %}
-    </p>
-    <div style="margin-top:12px;display:flex;gap:8px">
-      <a href="/captures/{{ capture.id }}/view" class="btn btn-primary">Open in SuperSplat ▶</a>
-      <a href="/captures/{{ capture.id }}/ply" class="btn btn-ghost" download>Download PLY</a>
+  <div class="as-page-head">
+    <a href="/captures/" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--signal-circuit);text-decoration:none;margin-bottom:14px">
+      {{ icon('arrow-left', 12) }} captures
+    </a>
+    <div class="as-eyebrow">
+      <span>capture</span>
+      {% if capture.finished_at %}<span class="sep">·</span><span>finished {{ capture.finished_at }}</span>{% endif %}
+      {% if capture.started_at and capture.status == 'running' %}<span class="sep">·</span><span>started {{ capture.started_at }}</span>{% endif %}
     </div>
-    {% else %}
-    <p class="meta">No PLY yet.</p>
-    {% endif %}
+    <div style="display:flex;align-items:flex-start;gap:var(--space-4)">
+      <div style="flex:1">
+        <h1 class="as-h1 as-h1-mono">{{ capture.id }}
+          <span class="pip-inline">{{ capture_badge(capture) }}</span>
+        </h1>
+        <p class="as-sub" style="margin-top:6px">
+          {% if capture.status == 'running' %}<span class="kuro-quote">Gaussians are blooming. Do not close the chamber.</span>
+          {% elif capture.status == 'done' %}<span class="kuro-quote">Loop closed. The graph remembers.</span>
+          {% elif capture.status == 'failed' %}<span class="kuro-quote">Signal lost. The chamber is quiet.</span>
+          {% else %}<span class="kuro-quote">Ready for signal.</span>{% endif %}
+        </p>
+      </div>
+      <div style="display:flex;gap:var(--space-2);margin-top:4px;flex-shrink:0">
+        {% if capture.status == 'done' and capture.has_ply %}
+        <a href="/captures/{{ capture.id }}/ply" class="as-btn ghost" download>{{ icon('download', 13) }} PLY</a>
+        <a href="/captures/{{ capture.id }}/view" class="as-btn primary">{{ icon('eye', 14) }} View splat</a>
+        {% elif capture.status in ('idle', 'failed', 'queued') %}
+        <form method="post" action="/captures/{{ capture.id }}/process">
+          <button type="submit" class="as-btn primary">{{ icon('play', 13) }} {% if capture.status == 'failed' %}Retry{% else %}Process{% endif %}</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Actions</h2>
-    {% if capture.status in ["idle", "failed"] %}
-    <form method="post" action="/captures/{{ capture.id }}/process">
-      <button type="submit" class="btn btn-primary">
-        {% if capture.status == "failed" %}Retry{% else %}Process{% endif %}
-      </button>
-    </form>
-    {% elif capture.status == "running" %}
-    <form method="post" action="/captures/{{ capture.id }}/cancel">
-      <button type="submit" class="btn btn-danger">Cancel Job</button>
-    </form>
-    {% else %}
-    <p class="meta">No actions available.</p>
-    {% endif %}
+  {{ stage_timeline(capture.stage, capture.status) }}
 
-    {% if capture.finished_at %}
-    <p class="meta" style="margin-top:8px">Finished: {{ capture.finished_at }}</p>
-    {% endif %}
-    {% if capture.duration_s %}
-    <p class="meta">Duration: {{ "%.0f"|format(capture.duration_s) }}s</p>
-    {% endif %}
-    {% if capture.reason %}
-    <p style="color:var(--red);margin-top:8px;font-size:12px">{{ capture.reason }}</p>
-    {% endif %}
+  <div class="as-two-col">
+
+    {# ── Left column ─────────────────────────────────────────────────────── #}
+    <div style="display:flex;flex-direction:column;gap:var(--space-5)">
+
+      {% if capture.status == 'running' %}
+      {# Brush metrics — poll-region/card pattern (no live stream in v1.1.0, shows log-derived data) #}
+      {% include "partials/brush_metrics.html" %}
+      {% endif %}
+
+      {% if capture.status == 'done' and capture.has_ply %}
+      {# Viewer thumbnail #}
+      <div class="as-card" style="padding:0;overflow:hidden">
+        <a href="/captures/{{ capture.id }}/view" style="display:block;text-decoration:none">
+          <div class="as-viewer" style="aspect-ratio:16/7;border-radius:0;border:0">
+            <div class="splat-grid"></div>
+            <div class="splat-placeholder"></div>
+            <div class="as-viewer-hud-tl">
+              <span class="as-viewer-pill"><span class="dot"></span><span>thumb · click to open</span></span>
+            </div>
+            <div class="as-viewer-hud-br">
+              <span class="as-viewer-iconbtn">{{ icon('maximize') }}</span>
+            </div>
+          </div>
+        </a>
+        <div style="padding:var(--space-3) var(--space-4);display:flex;align-items:center;gap:var(--space-4);border-top:1px solid var(--border-subtle);font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">
+          {% if capture.ply_size_bytes %}<span>ply · {{ '%.0f'|format(capture.ply_size_bytes / 1048576) }} mb</span>{% endif %}
+          <span style="flex:1"></span>
+          <a href="/captures/{{ capture.id }}/view" style="color:var(--signal-circuit)">open in supersplat →</a>
+        </div>
+      </div>
+
+      {# Exports — PLY only; SOG/SPZ are opt-in compress step not surfaced in CaptureInfo v1.1.0 #}
+      <div>
+        <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-tertiary);margin-bottom:10px">Exports</div>
+        <div class="as-card" style="border-top:2px solid var(--stage-export)">
+          <div class="as-card-body" style="padding:var(--space-4)">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <div style="font-family:var(--font-mono);font-size:18px;font-weight:600;color:var(--fg-primary);letter-spacing:-0.5px">PLY</div>
+              {% if capture.ply_size_bytes %}<div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">{{ '%.0f'|format(capture.ply_size_bytes / 1048576) }} mb</div>{% endif %}
+            </div>
+            <p style="margin:8px 0 12px;font-family:var(--font-body);font-size:12px;color:var(--fg-secondary);line-height:1.5">Standard splat · readable everywhere</p>
+            <a href="/captures/{{ capture.id }}/ply" class="as-btn sm ghost" download style="display:flex;justify-content:center">{{ icon('download', 11) }} Download</a>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Log tail #}
+      {% if capture.has_log %}
+      <div class="as-log">
+        <div class="as-log-head">
+          {{ icon('terminal', 12) }}
+          <span>{% if capture.status == 'running' %}live{% else %}final{% endif %} log · {{ capture.id[:8] }} · tail 40</span>
+          <span class="spacer"></span>
+          {% if capture.finished_at %}<span style="color:var(--fg-disabled)">{{ capture.finished_at }}</span>{% endif %}
+          <a href="/captures/{{ capture.id }}/log" class="as-btn sm ghost" style="margin-left:12px">{{ icon('download', 11) }} log</a>
+        </div>
+        <div class="as-log-body"
+             {% if capture.status == 'running' %}
+             hx-get="/partials/capture/{{ capture.id }}/log"
+             hx-trigger="every 2s"
+             hx-swap="innerHTML"
+             {% endif %}
+             {% if capture.status != 'running' %}style="max-height:220px"{% endif %}>
+          {% if log_lines %}
+            {% for line in log_lines %}
+            <div class="as-log-row info"><span class="msg">{{ line }}</span></div>
+            {% endfor %}
+          {% else %}
+          <div class="as-log-row info"><span class="t">—</span><span class="lvl">sys</span><span class="msg">Loading log…</span></div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    {# ── Right column ────────────────────────────────────────────────────── #}
+    <aside style="display:flex;flex-direction:column;gap:var(--space-4)">
+
+      {% if capture.status == 'done' %}
+      <div class="as-card" style="border-top:2px solid var(--stage-done)">
+        <div class="as-card-head"><span class="t">splat · final</span><span class="spacer"></span>{{ icon('check-circle', 13) }}</div>
+        <div class="as-card-body">
+          <div class="as-kv">
+            {% if capture.ply_size_bytes %}{{ kv_row('file · ply', '%.0f'|format(capture.ply_size_bytes / 1048576) ~ ' mb') }}{% endif %}
+            {% if capture.duration_s %}{{ kv_row('duration', '%.0f'|format(capture.duration_s) ~ 's e2e') }}{% endif %}
+            {% if capture.finished_at %}{{ kv_row('finished', capture.finished_at) }}{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="as-card">
+        <div class="as-card-head">
+          <span class="t">capture</span><span class="spacer"></span>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--fg-tertiary)">{{ capture.id[:10] }}</span>
+        </div>
+        <div class="as-card-body">
+          <div class="as-kv">
+            {{ kv_row('id', capture.id) }}
+            {% if capture.started_at %}{{ kv_row('started', capture.started_at) }}{% endif %}
+            {% if capture.finished_at %}{{ kv_row('finished', capture.finished_at) }}{% endif %}
+            {% if capture.duration_s %}{{ kv_row('duration', '%.0f'|format(capture.duration_s) ~ 's') }}{% endif %}
+            {% if capture.has_ply and capture.ply_size_bytes %}
+              {{ kv_row('ply', '%.0f'|format(capture.ply_size_bytes / 1048576) ~ ' mb') }}
+            {% else %}
+              {{ kv_row('ply', '—') }}
+            {% endif %}
+            {% if capture.reason %}
+            <div class="row"><span class="k">reason</span><span class="v" style="color:var(--stage-failed)">{{ capture.reason }}</span></div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if capture.status == 'running' %}
+      <div class="as-card" style="border-color:color-mix(in oklab, var(--stage-failed) 30%, var(--border-subtle))">
+        <div class="as-card-body" style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--stage-failed)">cancel job</div>
+          <p style="margin:0;font-family:var(--font-body);font-size:12.5px;color:var(--fg-secondary);line-height:1.55">
+            Cancel writes the last checkpoint, then stops gracefully. The capture returns to <code style="font-family:var(--font-mono);font-size:10px;color:var(--fg-tertiary)">ready</code>.
+          </p>
+          <form method="post" action="/captures/{{ capture.id }}/cancel">
+            <button type="submit" class="as-btn danger lg" style="width:100%">{{ icon('square', 13) }} Cancel job</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if capture.status == 'done' %}
+      <form method="post" action="/captures/{{ capture.id }}/delete"
+            onsubmit="return confirm('Delete capture? This cannot be undone.')">
+        <button type="submit" class="as-btn ghost"
+                style="width:100%;border-color:color-mix(in oklab, var(--stage-failed) 30%, var(--border-subtle));color:var(--fg-secondary)">
+          {{ icon('trash', 13) }} Erase capture
+        </button>
+      </form>
+      {% endif %}
+
+    </aside>
+
   </div>
 </div>
-
-{% if capture.has_log %}
-<div class="card">
-  <h2>Log Tail</h2>
-  <div class="log-box"
-       hx-get="/captures/{{ capture.id }}/log"
-       hx-trigger="every 4s"
-       hx-swap="innerHTML">
-    Loading…
-  </div>
-</div>
-{% endif %}
 {% endblock %}

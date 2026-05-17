@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from autosplat import __version__
-from autosplat.webui.state import get_capture, list_captures
+from autosplat.webui.state import get_capture, list_captures, read_log_tail
 
 router = APIRouter(prefix="/partials")
 
@@ -77,5 +77,32 @@ async def capture_status_partial(request: Request, capture_id: str) -> HTMLRespo
     return _templates(request).TemplateResponse(
         request,
         "partials/capture_status.html",
+        {"capture": capture},
+    )
+
+
+@router.get("/capture/{capture_id}/log", response_class=HTMLResponse)
+async def capture_log_partial(request: Request, capture_id: str) -> HTMLResponse:
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id)
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    lines = read_log_tail(capture.path, max_lines=40) if capture.has_log else []
+    rows = "".join(
+        f'<div class="as-log-row info"><span class="msg">{line}</span></div>'
+        for line in lines
+    ) or '<div class="as-log-row info"><span class="msg">— no log entries —</span></div>'
+    return HTMLResponse(content=rows)
+
+
+@router.get("/capture/{capture_id}/brush", response_class=HTMLResponse)
+async def capture_brush_partial(request: Request, capture_id: str) -> HTMLResponse:
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id)
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    return _templates(request).TemplateResponse(
+        request,
+        "partials/brush_metrics.html",
         {"capture": capture},
     )

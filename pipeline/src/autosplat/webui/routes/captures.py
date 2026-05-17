@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import shutil
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
@@ -44,10 +46,13 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     capture = get_capture(captures_dir, capture_id)
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    log_lines: list[str] = []
+    if capture.has_log and capture.status != "running":
+        log_lines = read_log_tail(capture.path, max_lines=40)
     return _templates(request).TemplateResponse(
         request,
         "capture/detail.html",
-        {"version": __version__, "capture": capture},
+        {"version": __version__, "capture": capture, "log_lines": log_lines},
     )
 
 
@@ -128,3 +133,15 @@ async def capture_cancel(request: Request, capture_id: str) -> RedirectResponse:
     if job_runner is not None:
         await job_runner.cancel_job(capture_id)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+@router.post("/{capture_id}/delete")
+async def capture_delete(request: Request, capture_id: str) -> RedirectResponse:
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id)
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    if capture.status == "running":
+        raise HTTPException(status_code=409, detail="Cannot delete a running capture")
+    shutil.rmtree(capture.path, ignore_errors=True)
+    return RedirectResponse(url="/captures/", status_code=303)

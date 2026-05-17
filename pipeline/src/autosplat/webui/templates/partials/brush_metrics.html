@@ -1,0 +1,33 @@
+{%- from "_icons.html" import icon -%}
+<div class="as-poll-region"
+     hx-get="/partials/capture/{{ capture.id }}/brush"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML">
+  <div class="as-card">
+    <div class="as-card-head">
+      <span class="t" style="color:var(--stage-brush)">{{ icon('activity', 12) }} brush · gaussian training</span>
+      <span class="spacer"></span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--fg-disabled)">live · check log for detail</span>
+    </div>
+    <div class="as-card-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-3)">
+        {%- set tiles = [
+          ('iter/s',  '—', ''),
+          ('loss',    '—', ''),
+          ('psnr',    '—', 'dB'),
+          ('gauss',   '—', ''),
+          ('elapsed', '—', ''),
+          ('eta',     '—', ''),
+          ('gpu',     '—', '%'),
+          ('vram',    '—', 'mb'),
+        ] -%}
+        {% for label, val, unit in tiles %}
+        <div style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-3);display:flex;flex-direction:column;gap:4px">
+          <div style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg-disabled)">{{ label }}</div>
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:600;color:var(--fg-tertiary);line-height:1">{{ val }}<span style="font-size:10px;margin-left:2px">{{ unit }}</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
