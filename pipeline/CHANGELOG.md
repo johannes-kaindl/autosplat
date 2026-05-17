@@ -6,6 +6,51 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.1.0] — 2026-05-17 — Kuro Signal Protocol WebUI Restyle
+
+Full visual restyle of the WebUI. All seven browser surfaces migrated to the **Kuro Signal Protocol** design system. No pipeline behaviour changes — the capture/train/export flow is byte-identical to v1.0.1.
+
+### Added
+
+- **Kuro Signal Protocol** WebUI restyle — all 7 surfaces migrated to KSP design tokens (`tokens.css` + `autosplat.css`). Local-first, no CDN dependencies.
+- **Theme toggle** (dark/light) with anti-flash `localStorage` persistence on `<html>` via the `data-theme` attribute. Default dark.
+- **Pre-rendered icon toggle** for the theme button (sun/moon SVG with label).
+- **Captures-list HTMX polling** every 3 s (the list was static before).
+- **Capture-detail two-column layout** with a `stage_timeline` macro using the `STAGE_MAP` backend→mockup-slot mapping (6-slot pipeline visualization).
+- **Brush-metrics partial** — 8-tile card with 3 s HTMX polling.
+- **Viewer page** with sidebar-collapse + CSS-only fullscreen toggle + Esc-key + GUI close-button. Three-state fallback (SuperSplat+PLY / PLY-only / no-PLY).
+- **Jobs page** Active + Recent sections with 2 s HTMX polling.
+- **Source page** KSP-styled AGPL §13 compliance card.
+- **WebUI smoke-test suite** — 10 HTTP-integration tests covering all 7 surfaces, static assets, and partial routes.
+- **Vendored HTMX** (`/static/js/htmx.min.js`, htmx@1.9.12, BSD-2) — eliminates the CDN SRI-mismatch class of failure.
+- **Latent features** (no UI exposure, console-accessible): HTMX polling annotation overlay (`document.body.setAttribute('data-annot', 'on')`) and aspect-subthemes gunshi/kantoku/sensei (CSS tokens, default `shugo` hardcoded).
+
+### Changed
+
+- `static/style.css` removed in favour of `static/css/tokens.css` + `static/css/autosplat.css`.
+- All page templates restructured with proper `as-poll-region` (HTMX outerHTML-swap target, no padding) vs `as-main-inner` (layout-padding wrapper) differentiation.
+- Pipeline live-pip text "chamber quiet" → "idle" (less lore, more clarity).
+
+### Known Issues
+
+⚠ Three known issues affect v1.1.0 and are scheduled for the v1.1.1 hotfix. All three are **WebUI-display-only** — the underlying pipeline runs correctly in every case and the captured data is intact.
+
+- **Backend status-write sync** (`SF-G2-9`) — pipeline state changes may not reflect in WebUI live-monitoring immediately. The active-jobs section can show empty while Brush training runs in the background; capture-detail pages may show stale status. *Workaround:* refresh the page manually, or check the CLI log directly. Root cause: a `state.json` write-sync race between the pipeline and `WatcherState`.
+- **SuperSplat viewer URL-loading** (`SF-PIPE-1`) — the embedded SuperSplat viewer may fail to load a PLY via URL parameter (`Unrecognized file type while loading 'ply'`). *Workaround:* download the PLY via the ↓ PLY button and drag-drop it onto [playcanvas.com/supersplat/editor](https://playcanvas.com/supersplat/editor) — file-drop loading works correctly. Root cause under investigation (URL encoding, Content-Type header, or CORS between the FastAPI PLY route and the iframe-embedded SuperSplat). Pre-dates v1.1.0.
+- **Recent-jobs single-run-per-capture** (`SF-G3-3`) — the `JobRunner` registry is keyed by `capture_id`, so re-triggering the same capture overwrites the previous job state. A capture that completed successfully but was later re-triggered with a failed preflight will show as `failed · preflight` in the WebUI jobs history. *Workaround:* check for the PLY at `<captures-dir>/<capture-id>/output/scene.ply` to confirm whether a successful run exists. Root cause: `JobRunner._jobs` is single-state, not job-history.
+
+### Tests
+
+195 unit tests (193 passed, 2 opt-in E2E skipped) — +10 over v1.0.1 from the new WebUI smoke-test suite. WebUI tests use `starlette.testclient.TestClient` against the real ASGI app.
+
+### Internal Notes
+
+- Built across 5 implementation bursts + 3 drift-resolution patches (P2.5 / P2.6 / P2.7 / P4.5).
+- Granular Tag-pairs `autosplat-pre/post-v1.1.0-restyle-P{N}-{slug}` for per-sub-phase rollback.
+- The `as-poll-region` vs `as-main-inner` wrapper pattern emerged in P2.7 and was applied through P4.5 and all subsequent templates.
+
+---
+
 ## [v1.0.1] — 2026-05-16 — Docs Sync Patch
 
 Documentation-only release. Brings README + docs/ in sync with the v1.0.0 WebUI release state. No code changes.

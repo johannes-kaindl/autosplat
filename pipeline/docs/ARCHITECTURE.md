@@ -196,16 +196,26 @@ src/autosplat/webui/
   jobs_runner.py       Async background executor: JobRunner, cancel via subprocess handle
   routes/
     health.py          GET /healthz → {"status":"ok","version":"..."}
-    dashboard.py       GET / → dashboard.html (HTMX 5s poll)
+    dashboard.py       GET / → dashboard.html (HTMX 3s poll)
     captures.py        GET+POST /captures/ and /captures/{id}; GET /captures/{id}/ply (FileResponse)
     jobs.py            GET /jobs/ (HTMX 2s poll)
     partials.py        GET /partials/* — HTMX fragments
     source.py          GET /source — AGPL §13 Network Clause
-  templates/           Jinja2 templates — base.html with HTMX CDN + AGPL footer
-  static/style.css     Minimal dark-mode CSS (no framework)
+  templates/           Jinja2 templates
+    base.html          KSP shell — TopBar, sidebar, footer, theme anti-flash, vendored HTMX
+    dashboard.html · jobs.html · source.html
+    capture/           list.html · detail.html · view.html
+    partials/          dashboard_inner · jobs_inner · captures_list_inner · capture_status · brush_metrics
+    _macros.html       capture_badge, stage_timeline, stat_tile, STAGE_MAP (backend→visual-slot)
+    _icons.html        inline SVG icon macro
+  static/css/tokens.css       KSP design primitives — colors, spacing, fonts, signal accents
+  static/css/autosplat.css    KSP component layer — frame grid, cards, tables, timeline, badges
+  static/js/htmx.min.js       vendored htmx@1.9.12 (BSD-2) — same-origin, no CDN/SRI
 ```
 
 SuperSplat `dist/` is served via a `/supersplat/` StaticFiles mount (only mounted when `dist/index.html` exists). PLY files stream via `FileResponse` with `Accept-Ranges` + CORS headers so the SuperSplat iframe can load them cross-origin.
+
+**Design system (v1.1.0 — Kuro Signal Protocol).** All 7 surfaces are styled via two CSS layers: `tokens.css` (primitives) + `autosplat.css` (components). Theme is `data-theme` on `<html>` (dark/light, `localStorage`-persisted, anti-flash inline script). The `STAGE_MAP` dict in `_macros.html` maps backend pipeline-stage names (`starting`, `train`, `export`, …) onto the 6-slot visual timeline — the pipeline code is never changed for display purposes. HTMX templates follow a wrapper pattern-lock: `as-poll-region` (outer, carries poll attributes, `outerHTML`-swap target) vs `as-main-inner` (inner, layout padding).
 
 ## Open architectural decisions
 

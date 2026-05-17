@@ -4,7 +4,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.0.1 — CLI + WebUI Release.** Mac Silicon, AGPL-3.0.
+> **Status: v1.1.0 — WebUI Restyle (Kuro Signal Protocol).** Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -48,6 +48,7 @@ drop *.mp4 / *.mov  →  watch-folder
 | 9     | Local SuperSplat auto-open                       | ✅ done — serves PLY over HTTP, auto-opens browser, CORS fix            |
 | 9.7   | splat CLI (real executable)                      | ✅ done — `~/.local/bin/splat`, caffeinate-wrap, nohup/tmux-compatible  |
 | 10    | WebUI (FastAPI + HTMX + Jinja2) — full browser control | ✅ done — `autosplat webui --port 8080`, dashboard, captures, jobs, viewer, AGPL §13 /source |
+| 10.1  | WebUI restyle — Kuro Signal Protocol design system     | ✅ done — all 7 surfaces on KSP tokens, theme toggle, HTMX polling, vendored HTMX, smoke tests |
 
 ---
 
@@ -103,7 +104,7 @@ autosplat webui --port 8080        # start on default port
 autosplat webui --host 0.0.0.0 --port 8080   # LAN-accessible
 ```
 
-Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features: live capture queue + dashboard, per-capture stage timeline, process/cancel/retry buttons, SuperSplat iframe embed for finished splats, AGPL §13 `/source` route. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
+Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features: live capture queue + dashboard, per-capture stage timeline, process/cancel/retry buttons, SuperSplat iframe embed for finished splats, AGPL §13 `/source` route. The interface uses the **Kuro Signal Protocol** design system (v1.1.0) with a dark/light theme toggle (anti-flash, persisted in `localStorage`) and live HTMX polling on every surface. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
 
 ---
 
@@ -127,7 +128,7 @@ Every key is documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 ## Test suite
 
 ```bash
-uv run pytest -q                    # 185 unit tests, ~3s
+uv run pytest -q                    # 195 unit tests, ~5s
 AUTOSPLAT_E2E=1 uv run pytest      # +1 opt-in end-to-end test (needs ffmpeg+colmap+brush)
 AUTOSPLAT_COMPRESS_E2E=1 uv run pytest tests/test_compress.py  # +1 opt-in compress smoke
 uv run ruff check src/ tests/      # lint — currently passes cleanly
@@ -146,7 +147,7 @@ auto-splat-pipeline/
 │   └── webui/            #   FastAPI + HTMX WebUI (Phase 10)
 ├── config/default.toml   # All defaults, all sections
 ├── scripts/              # install_deps.sh, fetch_brush.sh, install_splat.sh
-├── tests/                # 185 unit + 2 opt-in E2E (see tests/README.md)
+├── tests/                # 195 unit + 2 opt-in E2E (see tests/README.md)
 ├── examples/             # ready-made --config overlays for common use cases
 ├── docs/                 # spec, architecture, configuration, workflows,
 │                         # concepts, getting-started, ply-output-format,

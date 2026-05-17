@@ -215,3 +215,57 @@ src/autosplat/
 **Ergebnis:** 185 Tests gesamt (vorher 175 + 10 neue WebUI-Tests). Alle grün.
 
 **Schlüssel-Pattern:** Echte ASGI-Requests (kein Response-Mock) — konsistent mit `test_viewer.py`-Vorbild. Pattern-Memory `feedback_integration_tests_http.md` bestätigt: HTTP-Integration-Tests finden Bugs (CORS), die Unit-Tests übersehen.
+
+---
+
+## §7 v1.1.0 Restyle — Kuro Signal Protocol
+
+*Addendum 2026-05-17 · Session `2026-05-16-autosplat-v1.1.0-webui-restyle` · Rollback-Tag-Stack `autosplat-pre/post-v1.1.0-restyle-P{N}-*`*
+
+Die v1.0.0-WebUI nutzte ein minimales `static/style.css`. v1.1.0 ersetzt es durch ein vollständiges Design-System ohne Verhaltensänderung der Pipeline.
+
+### Token-System
+
+- `static/css/tokens.css` — Primitive: Farb-Skalen, Spacing (`--space-1…8`), Radii, Fonts (display/body/mono), Signal-Akzente (`--signal-phosphor`, `--signal-circuit`, …), Stage-Farben.
+- `static/css/autosplat.css` — Komponenten-Layer (~24 Sektionen): Frame-Grid, TopBar, Sidebar, Cards, Tabellen, Stage-Timeline, Badges, Buttons, Viewer-HUD.
+- Beide aspekt-fähig: `data-aspect` auf `<html>` schaltet Subthemes (gunshi/kantoku/sensei) — in v1.1.0 hart auf `shugo` gepinnt, Tokens latent vorhanden.
+
+### Theme-Toggle
+
+- `data-theme` auf `<html>` (`dark` Default / `light`), in `localStorage` als `autosplat-theme` persistiert.
+- Anti-Flash: ein Inline-`<script>` im `<head>` setzt `data-theme` vor dem ersten Paint.
+- TopBar-Pill mit vorgerendertem sun/moon-SVG, CSS-Visibility-Toggle.
+
+### HTMX-Polling-Architektur
+
+| Surface | Poll-Intervall | Swap-Ziel |
+|---|---|---|
+| Dashboard `/partials/dashboard` | 3 s | `outerHTML` |
+| Captures-List `/partials/captures` | 3 s | `outerHTML` |
+| Jobs `/partials/jobs` | 2 s | `outerHTML` |
+| Capture-Detail Log `/partials/capture/{id}/log` | 2 s | `innerHTML` |
+| Capture-Detail Brush `/partials/capture/{id}/brush` | 3 s | `outerHTML` |
+
+### Wrapper-Pattern-Lock (P2.7-Lesson)
+
+- **`as-poll-region`** — äußerer Wrapper, trägt die HTMX-Poll-Attribute, kein Padding. Ziel eines `outerHTML`-Swaps.
+- **`as-main-inner`** — innerer Wrapper, trägt das Layout-Padding. Das Partial trägt zusätzlich eigene HTMX-Attribute für Self-Renewal.
+- Verschachtelte `as-main-inner` waren der P2.7-Bug — die Trennung outer-Poll / inner-Padding löst ihn.
+
+### Vendored HTMX
+
+- `static/js/htmx.min.js` — htmx@1.9.12, BSD-2, lokal ausgeliefert.
+- Grund: der CDN-`integrity`-SRI-Hash war fehlerhaft → Browser blockierte HTMX komplett (P4.5-Root-Cause). Same-origin braucht kein SRI, ist offline-fähig und AGPL-konform.
+
+### Latent Features (kein UI-Exposure)
+
+- HTMX-Polling-Annotation-Overlay: `document.body.setAttribute('data-annot', 'on')` in der Konsole.
+- Aspect-Subthemes gunshi/kantoku/sensei — CSS-Tokens vorhanden, kein Picker (in P2.6 als scope-frei entfernt).
+
+### Tests
+
+`tests/webui/test_ui_smoke.py` — 10 HTTP-Integration-Tests: alle 7 Surfaces, Static-Assets (tokens.css / autosplat.css / htmx.min.js), Partial-Routes. Gesamt-Suite 185 → 195.
+
+### Bekannte v1.1.1-Hotfix-Kandidaten
+
+`SF-G2-9` (Backend-Status-Write-Race), `SF-PIPE-1` (SuperSplat-PLY-URL-Loading), `SF-G3-3` (JobRunner single-run-per-capture). Alle drei sind WebUI-Display-only — die Pipeline selbst läuft korrekt. Details in `CHANGELOG.md` [v1.1.0] § Known Issues.
