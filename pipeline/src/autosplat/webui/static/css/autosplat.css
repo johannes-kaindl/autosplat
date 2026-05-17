@@ -866,7 +866,10 @@
 .as-log-row.ok   .lvl { color: var(--stage-done); }
 .as-log-row.warn .lvl { color: var(--stage-quality); }
 .as-log-row.err  .lvl { color: var(--stage-failed); }
-.as-log-row .msg { color: var(--fg-secondary); white-space: pre-wrap; word-break: break-word; }
+.as-log-row .msg { color: var(--fg-secondary); white-space: pre-wrap; word-break: break-word; min-width: 0; }
+/* Raw log lines render only .msg (no time/level cell) — span the full row so
+   the message is not squeezed into the 56px time column. */
+.as-log-row .msg:only-child { grid-column: 1 / -1; }
 .as-log-row .msg em { font-style: normal; color: var(--signal-circuit); }
 .as-log-row .msg b { color: var(--fg-primary); font-weight: 500; }
 
@@ -895,6 +898,10 @@
 .as-kv .v {
   font-family: var(--font-mono); font-size: 12.5px;
   color: var(--fg-primary);
+  /* min-width:0 lets the grid track shrink; overflow-wrap breaks long
+     whitespace-free strings (paths, JSON) so they stay inside the card. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .as-kv .v.dim { color: var(--fg-tertiary); }
 .as-kv .v.accent { color: var(--accent); }
