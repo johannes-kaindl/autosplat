@@ -142,6 +142,13 @@
 [data-theme="light"] .as-side-foot { color: var(--fg-tertiary); }
 
 /* ====== Mockup frame ===================================================== */
+/* Load-bearing: .as-frame is <body> with height:100% + overflow:hidden. Without
+   this chain <body> collapses to content height, the viewport inherits its
+   overflow:hidden (page won't scroll), and every percentage-height descendant
+   (.as-main scroll container, the flex:1 viewer) has no parent height to
+   resolve against. Closes SF-PIPE-4 + SF-PIPE-5. */
+html, body { height: 100%; margin: 0; }
+
 .as-frame, .as-tokens {
   /* autosplat is an indie power-user tool, not a literary surface.
      Re-point display → sans (Space Grotesk) for this whole subtree only;
