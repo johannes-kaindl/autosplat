@@ -1,43 +1,99 @@
-{% if active_jobs %}
-<div class="card">
-  <h2>Active</h2>
-  <table>
-    <thead><tr><th>Capture</th><th>Status</th><th>Log tail</th></tr></thead>
-    <tbody>
-      {% for job in active_jobs %}
-      <tr>
-        <td><a href="/captures/{{ job.capture_id }}">{{ job.capture_id }}</a></td>
-        <td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td>
-        <td class="meta" style="font-size:11px;max-width:400px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
-          {{ job.get_log_tail()[-1] if job.get_log_tail() else "—" }}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
+{%- from "_icons.html" import icon -%}
+{%- from "_macros.html" import capture_badge -%}
+{%- set total = (active_jobs|length if active_jobs else 0) + (recent_jobs|length if recent_jobs else 0) -%}
+<div class="as-main-inner"
+     hx-get="/partials/jobs"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML">
 
-{% if recent_jobs %}
-<div class="card">
-  <h2>Recent</h2>
-  <table>
-    <thead><tr><th>Capture</th><th>Status</th><th>Error</th></tr></thead>
-    <tbody>
-      {% for job in recent_jobs %}
-      <tr>
-        <td><a href="/captures/{{ job.capture_id }}">{{ job.capture_id }}</a></td>
-        <td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td>
-        <td class="meta" style="font-size:11px">{{ job.error or "—" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
+  {# Page-Head #}
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span>
+      <span class="sep">·</span>
+      <span>{{ total }} job{{ '' if total == 1 else 's' }}</span>
+    </div>
+    <h1 class="as-h1">Jobs
+      <span style="color:var(--fg-tertiary);font-family:var(--font-mono);font-weight:500;font-size:24px;margin-left:12px">· {{ total }}</span>
+    </h1>
+    <p class="as-sub">Active pipelines and recent runs. Polled every 2 seconds.</p>
+  </div>
 
-{% if not active_jobs and not recent_jobs %}
-<div class="empty-state">
-  <p>No jobs yet. Process a capture to start.</p>
+  {# ── Active jobs ────────────────────────────────────────────────────────── #}
+  <section style="margin-bottom:var(--space-6)">
+    <div style="display:flex;align-items:baseline;margin-bottom:14px;gap:12px">
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:600;margin:0;color:var(--fg-primary)">Active</h2>
+      <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">{{ active_jobs|length if active_jobs else 0 }} running</span>
+    </div>
+
+    <div class="as-tbl-wrap">
+      {% if active_jobs %}
+      <table class="as-tbl">
+        <thead>
+          <tr>
+            <th>capture id</th>
+            <th>status</th>
+            <th>log tail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in active_jobs %}
+          <tr>
+            <td class="mono"><a href="/captures/{{ job.capture_id }}" style="color:var(--fg-primary);text-decoration:none">{{ job.capture_id }}</a></td>
+            <td>{{ capture_badge(job) }}</td>
+            <td class="dim" style="font-size:11px;max-width:480px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
+              {{ job.get_log_tail()[-1] if job.get_log_tail() else "—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state" style="text-align:center;padding:48px;color:var(--fg-tertiary);font-family:var(--font-mono);font-size:12px">
+        <p>No active jobs.</p>
+        <p style="margin-top:8px;color:var(--fg-disabled)">Drop a video into the watch folder or run <code style="color:var(--signal-circuit)">autosplat process &lt;file&gt;</code>.</p>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Recent jobs ────────────────────────────────────────────────────────── #}
+  {% if recent_jobs %}
+  <section>
+    <div style="display:flex;align-items:baseline;margin-bottom:14px;gap:12px">
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:600;margin:0;color:var(--fg-primary)">Recent</h2>
+      <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">last {{ recent_jobs|length }}</span>
+    </div>
+
+    <div class="as-tbl-wrap">
+      <table class="as-tbl">
+        <thead>
+          <tr>
+            <th>capture id</th>
+            <th>status</th>
+            <th style="text-align:right">duration</th>
+            <th>error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in recent_jobs %}
+          <tr>
+            <td class="mono"><a href="/captures/{{ job.capture_id }}" style="color:var(--fg-primary);text-decoration:none">{{ job.capture_id }}</a></td>
+            <td>{{ capture_badge(job) }}</td>
+            <td class="num">
+              {%- if job.finished_at and job.started_at -%}
+                {{ '%.1f'|format((job.finished_at - job.started_at) / 60) }} min
+              {%- else -%}— —{%- endif -%}
+            </td>
+            <td class="dim" style="font-size:11px;max-width:420px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
+              {{ job.error or "—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
 </div>
-{% endif %}

@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Jobs{% endblock %}
-{% block content %}
-<h1>Jobs</h1>
 
-<div hx-get="/partials/jobs"
+{% block crumbs %}
+<span class="sep">/</span><span class="cur">jobs</span>
+{% endblock %}
+
+{% block content %}
+<div class="as-poll-region"
+     hx-get="/partials/jobs"
      hx-trigger="every 2s"
-     hx-swap="innerHTML">
+     hx-swap="outerHTML">
   {% include "partials/jobs_inner.html" %}
 </div>
 {% endblock %}
