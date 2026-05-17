@@ -62,3 +62,6 @@ config/local.toml
 
 # CC working state
 .claude/
+
+# Local design reference (KSP mockups, not part of the shipped app)
+webui-design/
