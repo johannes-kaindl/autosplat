@@ -1,35 +1,35 @@
 # PHASE-10-PLAN — WebUI Release (v1.0.0)
 
-*Plan-Snapshot 2026-05-16 · Status: **HISTORICAL — DONE** · Autor: CC-Executor*
+*Plan snapshot 2026-05-16 · Status: **HISTORICAL — DONE** · Author: CC-Executor*
 *Basis: recon-v1.0.0-webui.md, session 2026-05-16-autosplat-v1.0.0-webui-release*
-*Rollback-Tag: `autosplat-pre-v1.0.0-webui`*
+*Rollback tag: `autosplat-pre-v1.0.0-webui`*
 
 ---
 
-## §1 Kontext + Scope
+## §1 Context + Scope
 
-**Was gebaut wurde:** Vollständige WebUI für die autosplat-Pipeline — Admin-Steuerung und Public-Surface in einer FastAPI + HTMX + Jinja2 App. Kein MVP-Cut; Dashboard, Capture-Liste, Detail-View, Job-Runner, SuperSplat-Embed und AGPL-Footer in einem Commit-Burst.
+**What was built:** A full WebUI for the autosplat pipeline — admin control and public surface in one FastAPI + HTMX + Jinja2 app. No MVP cut; dashboard, capture list, detail view, job runner, SuperSplat embed and AGPL footer in a single commit burst.
 
-**Was nicht:** Kein Multi-User-Auth, keine persistente DB (WatcherState-JSON bleibt State-Backbone), keine Cloud-Deploy-Infrastruktur, kein Neubau des CLI-`serve`-Kommandos (bleibt parallel), kein Node-Build-Step.
+**What was not:** No multi-user auth, no persistent DB (the WatcherState JSON remains the state backbone), no cloud-deploy infrastructure, no rebuild of the CLI `serve` command (kept in parallel), no Node build step.
 
-**Stack:** FastAPI + uvicorn + Jinja2 + HTMX (CDN). Neues Sub-Package `src/autosplat/webui/`. SuperSplat-dist/ via FastAPI StaticFiles gemountet. AGPL §13 Network-Clause: Footer auf jeder Seite + `/source`-Route.
+**Stack:** FastAPI + uvicorn + Jinja2 + HTMX (CDN). New sub-package `src/autosplat/webui/`. SuperSplat dist/ mounted via FastAPI StaticFiles. AGPL §13 network clause: footer on every page + `/source` route.
 
 ---
 
-## §2 Architektur-Skizze
+## §2 Architecture sketch
 
-### FastAPI-App-Struktur
+### FastAPI app structure
 
 ```
 src/autosplat/
   webui/
     __init__.py          re-exports create_app
     app.py               FastAPI factory (create_app(cfg)), CORSMiddleware,
-                         StaticFiles-Mounts, Lifespan-Hook
-    state.py             WatcherState-Adapter (read-only):
+                         StaticFiles mounts, lifespan hook
+    state.py             WatcherState adapter (read-only):
                          list_captures(), get_capture(), read_log_tail()
-    jobs_runner.py       Async Background-Executor:
-                         JobRunner, Dict[id → JobState], cancel via Popen-handle
+    jobs_runner.py       async background executor:
+                         JobRunner, Dict[id → JobState], cancel via Popen handle
     routes/
       __init__.py
       dashboard.py       GET / → dashboard.html
@@ -38,234 +38,234 @@ src/autosplat/
                          POST /captures/{id}/process, /captures/{id}/cancel
       jobs.py            GET /jobs/
       health.py          GET /healthz → {"status":"ok","version":"..."}
-      source.py          GET /source  → AGPL §13 Compliance
-      partials.py        GET /partials/* — HTMX-Fragmente
-    templates/           Jinja2: base.html (HTMX-CDN + AGPL-Footer),
+      source.py          GET /source  → AGPL §13 compliance
+      partials.py        GET /partials/* — HTMX fragments
+    templates/           Jinja2: base.html (HTMX CDN + AGPL footer),
                          dashboard.html, capture/list.html, capture/detail.html,
                          capture/view.html, jobs.html, source.html,
                          partials/dashboard_inner.html, partials/jobs_inner.html,
                          partials/capture_status.html
-    static/style.css     Minimal dark-mode CSS (native CSS Grid/Flex, kein Framework)
+    static/style.css     minimal dark-mode CSS (native CSS grid/flex, no framework)
 ```
 
-### Module-Boundaries
+### Module boundaries
 
-- `webui/app.py`: FastAPI-Instanz, Middleware, Mounts, Lifespan (lädt Config + JobRunner)
-- `webui/state.py`: liest WatcherState-JSON + Filesystem für Capture-Discovery. **Read-only** — kein direktes Schreiben in WatcherState
-- `webui/jobs_runner.py`: kapselt asyncio-Threading für `run_pipeline()`. Hält `Dict[capture_id → JobState]` im Speicher. Monkey-patcht `subprocess.Popen` für Cancel-Support
-- `webui/routes/`: Thin Handler — laden State, rendern Templates
-- `cli.py`: bekommt `autosplat webui` Kommando (startet uvicorn mit `create_app()`)
+- `webui/app.py`: FastAPI instance, middleware, mounts, lifespan (loads config + JobRunner)
+- `webui/state.py`: reads the WatcherState JSON + filesystem for capture discovery. **Read-only** — never writes WatcherState directly
+- `webui/jobs_runner.py`: wraps asyncio threading for `run_pipeline()`. Holds `Dict[capture_id → JobState]` in memory. Monkey-patches `subprocess.Popen` for cancel support
+- `webui/routes/`: thin handlers — load state, render templates
+- `cli.py`: gains the `autosplat webui` command (starts uvicorn with `create_app()`)
 
-### Verhältnis zu serve_directory
+### Relationship to serve_directory
 
-`viewer.py`/`serve_directory` bleibt unverändert — dient dem CLI-`serve`-Command. Die WebUI löst dasselbe Problem anders: SuperSplat dist/ und PLY werden über FastAPI StaticFiles + FileResponse ausgeliefert. Kein Code-Sharing, kein Merge, kein Refactor.
+`viewer.py`/`serve_directory` stays unchanged — it serves the CLI `serve` command. The WebUI solves the same problem differently: SuperSplat dist/ and PLY are served via FastAPI StaticFiles + FileResponse. No code sharing, no merge, no refactor.
 
 ---
 
-## §3 Routes-Inventar
+## §3 Routes inventory
 
 | URL | Method | Template / Response | Purpose |
 |---|---|---|---|
-| `/` | GET | `dashboard.html` | Dashboard: Queue, letzte Captures, aktiver Job |
-| `/captures/` | GET | `capture/list.html` | Alle Captures aus captures_dir, sortiert nach Datum |
-| `/captures/{id}` | GET | `capture/detail.html` | Detail: Stage-Status, PLY-Größe, Trigger-Button, Fehler |
-| `/captures/{id}/process` | POST | redirect → `/captures/{id}` | Capture in Job-Queue einreihen |
-| `/captures/{id}/cancel` | POST | redirect → `/captures/{id}` | Laufenden Job abbrechen |
-| `/captures/{id}/view` | GET | `capture/view.html` | SuperSplat-Embed (iframe + ?load=) |
-| `/captures/{id}/ply` | GET | `FileResponse` | PLY-Datei für SuperSplat ?load= Parameter |
-| `/captures/{id}/log` | GET | JSON | pipeline.log-Tail (letzte 50 Zeilen) |
-| `/jobs/` | GET | `jobs.html` | Aktive Jobs, Queue, letzte Läufe |
-| `/partials/dashboard` | GET | HTMX-Partial | Dashboard-Status-Update (5s-Poll) |
-| `/partials/capture/{id}/status` | GET | HTMX-Partial | Stage-Badge + Status (3s-Poll auf Detail-View) |
-| `/partials/jobs` | GET | HTMX-Partial | Job-Queue-Partial (2s-Poll auf Jobs-View) |
-| `/source` | GET | `source.html` | AGPL §13 Network-Clause: Quellcode-Link |
-| `/healthz` | GET | JSON `{"status":"ok"}` | Liveness-Check |
+| `/` | GET | `dashboard.html` | Dashboard: queue, recent captures, active job |
+| `/captures/` | GET | `capture/list.html` | All captures from captures_dir, sorted by date |
+| `/captures/{id}` | GET | `capture/detail.html` | Detail: stage status, PLY size, trigger button, errors |
+| `/captures/{id}/process` | POST | redirect → `/captures/{id}` | Enqueue capture into the job queue |
+| `/captures/{id}/cancel` | POST | redirect → `/captures/{id}` | Cancel the running job |
+| `/captures/{id}/view` | GET | `capture/view.html` | SuperSplat embed (iframe + ?load=) |
+| `/captures/{id}/ply` | GET | `FileResponse` | PLY file for SuperSplat's ?load= parameter |
+| `/captures/{id}/log` | GET | JSON | pipeline.log tail (last 50 lines) |
+| `/jobs/` | GET | `jobs.html` | Active jobs, queue, recent runs |
+| `/partials/dashboard` | GET | HTMX partial | Dashboard status update (5s poll) |
+| `/partials/capture/{id}/status` | GET | HTMX partial | Stage badge + status (3s poll on detail view) |
+| `/partials/jobs` | GET | HTMX partial | Job-queue partial (2s poll on jobs view) |
+| `/source` | GET | `source.html` | AGPL §13 network clause: source-code link |
+| `/healthz` | GET | JSON `{"status":"ok"}` | Liveness check |
 
-**StaticFiles-Mounts (kein Route-Handler):**
+**StaticFiles mounts (no route handler):**
 - `/static/` → `src/autosplat/webui/static/`
-- `/supersplat/` → `target/supersplat/dist/` (nur wenn `dist/index.html` vorhanden)
+- `/supersplat/` → `target/supersplat/dist/` (only when `dist/index.html` exists)
 
 ---
 
-## §4 Sub-Phasen (✅ DONE — historisch)
+## §4 Sub-phases (✅ DONE — historical)
 
-### P1 — FastAPI Foundation + `autosplat webui` CLI
+### P1 — FastAPI foundation + `autosplat webui` CLI
 
-**Scope:** App-Skeleton, Dependencies, CLI-Kommando, erster Test.
+**Scope:** App skeleton, dependencies, CLI command, first test.
 
-**Status:** ✅ done — Commit `f8b8f5b`
+**Status:** ✅ done — commit `f8b8f5b`
 
-**DoD erreicht:**
-- `pyproject.toml`: fastapi, uvicorn[standard], jinja2 als core dependencies; httpx in dev
+**DoD met:**
+- `pyproject.toml`: fastapi, uvicorn[standard], jinja2 as core dependencies; httpx in dev
 - `src/autosplat/webui/__init__.py`, `app.py`, `routes/health.py`
 - `GET /healthz` → `{"status":"ok","version":"0.9.0"}`
-- `autosplat webui --port 8080` startet uvicorn mit `create_app()`
-- `tests/webui/test_app.py`: /healthz Test + TestClient via Starlette
-- AGPL-Header in allen neuen Python-Dateien
+- `autosplat webui --port 8080` starts uvicorn with `create_app()`
+- `tests/webui/test_app.py`: /healthz test + TestClient via Starlette
+- AGPL header in all new Python files
 
 **Gate-1:** Smoke `http://localhost:8080/healthz` → OK ✅
 
 ---
 
-### P2 — Capture-Liste + Detail-View
+### P2 — Capture list + detail view
 
-**Scope:** Filesystem-Walk für Captures, /captures/, /captures/{id}, HTMX-Polling.
+**Scope:** Filesystem walk for captures, /captures/, /captures/{id}, HTMX polling.
 
-**Status:** ✅ done — Commit `c4c1b2f`
+**Status:** ✅ done — commit `c4c1b2f`
 
-**DoD erreicht:**
-- `webui/state.py`: `list_captures()` → `list[CaptureInfo]`, WatcherState-Overlay
-- Templates: `capture/list.html` (Status-Badge), `capture/detail.html` (Stage-Timeline)
-- `/partials/capture/{id}/status` — HTMX-Fragment (hx-trigger="every 3s")
-- `/captures/{id}/log` — JSON-Lines-Tail (letzte 50 Zeilen)
-- Template-Verzeichnis `capture/` (singular) — `.gitignore`-Konflikt mit `captures/` vermieden
+**DoD met:**
+- `webui/state.py`: `list_captures()` → `list[CaptureInfo]`, WatcherState overlay
+- Templates: `capture/list.html` (status badge), `capture/detail.html` (stage timeline)
+- `/partials/capture/{id}/status` — HTMX fragment (hx-trigger="every 3s")
+- `/captures/{id}/log` — JSON-lines tail (last 50 lines)
+- Template directory `capture/` (singular) — avoids the `.gitignore` conflict with `captures/`
 - Tests: list empty, list with fixture, detail 200
 
 ---
 
-### P3 — Job-Runner + Trigger + Cancel
+### P3 — Job runner + trigger + cancel
 
-**Scope:** POST /captures/{id}/process, asyncio Job-Runner, Cancel-Path.
+**Scope:** POST /captures/{id}/process, asyncio job runner, cancel path.
 
-**Status:** ✅ done — Commit `1981178`
+**Status:** ✅ done — commit `1981178`
 
-**DoD erreicht:**
+**DoD met:**
 - `webui/jobs_runner.py`: `JobRunner`, `Dict[id → JobState]`, `start_job()`, `cancel_job()`
-- Threading für synchronen `run_pipeline()` — blockiert nicht den ASGI Event-Loop
-- `subprocess.Popen` Monkey-Patch für Cancel-Handle
+- Threading for the synchronous `run_pipeline()` — does not block the ASGI event loop
+- `subprocess.Popen` monkey-patch for the cancel handle
 - `GET /jobs/` + `/partials/jobs` (hx-trigger="every 2s")
 - Tests: `find_source_video`, enqueue, cancel
 
 ---
 
-### P4 — SuperSplat-Embed + PLY-Serve
+### P4 — SuperSplat embed + PLY serving
 
-**Scope:** /captures/{id}/view, StaticFiles für dist/, PLY-FileResponse.
+**Scope:** /captures/{id}/view, StaticFiles for dist/, PLY FileResponse.
 
-**Status:** ✅ done — Commit `2d1f691`
+**Status:** ✅ done — commit `2d1f691`
 
-**DoD erreicht:**
-- `/supersplat/` StaticFiles-Mount (nur wenn `dist/index.html` vorhanden)
-- `GET /captures/{id}/ply` → `FileResponse` mit `Accept-Ranges` + CORS-Header
-- `capture/view.html`: iframe `src="/supersplat/index.html?load=/captures/{id}/ply"` + Fallback wenn kein PLY
-- Tests: PLY-Route 200 + MIME, 404 wenn kein PLY
+**DoD met:**
+- `/supersplat/` StaticFiles mount (only when `dist/index.html` exists)
+- `GET /captures/{id}/ply` → `FileResponse` with `Accept-Ranges` + CORS headers
+- `capture/view.html`: iframe `src="/supersplat/index.html?load=/captures/{id}/ply"` + fallback when no PLY
+- Tests: PLY route 200 + MIME, 404 when no PLY
 
 ---
 
-### P5 — AGPL §13 Footer + /source
+### P5 — AGPL §13 footer + /source
 
-**Scope:** AGPL-Compliance: Footer in base.html, /source-Route.
+**Scope:** AGPL compliance: footer in base.html, /source route.
 
-**Status:** ✅ done — Commit `bb0d3a7`
+**Status:** ✅ done — commit `bb0d3a7`
 
-**DoD erreicht:**
-- `base.html` Footer auf jeder Seite: Codeberg-Link + "AGPL-3.0-or-later"
-- `GET /source` → `source.html` mit License-Text + direktem Codeberg-Link
+**DoD met:**
+- `base.html` footer on every page: Codeberg link + "AGPL-3.0-or-later"
+- `GET /source` → `source.html` with the licence text + a direct Codeberg link
 - Tests: GET /source returns 200
 
 ---
 
-### P6 — CHANGELOG + Version-Bump + Release-Tag
+### P6 — CHANGELOG + version bump + release tag
 
-**Scope:** CHANGELOG-Entry, Version 1.0.0, annotierter Tag.
+**Scope:** CHANGELOG entry, version 1.0.0, annotated tag.
 
-**Status:** ✅ done — Commit `85dce52`, Tag `v1.0.0`
+**Status:** ✅ done — commit `85dce52`, tag `v1.0.0`
 
-**DoD erreicht:**
-- `CHANGELOG.md` v1.0.0-Section inkl. Pre-1.0-Polish-Commits
+**DoD met:**
+- `CHANGELOG.md` v1.0.0 section incl. pre-1.0 polish commits
 - `pyproject.toml`: `version = "1.0.0"`
 - `src/autosplat/__init__.py`: `__version__ = "1.0.0"`
-- Alle Tests grün (185 collected, 185 passed)
-- `git tag -a v1.0.0` annotiert + nach Codeberg gepusht
-- Codeberg-Release-Page durch Architekten manuell angelegt
+- All tests green (185 collected, 185 passed)
+- `git tag -a v1.0.0` annotated + pushed to Codeberg
+- Codeberg release page created manually by the architect
 
-**Gate-2:** Vollständiger Browser-Smoke (Dashboard, Detail, /source, /healthz) → OK ✅
+**Gate-2:** Full browser smoke (dashboard, detail, /source, /healthz) → OK ✅
 
 ---
 
-## §5 Risiken + Mitigations (wie aufgelöst)
+## §5 Risks + mitigations (as resolved)
 
-| Risiko | Mitigation | Aufgelöst? |
+| Risk | Mitigation | Resolved? |
 |---|---|---|
-| Brush-Async: `run_pipeline()` synchron blockierend | Threading für `run_pipeline()`, Job-Runner asyncio-safe | ✅ via `threading.Thread` in `jobs_runner.py` |
-| PLY-Streaming-Performance (200+ MB) | `FileResponse` mit `Accept-Ranges` | ✅ FastAPI streamt automatisch |
-| `autosplat serve` + `autosplat webui` Port-Konflikt | Verschiedene Default-Ports (8765 vs 8080), unabhängige Config | ✅ kein Konflikt |
-| WatcherState-Race (WebUI liest, Daemon schreibt) | `state.py` fängt `JSONDecodeError` ab, gibt letzten State zurück | ✅ graceful degradation |
-| SuperSplat dist/ fehlt (frischer Clone) | StaticFiles-Mount nur wenn `dist/index.html` existiert | ✅ Fallback-Hinweis auf View-Seite |
-| `.gitignore` `captures/` Muster | Template-Verzeichnis als `capture/` (singular) angelegt | ✅ alle Refs angepasst |
-| `ASGITransport` ist async-only | Starlette `TestClient` statt `httpx.Client(transport=ASGITransport)` | ✅ TestClient für Sync-Tests |
+| Brush async: `run_pipeline()` blocks synchronously | Threading for `run_pipeline()`, job runner asyncio-safe | ✅ via `threading.Thread` in `jobs_runner.py` |
+| PLY streaming performance (200+ MB) | `FileResponse` with `Accept-Ranges` | ✅ FastAPI streams automatically |
+| `autosplat serve` + `autosplat webui` port conflict | Different default ports (8765 vs 8080), independent config | ✅ no conflict |
+| WatcherState race (WebUI reads, daemon writes) | `state.py` catches `JSONDecodeError`, returns the last state | ✅ graceful degradation |
+| SuperSplat dist/ missing (fresh clone) | StaticFiles mount only when `dist/index.html` exists | ✅ fallback hint on the view page |
+| `.gitignore` `captures/` pattern | Template directory named `capture/` (singular) | ✅ all refs adjusted |
+| `ASGITransport` is async-only | Starlette `TestClient` instead of `httpx.Client(transport=ASGITransport)` | ✅ TestClient for sync tests |
 
 ---
 
-## §6 Test-Strategie
+## §6 Test strategy
 
-**Zielordner:** `tests/webui/`
+**Target directory:** `tests/webui/`
 
-**Framework:** `pytest` + Starlette `TestClient` (ASGI-Sync). Kein `pytest-anyio` benötigt für Sync-Tests; `anyio.from_thread` für async Job-Runner-Tests.
+**Framework:** `pytest` + Starlette `TestClient` (ASGI-sync). No `pytest-anyio` needed for sync tests; `anyio.from_thread` for async job-runner tests.
 
-**Dateien:**
+**Files:**
 - `tests/webui/__init__.py`
-- `tests/webui/conftest.py` — `app` Fixture (`load_config(include_xdg=False)` + `create_app(cfg)`), `tmp_captures_dir`
+- `tests/webui/conftest.py` — `app` fixture (`load_config(include_xdg=False)` + `create_app(cfg)`), `tmp_captures_dir`
 - `tests/webui/test_app.py` — /healthz, /source
-- `tests/webui/test_captures.py` — Filesystem-Walk, Detail 200, PLY 200/404
+- `tests/webui/test_captures.py` — filesystem walk, detail 200, PLY 200/404
 - `tests/webui/test_jobs.py` — `find_source_video`, enqueue, cancel
 
-**Marker:** `needs_supersplat_dist` für Tests die `target/supersplat/dist/` brauchen.
+**Marker:** `needs_supersplat_dist` for tests that need `target/supersplat/dist/`.
 
-**Ergebnis:** 185 Tests gesamt (vorher 175 + 10 neue WebUI-Tests). Alle grün.
+**Result:** 185 tests total (175 before + 10 new WebUI tests). All green.
 
-**Schlüssel-Pattern:** Echte ASGI-Requests (kein Response-Mock) — konsistent mit `test_viewer.py`-Vorbild. Pattern-Memory `feedback_integration_tests_http.md` bestätigt: HTTP-Integration-Tests finden Bugs (CORS), die Unit-Tests übersehen.
+**Key pattern:** Real ASGI requests (no response mock) — consistent with the `test_viewer.py` precedent. Pattern memory `feedback_integration_tests_http.md` confirms: HTTP integration tests catch bugs (CORS) that unit tests miss.
 
 ---
 
 ## §7 v1.1.0 Restyle — Kuro Signal Protocol
 
-*Addendum 2026-05-17 · Session `2026-05-16-autosplat-v1.1.0-webui-restyle` · Rollback-Tag-Stack `autosplat-pre/post-v1.1.0-restyle-P{N}-*`*
+*Addendum 2026-05-17 · Session `2026-05-16-autosplat-v1.1.0-webui-restyle` · Rollback tag stack `autosplat-pre/post-v1.1.0-restyle-P{N}-*`*
 
-Die v1.0.0-WebUI nutzte ein minimales `static/style.css`. v1.1.0 ersetzt es durch ein vollständiges Design-System ohne Verhaltensänderung der Pipeline.
+The v1.0.0 WebUI used a minimal `static/style.css`. v1.1.0 replaces it with a full design system, with no change to pipeline behaviour.
 
-### Token-System
+### Token system
 
-- `static/css/tokens.css` — Primitive: Farb-Skalen, Spacing (`--space-1…8`), Radii, Fonts (display/body/mono), Signal-Akzente (`--signal-phosphor`, `--signal-circuit`, …), Stage-Farben.
-- `static/css/autosplat.css` — Komponenten-Layer (~24 Sektionen): Frame-Grid, TopBar, Sidebar, Cards, Tabellen, Stage-Timeline, Badges, Buttons, Viewer-HUD.
-- Beide aspekt-fähig: `data-aspect` auf `<html>` schaltet Subthemes (gunshi/kantoku/sensei) — in v1.1.0 hart auf `shugo` gepinnt, Tokens latent vorhanden.
+- `static/css/tokens.css` — primitives: colour scales, spacing (`--space-1…8`), radii, fonts (display/body/mono), signal accents (`--signal-phosphor`, `--signal-circuit`, …), stage colours.
+- `static/css/autosplat.css` — component layer (~24 sections): frame grid, top bar, sidebar, cards, tables, stage timeline, badges, buttons, viewer HUD.
+- Both are aspect-capable: `data-aspect` on `<html>` switches subthemes (gunshi/kantoku/sensei) — hard-pinned to `shugo` in v1.1.0, with the tokens present but latent.
 
-### Theme-Toggle
+### Theme toggle
 
-- `data-theme` auf `<html>` (`dark` Default / `light`), in `localStorage` als `autosplat-theme` persistiert.
-- Anti-Flash: ein Inline-`<script>` im `<head>` setzt `data-theme` vor dem ersten Paint.
-- TopBar-Pill mit vorgerendertem sun/moon-SVG, CSS-Visibility-Toggle.
+- `data-theme` on `<html>` (`dark` default / `light`), persisted in `localStorage` as `autosplat-theme`.
+- Anti-flash: an inline `<script>` in the `<head>` sets `data-theme` before the first paint.
+- Top-bar pill with a pre-rendered sun/moon SVG and a CSS visibility toggle.
 
-### HTMX-Polling-Architektur
+### HTMX polling architecture
 
-| Surface | Poll-Intervall | Swap-Ziel |
+| Surface | Poll interval | Swap target |
 |---|---|---|
 | Dashboard `/partials/dashboard` | 3 s | `outerHTML` |
-| Captures-List `/partials/captures` | 3 s | `outerHTML` |
+| Captures list `/partials/captures` | 3 s | `outerHTML` |
 | Jobs `/partials/jobs` | 2 s | `outerHTML` |
-| Capture-Detail Log `/partials/capture/{id}/log` | 2 s | `innerHTML` |
-| Capture-Detail Brush `/partials/capture/{id}/brush` | 3 s | `outerHTML` |
+| Capture detail log `/partials/capture/{id}/log` | 2 s | `innerHTML` |
+| Capture detail brush `/partials/capture/{id}/brush` | 3 s | `outerHTML` |
 
-### Wrapper-Pattern-Lock (P2.7-Lesson)
+### Wrapper pattern lock (P2.7 lesson)
 
-- **`as-poll-region`** — äußerer Wrapper, trägt die HTMX-Poll-Attribute, kein Padding. Ziel eines `outerHTML`-Swaps.
-- **`as-main-inner`** — innerer Wrapper, trägt das Layout-Padding. Das Partial trägt zusätzlich eigene HTMX-Attribute für Self-Renewal.
-- Verschachtelte `as-main-inner` waren der P2.7-Bug — die Trennung outer-Poll / inner-Padding löst ihn.
+- **`as-poll-region`** — outer wrapper, carries the HTMX poll attributes, no padding. Target of an `outerHTML` swap.
+- **`as-main-inner`** — inner wrapper, carries the layout padding. The partial additionally carries its own HTMX attributes for self-renewal.
+- Nested `as-main-inner` was the P2.7 bug — separating outer-poll from inner-padding resolves it.
 
 ### Vendored HTMX
 
-- `static/js/htmx.min.js` — htmx@1.9.12, BSD-2, lokal ausgeliefert.
-- Grund: der CDN-`integrity`-SRI-Hash war fehlerhaft → Browser blockierte HTMX komplett (P4.5-Root-Cause). Same-origin braucht kein SRI, ist offline-fähig und AGPL-konform.
+- `static/js/htmx.min.js` — htmx@1.9.12, BSD-2, served locally.
+- Reason: the CDN `integrity` SRI hash was wrong → the browser blocked HTMX entirely (P4.5 root cause). Same-origin needs no SRI, works offline, and is AGPL-compliant.
 
-### Latent Features (kein UI-Exposure)
+### Latent features (no UI exposure)
 
-- HTMX-Polling-Annotation-Overlay: `document.body.setAttribute('data-annot', 'on')` in der Konsole.
-- Aspect-Subthemes gunshi/kantoku/sensei — CSS-Tokens vorhanden, kein Picker (in P2.6 als scope-frei entfernt).
+- HTMX polling annotation overlay: `document.body.setAttribute('data-annot', 'on')` from the console.
+- Aspect subthemes gunshi/kantoku/sensei — CSS tokens present, no picker (removed in P2.6 as out of scope).
 
 ### Tests
 
-`tests/webui/test_ui_smoke.py` — 10 HTTP-Integration-Tests: alle 7 Surfaces, Static-Assets (tokens.css / autosplat.css / htmx.min.js), Partial-Routes. Gesamt-Suite 185 → 195.
+`tests/webui/test_ui_smoke.py` — 10 HTTP integration tests: all 7 surfaces, static assets (tokens.css / autosplat.css / htmx.min.js), partial routes. Full suite 185 → 195.
 
-### Bekannte v1.1.1-Hotfix-Kandidaten
+### Known v1.1.1 hotfix candidates
 
-`SF-G2-9` (Backend-Status-Write-Race), `SF-PIPE-1` (SuperSplat-PLY-URL-Loading), `SF-G3-3` (JobRunner single-run-per-capture). Alle drei sind WebUI-Display-only — die Pipeline selbst läuft korrekt. Details in `CHANGELOG.md` [v1.1.0] § Known Issues.
+`SF-G2-9` (backend status-write race), `SF-PIPE-1` (SuperSplat PLY URL-loading), `SF-G3-3` (JobRunner single-run-per-capture). All three are WebUI-display-only — the pipeline itself runs correctly. Details in `CHANGELOG.md` [v1.1.0] § Known Issues.

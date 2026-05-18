@@ -1,44 +1,44 @@
 # PHASE-9-PLAN — Local SuperSplat Auto-Open (Option A)
 
-*Plan-Bau-Burst 2026-05-14 · Status: **Decision-Gate** · Autor: CC-Executor*
+*Plan-build burst 2026-05-14 · Status: **Decision-Gate** · Author: CC-Executor*
 *Basis: `docs/PHASE-9-RECON.md`, commit `889c333`*
 
 ---
 
-## § 1 — Kontext + Bezug zur Recon
+## § 1 — Context + Relation to the Recon
 
-Der load-bearing Befund aus der Recon: `viewer.py` hat seit Phase 1 einen stillen Fehler — es baut URLs der Form `https://playcanvas.com/supersplat/editor?load=http://127.0.0.1:8765/scene.ply`, die wegen Mixed-Content-Blockierung (HTTPS-Seite kann HTTP-Resource auf localhost nicht fetchen) im Browser nie funktioniert haben. PLY wurde daher immer manuell per Drag-and-drop geladen. Zusätzlich startet kein HTTP-Server für die PLY-Datei — `open_in_viewer` baut nur die URL und öffnet den Browser, ohne die Datei je zu servieren.
+The load-bearing finding from the recon: `viewer.py` has had a silent bug since Phase 1 — it builds URLs of the form `https://playcanvas.com/supersplat/editor?load=http://127.0.0.1:8765/scene.ply`, which never worked in the browser because of mixed-content blocking (an HTTPS page cannot fetch an HTTP resource on localhost). PLY therefore always had to be loaded manually via drag-and-drop. Additionally, no HTTP server starts for the PLY file — `open_in_viewer` only builds the URL and opens the browser, without ever serving the file.
 
-Option A löst beide Probleme mit einer lokal gebauten SuperSplat-Instanz (`http://localhost:3000`): gleiches Schema + Host wie der PLY-Server → kein CORS/Mixed-Content. SuperSplat ist MIT, baut sauber mit Node.js+Rollup, unterstützt `?load=URL` nativ.
+Option A solves both problems with a locally built SuperSplat instance (`http://localhost:3000`): same scheme + host as the PLY server → no CORS/mixed-content. SuperSplat is MIT, builds cleanly with Node.js+Rollup, and supports `?load=URL` natively.
 
-**Explicit Out of Scope für Phase 9:** Cloud-Share-URL-Automation (`embed_view_url` bleibt manuell), Capture-Browser-UI, Mobile-Support, Full WebUI, iframe-Fallback-Templating, Preview-Screenshot-Generierung.
+**Explicit Out of Scope for Phase 9:** cloud share URL automation (`embed_view_url` stays manual), capture browser UI, mobile support, full WebUI, iframe fallback templating, preview screenshot generation.
 
 ---
 
-## § 2 — Sub-Phasen-Architektur
+## § 2 — Sub-Phase Architecture
 
-### Sub-Phase 9.1 — Config-Erweiterung + URL-Builder-Fix
-*~0.5 Tag — keine externen Abhängigkeiten, reine Python-Änderungen*
+### Sub-Phase 9.1 — Config Extension + URL-Builder Fix
+*~0.5 day — no external dependencies, pure Python changes*
 
-**Scope:** Neues `target`-Value `"supersplat-local"`, neue Config-Felder, korrekter URL-Builder.
+**Scope:** New `target` value `"supersplat-local"`, new config fields, correct URL builder.
 
 **Commits:**
 1. `feat(phase-9.1): ViewerConfig — supersplat-local target + supersplat_local_port + dist_path`
-2. `feat(phase-9.1): viewer.py — URL-builder für supersplat-local; localhost statt 127.0.0.1`
+2. `feat(phase-9.1): viewer.py — URL-builder for supersplat-local; localhost instead of 127.0.0.1`
 3. `test(phase-9.1): viewer URL-builder-Tests (supersplat-local, remote, playcanvas)`
 
 **Tags:** `autosplat-pre-phase-9.1-config-url` → `autosplat-post-phase-9.1-config-url`
 
-**Konkrete Code-Änderungen:**
+**Concrete code changes:**
 
 `config.py` → `ViewerConfig`:
 ```python
-# Neue Felder:
+# New fields:
 supersplat_local_port: int = Field(default=3000, ge=1024, le=65535,
     description="Port for locally-built SuperSplat dev server.")
 supersplat_dist_path: Path = Field(default=Path("target/supersplat/dist"),
     description="Path to built SuperSplat dist/ directory.")
-# target erweitern:
+# extend target:
 target: Literal["supersplat", "supersplat-local", "playcanvas", "none"]
 ```
 
@@ -50,52 +50,52 @@ supersplat_dist_path = "target/supersplat/dist"
 
 `viewer.py` → `_build_viewer_url`:
 - `"supersplat-local"` → `f"http://localhost:{supersplat_port}?load=http://localhost:{ply_port}/{ply_name}"`
-- `"supersplat"` → weiterhin Remote-URL (für Nutzer ohne lokales Build)
-- `serve_directory` Binding: `"127.0.0.1"` bleibt für Security; URL zum Browser: `localhost` statt `127.0.0.1`
+- `"supersplat"` → still remote URL (for users without a local build)
+- `serve_directory` binding: `"127.0.0.1"` stays for security; URL to the browser: `localhost` instead of `127.0.0.1`
 
-`viewer.py` → `open_in_viewer` für `supersplat-local`:
-- Kein `webbrowser.open()` inline (kein Server läuft nach Pipeline-Exit)
-- Loggt `INFO viewer.local_hint`: `"Run: autosplat serve <output_dir> --with-supersplat"`
+`viewer.py` → `open_in_viewer` for `supersplat-local`:
+- No inline `webbrowser.open()` (no server runs after pipeline exit)
+- Logs `INFO viewer.local_hint`: `"Run: autosplat serve <output_dir> --with-supersplat"`
 
 **DoD 9.1:**
-- [ ] `target = "supersplat-local"` ist valider Pydantic-Wert, Config lädt ohne Fehler
+- [ ] `target = "supersplat-local"` is a valid Pydantic value, config loads without error
 - [ ] `_build_viewer_url("supersplat-local", "scene.ply", ply_port=8765, ss_port=3000)` → `"http://localhost:3000?load=http://localhost:8765/scene.ply"`
-- [ ] `open_in_viewer` für `supersplat-local` öffnet keinen Browser, loggt hint
-- [ ] Alle Tests grün (≥ 122 gesamt)
+- [ ] `open_in_viewer` for `supersplat-local` opens no browser, logs hint
+- [ ] All tests green (≥ 122 total)
 
-**Test-Adds 9.1: ~6**
-- URL-builder: supersplat-local, supersplat-remote, playcanvas, none
-- `open_in_viewer` mit `target="supersplat-local"` → kein `webbrowser.open`, hint geloggt
-- Config-Roundtrip: `supersplat_local_port` + `supersplat_dist_path` aus TOML
+**Test adds 9.1: ~6**
+- URL builder: supersplat-local, supersplat-remote, playcanvas, none
+- `open_in_viewer` with `target="supersplat-local"` → no `webbrowser.open`, hint logged
+- Config roundtrip: `supersplat_local_port` + `supersplat_dist_path` from TOML
 
 ---
 
-### Sub-Phase 9.2 — SuperSplat Setup-Script + Doctor
-*~0.5 Tag — erfordert Node.js/npm auf dem System*
+### Sub-Phase 9.2 — SuperSplat Setup Script + Doctor
+*~0.5 day — requires Node.js/npm on the system*
 
-**Scope:** Reproduzierbares Build-Script, Doctor-Check für lokales SuperSplat-Dist.
+**Scope:** Reproducible build script, doctor check for the local SuperSplat dist.
 
 **Commits:**
 1. `feat(phase-9.2): scripts/setup_supersplat.sh — clone, npm ci, npm run build, verify`
-2. `feat(phase-9.2): doctor — supersplat-dist check (required=False, WARN wenn fehlt)`
+2. `feat(phase-9.2): doctor — supersplat-dist check (required=False, WARN if missing)`
 3. `test(phase-9.2): doctor supersplat-check — OK + WARN + target≠supersplat-local → skip`
 
 **Tags:** `autosplat-pre-phase-9.2-setup-doctor` → `autosplat-post-phase-9.2-setup-doctor`
 
-**`scripts/setup_supersplat.sh` — Design:**
+**`scripts/setup_supersplat.sh` — design:**
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 SUPERSPLAT_REPO="https://github.com/playcanvas/supersplat"
-SUPERSPLAT_PIN="main"          # nach erstem Erfolg auf konkret-guten commit pinnen
+SUPERSPLAT_PIN="main"          # pin to a known-good commit after first success
 DEST="${REPO_ROOT}/target/supersplat"
 
 # Precondition: node + npm
 command -v node >/dev/null 2>&1 || { echo "ERROR: node not found. Install: brew install node"; exit 1; }
 command -v npm  >/dev/null 2>&1 || { echo "ERROR: npm not found";  exit 1; }
 
-# Clone oder update
+# Clone or update
 if [ -d "$DEST/.git" ]; then
   git -C "$DEST" fetch --quiet && git -C "$DEST" checkout "$SUPERSPLAT_PIN"
 else
@@ -111,7 +111,7 @@ npm run build
 echo "SuperSplat built → $DEST/dist/"
 ```
 
-**Doctor-Integration:**
+**Doctor integration:**
 ```python
 def _check_supersplat(config: Config) -> CheckResult | None:
     if config.viewer.target != "supersplat-local":
@@ -123,31 +123,31 @@ def _check_supersplat(config: Config) -> CheckResult | None:
     return CheckResult(name="supersplat", ok=False, required=False,
         detail=f"dist missing at {dist_index.parent} — run scripts/setup_supersplat.sh")
 ```
-→ `run_doctor()` ruft `_check_supersplat` auf, filtert `None` raus.
+→ `run_doctor()` calls `_check_supersplat`, filters out `None`.
 
 **DoD 9.2:**
-- [ ] `bash scripts/setup_supersplat.sh` läuft durch, `target/supersplat/dist/index.html` existiert
-- [ ] `autosplat doctor` zeigt `supersplat WARN` wenn dist fehlt (nur wenn target=supersplat-local)
-- [ ] `autosplat doctor` zeigt `supersplat OK` nach Setup
-- [ ] Alle Tests grün (≥ 125 gesamt)
+- [ ] `bash scripts/setup_supersplat.sh` runs through, `target/supersplat/dist/index.html` exists
+- [ ] `autosplat doctor` shows `supersplat WARN` when dist is missing (only when target=supersplat-local)
+- [ ] `autosplat doctor` shows `supersplat OK` after setup
+- [ ] All tests green (≥ 125 total)
 
-**Gate-1 (manuell, vor 9.3):**
-> Jay führt aus: `bash scripts/setup_supersplat.sh`
-> Danach: `python -m http.server 3000 --directory target/supersplat/dist &` und `open http://localhost:3000`
-> Erwartung: SuperSplat öffnet sich im Browser, zeigt die UI (kein Splat geladen — Drag-and-drop noch nötig).
-> Gate ist bestanden wenn SuperSplat lädt. STOP wenn Build-Error oder leere Seite → Befund an Cowork.
+**Gate-1 (manual, before 9.3):**
+> Jay runs: `bash scripts/setup_supersplat.sh`
+> Then: `python -m http.server 3000 --directory target/supersplat/dist &` and `open http://localhost:3000`
+> Expectation: SuperSplat opens in the browser, shows the UI (no splat loaded — drag-and-drop still needed).
+> Gate passes when SuperSplat loads. STOP on build error or blank page → report finding to Cowork.
 
-**Test-Adds 9.2: ~3**
-- Doctor-Check: dist vorhanden → OK
-- Doctor-Check: dist fehlt + target=supersplat-local → WARN
-- Doctor-Check: target=supersplat (remote) → kein supersplat-Check in output
+**Test adds 9.2: ~3**
+- Doctor check: dist present → OK
+- Doctor check: dist missing + target=supersplat-local → WARN
+- Doctor check: target=supersplat (remote) → no supersplat check in output
 
 ---
 
-### Sub-Phase 9.3 — `autosplat serve` CLI-Command
-*~1 Tag — Prozess-Management, graceful shutdown, subprocess-Kontrolle*
+### Sub-Phase 9.3 — `autosplat serve` CLI Command
+*~1 day — process management, graceful shutdown, subprocess control*
 
-**Scope:** Neuer CLI-Command der PLY-Server + SuperSplat-Server startet, Browser öffnet, blockiert bis Ctrl+C.
+**Scope:** New CLI command that starts the PLY server + SuperSplat server, opens the browser, blocks until Ctrl+C.
 
 **Commits:**
 1. `feat(phase-9.3): viewer.py — serve_supersplat_local context manager`
@@ -156,7 +156,7 @@ def _check_supersplat(config: Config) -> CheckResult | None:
 
 **Tags:** `autosplat-pre-phase-9.3-serve-cmd` → `autosplat-post-phase-9.3-serve-cmd`
 
-**`viewer.py` — neuer Context-Manager:**
+**`viewer.py` — new context manager:**
 ```python
 @contextmanager
 def serve_supersplat_local(
@@ -171,7 +171,7 @@ def serve_supersplat_local(
             yield {"supersplat": ss_base, "ply": ply_base}
 ```
 
-**`cli.py` — neuer Command:**
+**`cli.py` — new command:**
 ```python
 @app.command()
 def serve(
@@ -183,20 +183,20 @@ def serve(
     config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = _load_or_die(config)
-    ply_file = _find_ply(capture_dir)     # sucht scene.ply in capture_dir oder capture_dir/output/
+    ply_file = _find_ply(capture_dir)     # looks for scene.ply in capture_dir or capture_dir/output/
     effective_ply_port = ply_port or cfg.viewer.local_http_port
     effective_ss_port  = supersplat_port or cfg.viewer.supersplat_local_port
     ...
-    # Blockiert bis Ctrl+C (signal.pause() oder threading.Event.wait())
+    # Blocks until Ctrl+C (signal.pause() or threading.Event.wait())
 ```
 
-**`_find_ply(capture_dir)` Logik:**
-1. `capture_dir/scene.ply` → direkt
-2. `capture_dir/output/scene.ply` → in outputs-Subdir
-3. Erstes `*.ply` in `capture_dir` → Fallback
-4. Kein PLY → Exit mit Fehlermeldung
+**`_find_ply(capture_dir)` logic:**
+1. `capture_dir/scene.ply` → directly
+2. `capture_dir/output/scene.ply` → in outputs subdir
+3. First `*.ply` in `capture_dir` → fallback
+4. No PLY → exit with error message
 
-**Graceful Shutdown:**
+**Graceful shutdown:**
 ```python
 import signal
 stop_event = threading.Event()
@@ -212,37 +212,37 @@ with serve_supersplat_local(...) as urls:
     stop_event.wait()   # blocks here
 ```
 
-**Portkonflikt (STOP-Trigger):**
-`socketserver.ThreadingTCPServer` wirft `OSError: [Errno 48] Address already in use` → exception propagiert als Exit-Code `EXIT_USER_ERROR` mit Meldung `"Port {port} already in use — use --ply-port / --supersplat-port to override"`.
+**Port conflict (STOP trigger):**
+`socketserver.ThreadingTCPServer` raises `OSError: [Errno 48] Address already in use` → exception propagates as exit code `EXIT_USER_ERROR` with message `"Port {port} already in use — use --ply-port / --supersplat-port to override"`.
 
 **DoD 9.3:**
-- [ ] `autosplat serve /path/to/capture --with-supersplat` → Browser öffnet, PLY lädt automatisch (keine Drag-and-drop)
-- [ ] Ctrl+C → beide Server shutdown, Prozess beendet sich sauber
-- [ ] Port-Konflikt → klare Fehlermeldung, Exit 1
-- [ ] Smoke: manueller Test durch Jay mit burgstall-PLY
-- [ ] Alle Tests grün (≥ 131 gesamt)
+- [ ] `autosplat serve /path/to/capture --with-supersplat` → browser opens, PLY loads automatically (no drag-and-drop)
+- [ ] Ctrl+C → both servers shut down, process exits cleanly
+- [ ] Port conflict → clear error message, exit 1
+- [ ] Smoke: manual test by Jay with the burgstall PLY
+- [ ] All tests green (≥ 131 total)
 
-**Test-Adds 9.3: ~6**
-- `serve_supersplat_local`: beide Server starten, correkter yield, shutdown
-- `_find_ply`: direkter Pfad / output-Subdir / fallback / kein PLY
-- `serve` CLI: Port-Konflikt-Exit, `--no-open-browser` unterdrückt `webbrowser.open`
+**Test adds 9.3: ~6**
+- `serve_supersplat_local`: both servers start, correct yield, shutdown
+- `_find_ply`: direct path / output subdir / fallback / no PLY
+- `serve` CLI: port conflict exit, `--no-open-browser` suppresses `webbrowser.open`
 
 ---
 
-### Sub-Phase 9.4 — embed_url Auto-Fill nach Pipeline-Run
-*~0.5 Tag — pipeline.py + obsidian.py, keine neuen Module*
+### Sub-Phase 9.4 — embed_url Auto-Fill After Pipeline Run
+*~0.5 day — pipeline.py + obsidian.py, no new modules*
 
-**Scope:** Nach erfolgreichem Training + Export: `embed_url` mit localhost-URL automatisch in die Obsidian-Note schreiben.
+**Scope:** After successful training + export: automatically write `embed_url` with the localhost URL into the Obsidian note.
 
 **Commits:**
-1. `feat(phase-9.4): pipeline.py — build embed_url für supersplat-local target`
+1. `feat(phase-9.4): pipeline.py — build embed_url for supersplat-local target`
 2. `test(phase-9.4): embed_url Auto-Fill — supersplat-local target, user-override preserved, remote target → None`
 
 **Tags:** `autosplat-pre-phase-9.4-embed-url` → `autosplat-post-phase-9.4-embed-url`
 
-**`pipeline.py` — Änderung in `run_pipeline`:**
+**`pipeline.py` — change in `run_pipeline`:**
 ```python
-# Nach export_capture, vor obsidian.write_capture_note:
+# After export_capture, before obsidian.write_capture_note:
 embed_url: str | None = None
 if (
     config.obsidian.enabled
@@ -256,43 +256,43 @@ if (
 
 note_data = obsidian_mod.CaptureNoteData(
     ...
-    embed_url=embed_url,   # War bisher implizit None
+    embed_url=embed_url,   # was implicitly None until now
     ...
 )
 ```
 
-**Merge-Policy (bereits korrekt in Phase 8):**
-`embed_url` ist in `_COWORK_GENERATED_BUT_USER_OVERRIDABLE` → wenn User eine superspl.at-URL manuell eingetragen hat, wird sie auf Re-Run bewahrt. Kein weiterer Code nötig.
+**Merge policy (already correct since Phase 8):**
+`embed_url` is in `_COWORK_GENERATED_BUT_USER_OVERRIDABLE` → if the user has manually entered a superspl.at URL, it is preserved on re-run. No further code needed.
 
-**Beispiel-Result in Obsidian-Note:**
+**Example result in the Obsidian note:**
 ```yaml
 embed_url: "http://localhost:3000?load=http://localhost:8765/scene.ply"
 ```
 
-**Gate-2 (manuell, nach 9.4):**
-> Jay führt `autosplat process <video>` aus, öffnet generierte Note.
-> Erwartet: `embed_url` ist gesetzt (nicht leer), Auto-Block zeigt `<iframe src="http://localhost:3000?load=...">`.
-> Mit laufendem `autosplat serve <capture_dir> --with-supersplat`: iframe rendert Splat in Obsidian Reading-Mode.
-> STOP wenn embed_url leer bleibt → Befund an Cowork.
+**Gate-2 (manual, after 9.4):**
+> Jay runs `autosplat process <video>`, opens the generated note.
+> Expected: `embed_url` is set (not empty), the auto block shows `<iframe src="http://localhost:3000?load=...">`.
+> With `autosplat serve <capture_dir> --with-supersplat` running: the iframe renders the splat in Obsidian reading mode.
+> STOP if embed_url stays empty → report finding to Cowork.
 
 **DoD 9.4:**
-- [ ] `embed_url` ist nach Pipeline-Run automatisch gesetzt (nicht `""`)
-- [ ] Re-Run bei bestehender Note mit user-eingetragener superspl.at-URL: URL bleibt erhalten
-- [ ] `target = "supersplat"` (remote) → `embed_url = None` (kein lokaler Pfad)
-- [ ] Alle Tests grün (≥ 135 gesamt)
+- [ ] `embed_url` is automatically set after a pipeline run (not `""`)
+- [ ] Re-run on an existing note with a user-entered superspl.at URL: URL is preserved
+- [ ] `target = "supersplat"` (remote) → `embed_url = None` (no local path)
+- [ ] All tests green (≥ 135 total)
 
-**Test-Adds 9.4: ~4**
-- `embed_url` korrekt gebaut für supersplat-local target
-- `embed_url = None` wenn target=supersplat (remote)
-- Merge-Policy: user-override-URL bleibt beim Re-Run erhalten
-- Pipeline-Integration: embed_url fließt in `CaptureNoteData`
+**Test adds 9.4: ~4**
+- `embed_url` built correctly for supersplat-local target
+- `embed_url = None` when target=supersplat (remote)
+- Merge policy: user-override URL is preserved on re-run
+- Pipeline integration: embed_url flows into `CaptureNoteData`
 
 ---
 
-### Sub-Phase 9.5 — macOS Notification nach Trainingsende
-*~0.5 Tag — neues Modul, opt-in, isolated*
+### Sub-Phase 9.5 — macOS Notification After Training Ends
+*~0.5 day — new module, opt-in, isolated*
 
-**Scope:** Nach erfolgreichem Brush-Training: macOS Notification Center Meldung.
+**Scope:** After successful Brush training: a macOS Notification Center message.
 
 **Commits:**
 1. `feat(phase-9.5): notification.py — osascript notify_training_complete, graceful no-op`
@@ -326,86 +326,86 @@ def notify_training_complete(
         logger.debug("notification.failed", error=str(exc))
 ```
 
-**`config.py` — `ViewerConfig` Erweiterung (oder neuer `[notifications]` Block):**
+**`config.py` — `ViewerConfig` extension (or a new `[notifications]` block):**
 ```toml
 [viewer]
 notify_on_complete = false   # macOS Notification nach Training. Opt-in.
 ```
 
-**`pipeline.py` — Placement:**
+**`pipeline.py` — placement:**
 ```python
-# Nach train_mod.run_brush(...), VOR export:
+# After train_mod.run_brush(...), BEFORE export:
 if getattr(config.viewer, "notify_on_complete", False):
     from . import notification as notif_mod
     notif_mod.notify_training_complete(
         capture_name=_make_capture_name(video_path),
         duration_s=training_duration,
-        gaussians=0,   # noch nicht bekannt — PLY nicht geparst; oder weglassen bis nach export
+        gaussians=0,   # not yet known — PLY not parsed; or omit until after export
     )
 ```
 
-*Note: Gaussians-Count kommt aus PLY-Header (Phase 4 `read_ply_header`), der erst nach Export bekannt ist. Für Phase 9 Notification: entweder aus `train.py`-Progressparser schätzen oder 0/None lassen und Meldung ohne Gaussians zeigen. Die Notification-Platzierung NACH Training ist das Kern-Goal.*
+*Note: the Gaussian count comes from the PLY header (Phase 4 `read_ply_header`), which is only known after export. For the Phase 9 notification: either estimate it from the `train.py` progress parser, or leave it at 0/None and show the message without Gaussians. The core goal is placing the notification AFTER training.*
 
 **DoD 9.5:**
-- [ ] `notify_on_complete = true` in Config → macOS Notification erscheint nach Trainingsende
-- [ ] Default `false` → keine Notification
+- [ ] `notify_on_complete = true` in config → macOS notification appears after training ends
+- [ ] Default `false` → no notification
 - [ ] Non-macOS → silent no-op
-- [ ] `osascript`-Fehler → Debug-Log, kein Pipeline-Crash
-- [ ] Alle Tests grün (≥ 139 gesamt)
+- [ ] `osascript` error → debug log, no pipeline crash
+- [ ] All tests green (≥ 139 total)
 
-**Test-Adds 9.5: ~4**
-- `notify_training_complete` ruft `osascript` mit korrektem Argument
-- Non-macOS (mock `platform.system()` → "Linux") → kein subprocess-Call
-- `subprocess.run` wirft Exception → kein crash, debug-log
-- `config.viewer.notify_on_complete = false` → Pipeline ruft notify nicht auf
+**Test adds 9.5: ~4**
+- `notify_training_complete` calls `osascript` with the correct argument
+- Non-macOS (mock `platform.system()` → "Linux") → no subprocess call
+- `subprocess.run` raises an exception → no crash, debug log
+- `config.viewer.notify_on_complete = false` → pipeline does not call notify
 
 ---
 
-## § 3 — Test-Strategie
+## § 3 — Test Strategy
 
-| Sub-Phase | Test-Klassen | Coverage-Fokus | Smoke |
+| Sub-Phase | Test classes | Coverage focus | Smoke |
 |---|---|---|---|
-| 9.1 | Unit (URL-builder, Config-Parsing) | Alle target-Varianten, localhost vs. 127.0.0.1, Config-Defaults | TOML-Config laden mit neuen Feldern |
-| 9.2 | Unit (doctor check) | dist vorhanden/fehlt, target-Check | `bash scripts/setup_supersplat.sh` → dist prüfen |
-| 9.3 | Unit (process lifecycle, _find_ply, port-error) | Server-Start/Stop, URL-Bau, Fallback-PLY-Suche | Manuell: `autosplat serve <dir> --with-supersplat` |
-| 9.4 | Unit (embed_url build, merge-policy) | supersplat-local → URL korrekt; remote → None; user-override | `autosplat process <video>` → Note-Inhalt prüfen |
-| 9.5 | Unit (osascript mock, platform mock) | Happy-path, non-macOS, exception | Manuell: Notification erscheint nach Training |
+| 9.1 | Unit (URL builder, config parsing) | All target variants, localhost vs. 127.0.0.1, config defaults | Load TOML config with the new fields |
+| 9.2 | Unit (doctor check) | dist present/missing, target check | `bash scripts/setup_supersplat.sh` → check dist |
+| 9.3 | Unit (process lifecycle, _find_ply, port error) | Server start/stop, URL building, fallback PLY lookup | Manual: `autosplat serve <dir> --with-supersplat` |
+| 9.4 | Unit (embed_url build, merge policy) | supersplat-local → URL correct; remote → None; user override | `autosplat process <video>` → check note content |
+| 9.5 | Unit (osascript mock, platform mock) | Happy path, non-macOS, exception | Manual: notification appears after training |
 
-**Test-Count-Schätzung:**
-- 9.1: +6 Tests
-- 9.2: +3 Tests
-- 9.3: +6 Tests
-- 9.4: +4 Tests
-- 9.5: +4 Tests
-- **Gesamt neu: ~23 Tests → Phase-9-Post-Total: ~139** (aktuell 116)
+**Test count estimate:**
+- 9.1: +6 tests
+- 9.2: +3 tests
+- 9.3: +6 tests
+- 9.4: +4 tests
+- 9.5: +4 tests
+- **Total new: ~23 tests → Phase-9 post-total: ~139** (currently 116)
 
 ---
 
-## § 4 — STOP-Triggers
+## § 4 — STOP Triggers
 
-| Trigger | Bedingung | Aktion |
+| Trigger | Condition | Action |
 |---|---|---|
-| **Node.js/npm fehlt** | `setup_supersplat.sh` schlägt bei `command -v node` fehl | STOP. Befund melden: "Node.js nicht installiert. Optionen: (a) `brew install node`, (b) target=supersplat (remote) weiternutzen". Kein Auto-Install — externe Dep, Jay entscheidet. |
-| **SuperSplat Build-Fehler** | `npm run build` schlägt fehl (Rollup-Fehler, TypeScript-Fehler) | STOP. Build-Log melden. Mögliche Ursache: SuperSplat-`main` hat Breaking Change. Fix: `SUPERSPLAT_PIN` auf letzten bekannt-guten Commit setzen. |
-| **Port bereits belegt** | `:3000` oder `:8765` in Benutzung | Nicht STOP — konfigurierbarer Port via `--supersplat-port` / `--ply-port`. Klare Fehlermeldung + Hinweis auf Override-Flags. Kein Auto-Port-Scan (zu magisch). |
-| **`?load=` nimmt kein URL** | Falls SuperSplat-Update den Parameter entfernt | STOP. Plan-Annahme falsifiziert. Lösung: nach lokalem Build testen, ggf. PLY per File-Input-Dialog öffnen (Post-9-Workaround dokumentieren). |
-| **Gate-1 fehlägt (SuperSplat lädt nicht)** | Weiße Seite oder JS-Error nach Setup | STOP vor 9.3. Untersuche: MIME-Type für `.js`-Dateien korrekt? `http.server` vs. dev-server? Ggf. `npm run serve` statt statisches Serving. |
-| **Gate-2 schlägt fehl (embed_url leer)** | Note zeigt `embed_url: ""` nach Pipeline-Run | STOP vor 9.5. Pipeline-Log prüfen ob `obsidian.enabled=true` und `target=supersplat-local`. |
+| **Node.js/npm missing** | `setup_supersplat.sh` fails at `command -v node` | STOP. Report finding: "Node.js not installed. Options: (a) `brew install node`, (b) keep using target=supersplat (remote)". No auto-install — external dep, Jay decides. |
+| **SuperSplat build error** | `npm run build` fails (Rollup error, TypeScript error) | STOP. Report the build log. Possible cause: SuperSplat `main` has a breaking change. Fix: set `SUPERSPLAT_PIN` to the last known-good commit. |
+| **Port already in use** | `:3000` or `:8765` in use | Not a STOP — port is configurable via `--supersplat-port` / `--ply-port`. Clear error message + pointer to the override flags. No auto port scan (too magic). |
+| **`?load=` takes no URL** | If a SuperSplat update removes the parameter | STOP. Plan assumption falsified. Solution: test after the local build, fall back to opening the PLY via a file-input dialog (document a post-9 workaround). |
+| **Gate-1 fails (SuperSplat does not load)** | Blank page or JS error after setup | STOP before 9.3. Investigate: is the MIME type for `.js` files correct? `http.server` vs. dev server? Possibly `npm run serve` instead of static serving. |
+| **Gate-2 fails (embed_url empty)** | Note shows `embed_url: ""` after a pipeline run | STOP before 9.5. Check the pipeline log for `obsidian.enabled=true` and `target=supersplat-local`. |
 
 ---
 
-## § 5 — Rollback-Pfad
+## § 5 — Rollback Path
 
-**Tag-Convention (annotated, lokal-only):**
+**Tag convention (annotated, local-only):**
 
 ```
-autosplat-pre-phase-9-recon         ← gesetzt, HEAD: 29f81f3
-autosplat-post-phase-9-recon        ← gesetzt, HEAD: 889c333
-autosplat-pre-phase-9-plan          ← gesetzt, HEAD: 889c333 (dieser Burst)
-autosplat-post-phase-9-plan         ← wird nach Commit gesetzt
+autosplat-pre-phase-9-recon         ← set, HEAD: 29f81f3
+autosplat-post-phase-9-recon        ← set, HEAD: 889c333
+autosplat-pre-phase-9-plan          ← set, HEAD: 889c333 (this burst)
+autosplat-post-phase-9-plan         ← set after commit
 
-autosplat-pre-phase-9.1-config-url  ← vor Sub-Phase 9.1
-autosplat-post-phase-9.1-config-url ← nach Sub-Phase 9.1
+autosplat-pre-phase-9.1-config-url  ← before Sub-Phase 9.1
+autosplat-post-phase-9.1-config-url ← after Sub-Phase 9.1
 
 autosplat-pre-phase-9.2-setup-doctor
 autosplat-post-phase-9.2-setup-doctor
@@ -420,100 +420,100 @@ autosplat-pre-phase-9.5-notification
 autosplat-post-phase-9.5-notification
 ```
 
-**Rollback-Befehl:**
+**Rollback command:**
 ```bash
 git reset --hard autosplat-pre-phase-9.X-<slug>^{}
 ```
 
-`^{}` dereferenziert den annotierten Tag auf den Commit. `--hard` verwirft Working-Tree-Änderungen — immer Pre-Tag zuerst prüfen.
+`^{}` dereferences the annotated tag to the commit. `--hard` discards working-tree changes — always check the pre-tag first.
 
 ---
 
-## § 6 — DoD pro Sub-Phase (Gesamtübersicht)
+## § 6 — DoD per Sub-Phase (Overview)
 
-| Sub-Phase | Unit-Tests grün | Smoke | Manuell Jay |
+| Sub-Phase | Unit tests green | Smoke | Manual Jay |
 |---|---|---|---|
-| **9.1** | ≥ 122 | `uv run autosplat config show` zeigt supersplat-local Felder | — |
-| **9.2** | ≥ 125 | `bash scripts/setup_supersplat.sh` → `dist/index.html` exists | **Gate-1:** `open http://localhost:3000` → SuperSplat lädt |
-| **9.3** | ≥ 131 | `uv run autosplat serve <dir> --no-open-browser` → curl :8765 + :3000 erreichbar, Ctrl+C sauber | **Smoke durch Jay:** PLY lädt automatisch, kein Drag-and-drop |
-| **9.4** | ≥ 135 | `autosplat process <tiny_video>` → Note-Datei enthält `embed_url: "http://localhost..."` | **Gate-2:** Note in Obsidian öffnen, iframe sichtbar mit laufendem Server |
-| **9.5** | ≥ 139 | `notify_on_complete = true` in Config + Mini-Pipeline-Lauf → Notification | Manuell: Notification erscheint nach echtem Training |
+| **9.1** | ≥ 122 | `uv run autosplat config show` shows supersplat-local fields | — |
+| **9.2** | ≥ 125 | `bash scripts/setup_supersplat.sh` → `dist/index.html` exists | **Gate-1:** `open http://localhost:3000` → SuperSplat loads |
+| **9.3** | ≥ 131 | `uv run autosplat serve <dir> --no-open-browser` → curl :8765 + :3000 reachable, Ctrl+C clean | **Smoke by Jay:** PLY loads automatically, no drag-and-drop |
+| **9.4** | ≥ 135 | `autosplat process <tiny_video>` → note file contains `embed_url: "http://localhost..."` | **Gate-2:** open note in Obsidian, iframe visible with the server running |
+| **9.5** | ≥ 139 | `notify_on_complete = true` in config + mini pipeline run → notification | Manual: notification appears after a real training run |
 
 ---
 
 ## § 7 — Out-of-Scope (Phase 9)
 
-Klar abgegrenzt — **nicht implementieren**, auch wenn es "nur kurz" wirkt:
+Clearly delimited — **do not implement**, even if it seems "quick":
 
-- Cloud-Share-URL-Automation (`embed_view_url` manuell befüllen bleibt Standard)
-- Capture-Browser-UI (Obsidian Bases reichen)
-- Mobile-Support (localhost-URLs funktionieren auf iOS/Android nicht)
-- iframe-Fallback-Templating für offline/mobile (Phase 10)
-- Preview-Screenshot-Generierung (Phase 10)
-- `autosplat serve` ohne expliziten capture_dir (auto-latest Detection, Phase 10)
-- Multi-Capture-Concurrent-View
-- SuperSplat-Cleanup-Automatisierung (per Definition manuell)
-- WebUI (Option B/C: verworfen bis Nutzungsvolumen steigt)
-
----
-
-## § 8 — Konzeptpapier-Front-Bezug
-
-**§5.2 Strukturelle Fragmentierung** (3 Tools → 2 Tools):
-Vorher: CLI-Pipeline → *manuell Browser öffnen + navigieren* → *manuell Drag-and-drop* → SuperSplat-Editor → *manuell Cloud-Upload* → *manuell URL kopieren + in Note eintragen*.
-Nach Phase 9: CLI-Pipeline → `autosplat serve <dir> --with-supersplat` → SuperSplat mit PLY auto-geladen (Cleanup bleibt manuell). `embed_url` ist automatisch in Note.
-Verbleibende manuelle Schritte: SuperSplat-Cleanup + Cloud-Upload für Mobile (beides intentional manuell).
-
-**§5.2 Tool-/Skill-Sprawl — Node.js als neue Dep:**
-Trade-off bewusst: `node` + `npm` werden System-Voraussetzung für `supersplat-local` target. Gegengewicht: dauerhaft offline-fähig, kein PlayCanvas-Cloud-Account, 214 MB PLY lädt von localhost ohne Netzwerk-Transfer. ROI rational. Setup-Script macht Einmalaufwand transparent.
+- Cloud share URL automation (filling `embed_view_url` manually stays the default)
+- Capture browser UI (Obsidian Bases are sufficient)
+- Mobile support (localhost URLs do not work on iOS/Android)
+- iframe fallback templating for offline/mobile (Phase 10)
+- Preview screenshot generation (Phase 10)
+- `autosplat serve` without an explicit capture_dir (auto-latest detection, Phase 10)
+- Multi-capture concurrent view
+- SuperSplat cleanup automation (manual by definition)
+- WebUI (Option B/C: dropped until usage volume rises)
 
 ---
 
-## § 9 — Decision-Gates innerhalb der Implementierung
+## § 8 — Relation to the Concept Paper
 
-**Gate-1 (nach Sub-Phase 9.2, vor 9.3):**
+**§5.2 Structural fragmentation** (3 tools → 2 tools):
+Before: CLI pipeline → *manually open browser + navigate* → *manual drag-and-drop* → SuperSplat editor → *manual cloud upload* → *manually copy URL + enter it into the note*.
+After Phase 9: CLI pipeline → `autosplat serve <dir> --with-supersplat` → SuperSplat with the PLY auto-loaded (cleanup stays manual). `embed_url` is automatically in the note.
+Remaining manual steps: SuperSplat cleanup + cloud upload for mobile (both intentionally manual).
 
-> **Checkpoint:** Jay führt manuell aus:
+**§5.2 Tool/skill sprawl — Node.js as a new dep:**
+Trade-off accepted deliberately: `node` + `npm` become a system prerequisite for the `supersplat-local` target. Counterweight: permanently offline-capable, no PlayCanvas cloud account, a 214 MB PLY loads from localhost without network transfer. ROI is rational. The setup script makes the one-time effort transparent.
+
+---
+
+## § 9 — Decision Gates Within the Implementation
+
+**Gate-1 (after Sub-Phase 9.2, before 9.3):**
+
+> **Checkpoint:** Jay runs manually:
 > ```bash
 > bash scripts/setup_supersplat.sh
 > python -m http.server 3000 --directory target/supersplat/dist &
 > open http://localhost:3000
 > ```
-> **Erwartung:** SuperSplat UI lädt im Browser (leeres Canvas, keine Splat). Drag-and-drop eines kleinen PLY (bench_chill) funktioniert.
-> **GO:** SuperSplat UI sichtbar → 9.3 starten.
-> **STOP:** Weiße Seite, JS-Fehler, MIME-Type-Probleme → Befund an Cowork vor 9.3.
+> **Expectation:** the SuperSplat UI loads in the browser (empty canvas, no splat). Drag-and-drop of a small PLY (bench_chill) works.
+> **GO:** SuperSplat UI visible → start 9.3.
+> **STOP:** blank page, JS error, MIME-type problems → report finding to Cowork before 9.3.
 
-**Gate-2 (nach Sub-Phase 9.4, vor 9.5):**
+**Gate-2 (after Sub-Phase 9.4, before 9.5):**
 
-> **Checkpoint:** Jay führt aus:
+> **Checkpoint:** Jay runs:
 > ```bash
-> autosplat process <video_path>   # oder autosplat process mit bereits existierendem Capture + skip-stages
+> autosplat process <video_path>   # or autosplat process with an already-existing capture + skip-stages
 > ```
-> Öffnet generierte Note in Obsidian. Mit laufendem `autosplat serve <output_dir> --with-supersplat`: iframe rendert Splat.
-> **GO:** Embed funktioniert, embed_url ist korrekt → 9.5 starten.
-> **STOP:** iframe leer, embed_url leer oder falsch → Befund an Cowork.
+> Opens the generated note in Obsidian. With `autosplat serve <output_dir> --with-supersplat` running: the iframe renders the splat.
+> **GO:** embed works, embed_url is correct → start 9.5.
+> **STOP:** iframe empty, embed_url empty or wrong → report finding to Cowork.
 
 ---
 
-## Anhang — Sequenz-Diagramm (Schritt-für-Schritt-Flow nach Phase 9)
+## Appendix — Sequence Diagram (step-by-step flow after Phase 9)
 
 ```
 autosplat watch ~/inbox
     └── [Video dropped]
         └── run_pipeline(video)
             ├── preprocess → sfm → quality → train
-            │       └── [50+ min für burgstall]
+            │       └── [50+ min for burgstall]
             │           └── notify_training_complete("burgstall", 3001s) → macOS Notification
             ├── export → scene.ply @ ~/AutoSplat/outputs/burgstall/scene.ply
             └── obsidian.write_capture_note(embed_url="http://localhost:3000?load=...")
-                    └── burgstall.md hat embed_url automatisch befüllt
+                    └── burgstall.md has embed_url filled in automatically
 
-# Getrennte Review-Session (jederzeit danach):
+# Separate review session (any time afterwards):
 autosplat serve ~/AutoSplat/outputs/burgstall --with-supersplat
-    ├── PLY-Server auf :8765, serving scene.ply
-    ├── SuperSplat-Server auf :3000, serving target/supersplat/dist/
-    └── Browser öffnet http://localhost:3000?load=http://localhost:8765/scene.ply
-            └── PLY lädt automatisch — kein Drag-and-drop
-                └── Cleanup (Floater, Crop) manuell
-                    └── [optional] File → Publish → superspl.at-URL → manuell in embed_view_url
+    ├── PLY server on :8765, serving scene.ply
+    ├── SuperSplat server on :3000, serving target/supersplat/dist/
+    └── Browser opens http://localhost:3000?load=http://localhost:8765/scene.ply
+            └── PLY loads automatically — no drag-and-drop
+                └── Cleanup (floaters, crop) manual
+                    └── [optional] File → Publish → superspl.at URL → manually into embed_view_url
 ```

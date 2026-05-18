@@ -1,274 +1,274 @@
 # PHASE-9-RECON — SuperSplat Local + WebUI Options
 
-*Recon-Burst 2026-05-14 · Status: **Decision-Gate** · Autor: CC-Executor*
+*Recon-Burst 2026-05-14 · Status: **Decision-Gate** · Author: CC-Executor*
 
 ---
 
 ## 1 · SuperSplat-Source-Recon
 
-**Lizenz:** MIT — vollständig Open Source, uneingeschränktes Self-Hosting und Modifikation erlaubt.
+**License:** MIT — fully open source, unrestricted self-hosting and modification allowed.
 
 **Repo:** [github.com/playcanvas/supersplat](https://github.com/playcanvas/supersplat)
 
 **Build-Stack:**
-- Rollup 4.60.3 (Bundler), TypeScript 6.0.3, SCSS/PostCSS
-- Node.js ≥ 20.19.0 erforderlich
-- PlayCanvas Engine 2.18.1 (WebGL/WebGPU-Renderer)
+- Rollup 4.60.3 (bundler), TypeScript 6.0.3, SCSS/PostCSS
+- Node.js ≥ 20.19.0 required
+- PlayCanvas Engine 2.18.1 (WebGL/WebGPU renderer)
 
 **Dev-Server:**
-- `npm run develop` → concurrent Rollup-Build + Dev-Server auf **Port 3000** (`http://localhost:3000`)
-- `npm run serve` → Server-only (kein Live-Rebuild), ebenfalls Port 3000
-- `npm run build` → Production-Bundle nach `dist/`
+- `npm run develop` → concurrent Rollup build + dev server on **port 3000** (`http://localhost:3000`)
+- `npm run serve` → server-only (no live rebuild), also port 3000
+- `npm run build` → production bundle to `dist/`
 
-**Bundle-Größe:** Nicht offiziell dokumentiert. Typisch für Rollup+TS SPAs mit WebGPU-Engine: 2–8 MB minified+gzip. Muss nach lokalem Build verifiziert werden.
+**Bundle size:** Not officially documented. Typical for Rollup+TS SPAs with a WebGPU engine: 2–8 MB minified+gzip. Must be verified after a local build.
 
-**Headless-Mode:** **Keiner.** Kein CLI-Modus, keine programmatische PLY-Import-API. Die Applikation ist rein browser-interaktiv (Drag-and-drop oder File-Open-Dialog). Eine maschinelle Batch-Verarbeitung ist nicht vorgesehen.
+**Headless mode:** **None.** No CLI mode, no programmatic PLY import API. The application is purely browser-interactive (drag-and-drop or file-open dialog). Machine-driven batch processing is not provided for.
 
-**URL-Parameter:** SuperSplat unterstützt einen `?load=<URL>`-Parameter (bestätigt aus `main.ts`: `url.searchParams.getAll('load')`). Die App fetcht die URL über `fetch()` beim Start. Bedeutung für die Pipeline: ein lokal laufendes SuperSplat kann so eine lokal servierte PLY-Datei automatisch laden — ohne manuellen Drag-and-drop.
+**URL parameters:** SuperSplat supports a `?load=<URL>` parameter (confirmed from `main.ts`: `url.searchParams.getAll('load')`). The app fetches the URL via `fetch()` on startup. Implication for the pipeline: a locally running SuperSplat can thus automatically load a locally served PLY file — without manual drag-and-drop.
 
 ---
 
 ## 2 · Local-Server-Integration-Options
 
-Drei Ansätze, SuperSplat lokal zu betreiben:
+Three approaches to running SuperSplat locally:
 
-| Kriterium | **(a) Static-Build im Repo** | **(b) `file://`-iframe** | **(c) Electron-Wrapper** |
+| Criterion | **(a) Static build in repo** | **(b) `file://`-iframe** | **(c) Electron wrapper** |
 |---|---|---|---|
-| Beschreibung | SuperSplat-Repo clonen, `npm run build`, `dist/` statisch via uvicorn/http.server ausliefern | SuperSplat-`dist/` lokal bauen, `file://`-URL in Obsidian | SuperSplat in Electron-App wrappen |
-| Dev-Aufwand | Mittel (Node-Setup + Build-Step in Install-Script) | Niedrig (nur Build) | Hoch (Electron-Packaging) |
-| CORS/Mixed-Content | ✅ **OK** — `http://localhost:3000 → http://localhost:8765` = same-scheme, kein Mixed-Content | ⚠️ Browser-abhängig — `file://`-Seiten dürfen in neueren Chrome/Safari-Versionen keine `http://` fetchen | ✅ OK (Electron-Native) |
-| Obsidian-Embed (`iframe src`) | ✅ `http://localhost:PORT?load=...` funktioniert im Reading-Mode | ❌ `file://`-URLs in Obsidian-iframes blockiert | ❌ keine iframe-Kompatibilität |
-| Nutzer-Voraussetzungen | Node.js + npm (einmalig via Install-Script) | Node.js + npm (nur für Build) | Kein Node nach Build |
-| Update-Wartung | SuperSplat-Updates: `git pull && npm run build` | Identisch | Hoch (Electron-Releases) |
-| Sharing/Mobile | ❌ `localhost`-URL nicht teilbar | ❌ | ❌ |
-| **Fazit** | **Empfohlen für Phase 9** | Machbar für reinen Viewer, kein Obsidian-Embed | Overengineering für diesen Scope |
+| Description | Clone the SuperSplat repo, `npm run build`, serve `dist/` statically via uvicorn/http.server | Build SuperSplat `dist/` locally, `file://`-URL in Obsidian | Wrap SuperSplat in an Electron app |
+| Dev effort | Medium (Node setup + build step in install script) | Low (build only) | High (Electron packaging) |
+| CORS/Mixed-Content | ✅ **OK** — `http://localhost:3000 → http://localhost:8765` = same-scheme, no mixed-content | ⚠️ Browser-dependent — `file://` pages may not fetch `http://` in newer Chrome/Safari versions | ✅ OK (Electron-native) |
+| Obsidian embed (`iframe src`) | ✅ `http://localhost:PORT?load=...` works in reading mode | ❌ `file://`-URLs blocked in Obsidian iframes | ❌ no iframe compatibility |
+| User prerequisites | Node.js + npm (one-time via install script) | Node.js + npm (only for build) | No Node after build |
+| Update maintenance | SuperSplat updates: `git pull && npm run build` | Identical | High (Electron releases) |
+| Sharing/Mobile | ❌ `localhost`-URL not shareable | ❌ | ❌ |
+| **Verdict** | **Recommended for Phase 9** | Feasible for a pure viewer, no Obsidian embed | Overengineering for this scope |
 
-**Wichtige CORS-Klarstellung:** Der aktuelle `viewer.py`-Code öffnet `https://playcanvas.com/supersplat/editor?load=http://127.0.0.1:8765/scene.ply`. Das ist **nachweislich broken**: Ein HTTPS-Dokument (playcanvas.com) darf aus Sicherheitsgründen keine HTTP-Ressource (127.0.0.1) fetchen (Mixed-Content-Blockierung). Die `?load=`-Funktion existiert in SuperSplat, war aber de facto nie nutzbar mit der aktuellen remote-Viewer-Konfiguration.
+**Important CORS clarification:** The current `viewer.py` code opens `https://playcanvas.com/supersplat/editor?load=http://127.0.0.1:8765/scene.ply`. This is **demonstrably broken**: for security reasons an HTTPS document (playcanvas.com) may not fetch an HTTP resource (127.0.0.1) (mixed-content blocking). The `?load=` function exists in SuperSplat but was de facto never usable with the current remote-viewer configuration.
 
 ---
 
-## 3 · Web-UI-Scope-Achsen
+## 3 · Web-UI scope axes
 
-Was würde eine lokale Web-UI über das CLI hinaus bieten? Bewertung nach Phase-9-Relevanz:
+What would a local web UI offer beyond the CLI? Evaluated by Phase-9 relevance:
 
-| Feature | Beschreibung | Phase-9-Pflicht? | Begründung |
+| Feature | Description | Phase-9 mandatory? | Rationale |
 |---|---|---|---|
-| **(a) Drop-Zone** | Video ins Browser-Fenster ziehen → startet Pipeline | Nein | CLI `autosplat watch` erfüllt das. Dopplung ohne zusätzlichen Nutzen. |
-| **(b) Live-Pipeline-Status** | Fortschritt der laufenden Stage, ETA, Logs | Nein | `autosplat status` + Rich-Terminal reichen. WebUI-Polling erhöht Komplexität ohne echten Vorteil gegenüber Terminal-Tab. |
-| **(c) Capture-Browser** | Liste aller Captures mit FM-Stats (Gaussians, Datum, PLY-Größe) | **Ja (Phase 9)** | Direkte Abhilfe für den "Wo ist mein Capture?"-Pain (s. §11). Obsidian Bases sind alternative, aber eine autosplat-native Ansicht wäre wertvoller für den Viewer-Launch-Flow. |
-| **(d) Inline-SuperSplat-Editor** | SuperSplat als iframe in der Web-UI | Optional | Funktioniert, aber `localhost:3000` direkt zu öffnen ist genauso gut. Iframe fügt nichts hinzu. |
-| **(e) "Save to Obsidian"-Button** | Füllt `embed_url:` + `embed_view_url:` in der Capture-Note nach Cleanup | **Ja (Phase 9)** | Adressiert den #1 Pain-Point: leere `embed_url` nach Pipeline-Run. |
-| **(f) Doctor-Status-Pane** | Deps-Status im Browser | Nein | `autosplat doctor` reicht vollständig. |
+| **(a) Drop-Zone** | Drag a video into the browser window → starts the pipeline | No | CLI `autosplat watch` covers this. Duplication with no additional benefit. |
+| **(b) Live pipeline status** | Progress of the running stage, ETA, logs | No | `autosplat status` + Rich terminal are sufficient. WebUI polling increases complexity with no real advantage over a terminal tab. |
+| **(c) Capture browser** | List of all captures with FM stats (Gaussians, date, PLY size) | **Yes (Phase 9)** | Directly addresses the "Where is my capture?" pain (see §11). Obsidian Bases is an alternative, but an autosplat-native view would be more valuable for the viewer-launch flow. |
+| **(d) Inline SuperSplat editor** | SuperSplat as an iframe in the web UI | Optional | Works, but opening `localhost:3000` directly is just as good. The iframe adds nothing. |
+| **(e) "Save to Obsidian" button** | Fills `embed_url:` + `embed_view_url:` in the capture note after cleanup | **Yes (Phase 9)** | Addresses the #1 pain point: empty `embed_url` after a pipeline run. |
+| **(f) Doctor status pane** | Deps status in the browser | No | `autosplat doctor` is fully sufficient. |
 
-**Minimaler Phase-9-Web-UI-Scope** (falls WebUI gebaut wird): Capture-Browser-Liste + "In SuperSplat öffnen"-Button + "embed_url in Obsidian Note schreiben"-Button. Alles andere ist Phase 10+.
+**Minimal Phase-9 web UI scope** (if a WebUI is built): capture-browser list + "Open in SuperSplat" button + "Write embed_url into Obsidian note" button. Everything else is Phase 10+.
 
 ---
 
-## 4 · iframe-Target-Strategie
+## 4 · iframe target strategy
 
-Drei Ansätze für den `embed_url`-Wert in Obsidian-Capture-Notes:
+Three approaches for the `embed_url` value in Obsidian capture notes:
 
-| Strategie | Beispiel-URL | Pros | Cons |
+| Strategy | Example URL | Pros | Cons |
 |---|---|---|---|
-| **localhost:PORT** (lokal) | `http://localhost:3000?load=http://localhost:8765/burgstall/scene.ply` | Funktioniert offline, kein Cloud-Upload nötig, automatisierbar | Nur auf demselben Rechner nutzbar; Obsidian-Mobile sieht leeren iframe; nicht teilbar |
-| **superspl.at Share-URL** (cloud) | `https://superspl.at/s?id=09cbbcd9` | Teilbar, mobile-kompatibel, kein lokaler Server nötig | Erfordert manuellen Cloud-Upload via Browser; keine bekannte API; PlayCanvas-Cloud-Abhängigkeit |
-| **Standalone-HTML-Export** | `file:///Users/.../burgstall-viewer.html` | Vollständig offline + lokal | `file://`-URLs in Obsidian-iframes blockiert; Dateigröße unklar; SuperSplat unterstützt keinen Standalone-HTML-Export |
+| **localhost:PORT** (local) | `http://localhost:3000?load=http://localhost:8765/burgstall/scene.ply` | Works offline, no cloud upload needed, automatable | Usable only on the same machine; Obsidian Mobile sees an empty iframe; not shareable |
+| **superspl.at share URL** (cloud) | `https://superspl.at/s?id=09cbbcd9` | Shareable, mobile-compatible, no local server needed | Requires a manual cloud upload via browser; no known API; PlayCanvas-cloud dependency |
+| **Standalone HTML export** | `file:///Users/.../burgstall-viewer.html` | Fully offline + local | `file://`-URLs blocked in Obsidian iframes; file size unclear; SuperSplat does not support standalone HTML export |
 
-**Empfehlung:** Zweistufige Strategie:
-1. **`embed_url` = localhost-URL** — automatisch befüllt nach Pipeline-Run, sofort nutzbar auf dem Arbeitsrechner.
-2. **`embed_view_url` = superspl.at-URL** — manuell nach Cloud-Upload eingetragen, optional.
+**Recommendation:** Two-tier strategy:
+1. **`embed_url` = localhost URL** — automatically populated after a pipeline run, immediately usable on the work machine.
+2. **`embed_view_url` = superspl.at URL** — entered manually after a cloud upload, optional.
 
-Das Obsidian-Note-Template sollte beide Felder mit einem Fallback-Link vorsehen: zeige iframe wenn `embed_url` gesetzt, zeige "In SuperSplat öffnen"-Link als Fallback.
+The Obsidian note template should provide for both fields with a fallback link: show the iframe when `embed_url` is set, show an "Open in SuperSplat" link as fallback.
 
 ---
 
 ## 5 · Obsidian-Reader-UX
 
-**Wenn lokaler SuperSplat-Server läuft:** `iframe src="http://localhost:3000?load=..."` rendert vollständig interaktiv im Obsidian-Reading-Mode.
+**When a local SuperSplat server is running:** `iframe src="http://localhost:3000?load=..."` renders fully interactive in Obsidian reading mode.
 
-**Wenn Server nicht läuft:** iframe zeigt leere/gebrochene Seite ohne Fehlermeldung — schlechte UX. Mitigation: Note-Template sollte HTML-Fallback mit sichtbarem Hinweis enthalten:
+**When the server is not running:** the iframe shows an empty/broken page with no error message — poor UX. Mitigation: the note template should include an HTML fallback with a visible hint:
 
 ```html
 <iframe src="http://localhost:3000?load=..." ...></iframe>
 
-> **Viewer offline?** Starte autosplat mit `autosplat serve` oder nutze den [Cloud-Link](https://superspl.at/s?id=XXXX).
+> **Viewer offline?** Start autosplat with `autosplat serve` or use the [cloud link](https://superspl.at/s?id=XXXX).
 ```
 
-**Screenshot-Preview-Fallback:** Phase 4 generiert keine Preview-Screenshots. Ein statisches `preview.jpg` (z.B. via Brush `--with-viewer` Screenshot-API oder FFmpeg-Thumbnailing) wäre ein niedriger Aufwand und macht die Note auch mobil/offline brauchbar. Kandidat für Phase 10.
+**Screenshot-preview fallback:** Phase 4 does not generate preview screenshots. A static `preview.jpg` (e.g. via the Brush `--with-viewer` screenshot API or FFmpeg thumbnailing) would be low effort and would make the note usable mobile/offline as well. Candidate for Phase 10.
 
-**Mobile (Obsidian iOS/Android):** localhost-URLs funktionieren nie. Hier ist `embed_view_url` mit superspl.at-Link der einzige Weg. Ohne diesen bleibt die Note auf Mobile rein textlich.
+**Mobile (Obsidian iOS/Android):** localhost URLs never work. Here `embed_view_url` with a superspl.at link is the only way. Without it the note remains purely textual on mobile.
 
 ---
 
 ## 6 · Auth + Sharing
 
-**Out-of-Scope für Phase 9.** Kontext-Notiz für die Roadmap:
+**Out of scope for Phase 9.** Context note for the roadmap:
 
-Der PlayCanvas Cloud Publish-Service (`superspl.at`) ist die einzige existierende Sharing-Lösung. Er ist an den PlayCanvas-Account gebunden und hat — soweit öffentlich bekannt — **keine offizielle API** für programmatisches Hochladen (kein REST-Endpoint, kein CLI-Tool dokumentiert). Ein automatisches "Publish + URL kopieren" wäre also ein Reverse-Engineering-Projekt.
+The PlayCanvas Cloud Publish service (`superspl.at`) is the only existing sharing solution. It is tied to the PlayCanvas account and — as far as is publicly known — has **no official API** for programmatic uploading (no REST endpoint, no CLI tool documented). An automatic "publish + copy URL" would therefore be a reverse-engineering project.
 
-Alternativen für Phase 10+:
-- **Self-hosted Splat-Server** (z.B. nginx + statisches HTML mit Three.js/gaussian-splats-3d.js) → eigene Share-URLs auf eigenem Server/NAS
-- **Obsidian Publish** — iframe-Rendering von externen Domains ist durch CSP eingeschränkt; superspl.at funktioniert (wie burgstall beweist), localhost-URLs nicht
-- **Airdrop/Export** — `.ply` direkt teilen; Empfänger öffnet selbst in supersplat.com
+Alternatives for Phase 10+:
+- **Self-hosted splat server** (e.g. nginx + static HTML with Three.js/gaussian-splats-3d.js) → own share URLs on your own server/NAS
+- **Obsidian Publish** — iframe rendering of external domains is restricted by CSP; superspl.at works (as burgstall proves), localhost URLs do not
+- **Airdrop/Export** — share the `.ply` directly; the recipient opens it themselves in supersplat.com
 
 ---
 
-## 7 · Tech-Stack-Implikationen
+## 7 · Tech-stack implications
 
-| Ansatz | Neue Runtime-Deps | Footprint | Setup-Komplexität | Test-Story |
+| Approach | New runtime deps | Footprint | Setup complexity | Test story |
 |---|---|---|---|---|
-| **Nur lokal SuperSplat** (Option A) | `node` + `npm` (System) | ~200 MB nach `npm install` | Mittel — `scripts/setup_supersplat.sh` | Smoke: `curl localhost:3000` + PLY-Load-Check |
-| **FastAPI WebUI** (Option B) | `fastapi`, `uvicorn`, `jinja2` | ~15 MB pip | Mittel — neue `pyproject.toml`-Deps | Playwright oder `httpx`-basierte Tests |
-| **`python -m http.server`** | Keine | Minimal | Trivial | N/A |
-| **PyWebView** | `pywebview` | ~50 MB | Niedrig | Schwer automatisierbar |
+| **SuperSplat local only** (Option A) | `node` + `npm` (system) | ~200 MB after `npm install` | Medium — `scripts/setup_supersplat.sh` | Smoke: `curl localhost:3000` + PLY load check |
+| **FastAPI WebUI** (Option B) | `fastapi`, `uvicorn`, `jinja2` | ~15 MB pip | Medium — new `pyproject.toml` deps | Playwright- or `httpx`-based tests |
+| **`python -m http.server`** | None | Minimal | Trivial | N/A |
+| **PyWebView** | `pywebview` | ~50 MB | Low | Hard to automate |
 
-**Beobachtung:** `python -m http.server` ist bereits via `socketserver.ThreadingTCPServer` in `viewer.py` implementiert — der HTTP-Server-Layer ist solved. Was fehlt ist lediglich (a) ein lokal laufendes SuperSplat und (b) eine CORS-konforme URL-Konstruktion.
+**Observation:** `python -m http.server` is already implemented via `socketserver.ThreadingTCPServer` in `viewer.py` — the HTTP-server layer is solved. What is missing is merely (a) a locally running SuperSplat and (b) CORS-compliant URL construction.
 
-FastAPI würde hauptsächlich dann Sinn ergeben, wenn das WebUI interaktive Endpunkte braucht (Pipeline-Trigger, Note-Update). Für reine statische Capture-Browsing-Pages reicht auch `http.server` + generiertes HTML.
+FastAPI would mainly make sense if the WebUI needs interactive endpoints (pipeline trigger, note update). For purely static capture-browsing pages, `http.server` + generated HTML is also sufficient.
 
 ---
 
 ## 8 · CLI-vs-WebUI-Hybrid
 
-**Vorschlag für Spec §4 Repo-Struktur-Erweiterung** (Hybrid-Ansatz):
+**Proposal for spec §4 repo-structure extension** (hybrid approach):
 
 ```
 auto-splat-pipeline/
 ├── src/autosplat/
-│   ├── viewer.py          # bestehend — fix CORS-Logik, add local-supersplat-path
+│   ├── viewer.py          # existing — fix CORS logic, add local-supersplat-path
 │   ├── ui/
 │   │   ├── server.py      # FastAPI/uvicorn app (optional, opt-in)
 │   │   ├── templates/
-│   │   │   └── captures.html   # Jinja2 Capture-Browser
+│   │   │   └── captures.html   # Jinja2 capture browser
 │   │   └── static/
-│   └── supersplat/        # ODER: target/supersplat/ (gitignored build-artifact)
+│   └── supersplat/        # OR: target/supersplat/ (gitignored build-artifact)
 └── scripts/
     └── setup_supersplat.sh  # clone + npm install + npm run build
 ```
 
-**CLI-Erweiterung:**
+**CLI extension:**
 ```
 autosplat serve [--port 8765] [--with-supersplat] [--open-browser]
 ```
-- Ohne `--with-supersplat`: PLY-Server-only (wie heute, aber ohne remote-Viewer-Bug)
-- Mit `--with-supersplat`: startet lokalen SuperSplat auf :3000 + PLY-Server auf :8765
-- `autosplat watch` läuft unverändert parallel
+- Without `--with-supersplat`: PLY-server only (as today, but without the remote-viewer bug)
+- With `--with-supersplat`: starts a local SuperSplat on :3000 + PLY server on :8765
+- `autosplat watch` runs unchanged in parallel
 
-**Separierung von Concerns:** `autosplat watch` und `autosplat serve` sind unabhängige Prozesse. Watch läuft dauerhaft im Hintergrund, serve ist interaktiv für Review-Sessions. Kein Kopplung.
+**Separation of concerns:** `autosplat watch` and `autosplat serve` are independent processes. Watch runs continuously in the background, serve is interactive for review sessions. No coupling.
 
 ---
 
-## 9 · Test-Strategie
+## 9 · Test strategy
 
-| Ebene | Ansatz | Coverage | Zeitaufwand |
+| Level | Approach | Coverage | Time effort |
 |---|---|---|---|
-| **Unit** | Mocks für SuperSplat-Process-Start, URL-Builder-Tests | URL-Konstruktion, Server-Start/Stop-Logic | Niedrig |
-| **Integration** | `curl localhost:3000` nach `setup_supersplat.sh` + Server-Start | SuperSplat läuft + erreichbar | Mittel (erfordert npm im CI — problematisch) |
-| **Playwright E2E** | Headless Chrome, lade PLY über localhost:3000, check canvas-Element | Echter PLY-Render | Hoch + langsam + CI-Infra-Aufwand |
-| **Smoke (realistisch)** | `autosplat serve --with-supersplat --no-open`, curl-Check, dann manuell | Reachability | Niedrig |
+| **Unit** | Mocks for SuperSplat process start, URL-builder tests | URL construction, server start/stop logic | Low |
+| **Integration** | `curl localhost:3000` after `setup_supersplat.sh` + server start | SuperSplat runs + reachable | Medium (requires npm in CI — problematic) |
+| **Playwright E2E** | Headless Chrome, load PLY via localhost:3000, check canvas element | Real PLY render | High + slow + CI-infra effort |
+| **Smoke (realistic)** | `autosplat serve --with-supersplat --no-open`, curl check, then manual | Reachability | Low |
 
-**Empfehlung:** Für Phase 9 ist **Smoke-only** realistisch: Unit-Tests für URL-Builder + Process-Management + `curl`-basierter Smoke. Playwright wäre Gold-Standard aber unverhältnismäßig für diesen Scope. CI mit npm/Node ist lösbar aber erhöht Setup-Komplexität.
+**Recommendation:** For Phase 9, **smoke-only** is realistic: unit tests for the URL builder + process management + a `curl`-based smoke test. Playwright would be the gold standard but disproportionate for this scope. CI with npm/Node is solvable but increases setup complexity.
 
 ---
 
-## 10 · Phase-Plan-Konsequenzen
+## 10 · Phase-plan consequences
 
-### Option A — SuperSplat Local Auto-Open (~1–2 Tage)
+### Option A — SuperSplat Local Auto-Open (~1–2 days)
 
-Scope: Fix `viewer.py` (CORS-Bug), `scripts/setup_supersplat.sh` (clone + build), `autosplat serve --with-supersplat`, `embed_url`-Auto-Fill mit localhost-URL nach Pipeline-Run.
+Scope: fix `viewer.py` (CORS bug), `scripts/setup_supersplat.sh` (clone + build), `autosplat serve --with-supersplat`, `embed_url` auto-fill with a localhost URL after a pipeline run.
 
-Adressiert direkt:
-- CORS/Mixed-Content-Bug in `viewer.py` (PLY wurde nie wirklich automatisch geladen)
-- `embed_url: ""` Problem — wird zu `http://localhost:3000?load=...`
-- Manuelle Drag-and-drop-Pflicht entfällt
+Directly addresses:
+- CORS/mixed-content bug in `viewer.py` (PLY was never really loaded automatically)
+- `embed_url: ""` problem — becomes `http://localhost:3000?load=...`
+- Manual drag-and-drop requirement is eliminated
 
-Nicht adressiert:
-- Cloud-Share-URL für Mobile/Sharing
-- Capture-Browser-Übersicht
-- Keine neue UI außer Terminal
+Not addressed:
+- Cloud share URL for mobile/sharing
+- Capture-browser overview
+- No new UI besides the terminal
 
-### Option B — Full Local WebUI (mehrere Tage, 4–8 Tage realistisch)
+### Option B — Full Local WebUI (several days, 4–8 days realistic)
 
-Scope: FastAPI-App mit Capture-Browser, Pipeline-Status, embedded SuperSplat iframe, "Obsidian Note Update"-Button, Doctor-Status-Pane.
+Scope: FastAPI app with capture browser, pipeline status, embedded SuperSplat iframe, "Obsidian note update" button, doctor status pane.
 
-Adressiert zusätzlich:
-- Alle §3-Features (a)–(f)
-- Bessere Onboarding-UX
+Additionally addresses:
+- All §3 features (a)–(f)
+- Better onboarding UX
 
-Risiken:
-- Scope-Creep — "nur noch ein Feature" kann Wochen verschlingen
-- FastAPI als neue Runtime-Dep (nicht kritisch, aber `uv add`)
-- Playwright-Tests oder manuelle Tests
-- Zeit-zu-Nutzen-Ratio: die meisten Gains kommen aus Option A, nicht aus dem UI-Layer
+Risks:
+- Scope creep — "just one more feature" can swallow weeks
+- FastAPI as a new runtime dep (not critical, but `uv add`)
+- Playwright tests or manual tests
+- Time-to-benefit ratio: most gains come from Option A, not from the UI layer
 
-### Option C — Hybrid: Local SuperSplat + Minimaler Capture-Browser (~2–3 Tage)
+### Option C — Hybrid: Local SuperSplat + Minimal Capture Browser (~2–3 days)
 
-Option A + eine simple HTML-Seite (statisch generiert, kein Framework) mit Capture-Liste und "Open in SuperSplat" / "Update embed_url" Buttons. Kein Pipeline-Control im Browser.
+Option A + a simple HTML page (statically generated, no framework) with a capture list and "Open in SuperSplat" / "Update embed_url" buttons. No pipeline control in the browser.
 
-**Decision-Gate-Kriterien:**
-1. Wie häufig wird die Pipeline täglich genutzt? (weniger als 3× → A reicht)
-2. Ist Mobile-Sharing/Obsidian-Mobile ein harter Requirement für Phase 9? (ja → Cloud-URL-Frage bleibt offen unabhängig von A/B/C)
-3. Wie wichtig ist Capture-Browsing außerhalb von Obsidian? (Obsidian Bases deckt das bereits ab)
+**Decision-gate criteria:**
+1. How often is the pipeline used daily? (fewer than 3× → A is sufficient)
+2. Is mobile sharing / Obsidian Mobile a hard requirement for Phase 9? (yes → the cloud-URL question remains open regardless of A/B/C)
+3. How important is capture browsing outside of Obsidian? (Obsidian Bases already covers that)
 
 ---
 
 ## 11 · Real-World-Use-Case-Friction
 
-### Quellen: bench_chill Handover + burgstall Capture-Note
+### Sources: bench_chill handover + burgstall capture note
 
-**Pain-Points aus der bench_chill Handover (manueller Roundtrip):**
+**Pain points from the bench_chill handover (manual round-trip):**
 
-1. **PLY-Load ist manuell** — Schritt 1 verlangt explizit Drag-and-drop in den Browser. Der `viewer.py`-`?load=`-Mechanismus funktioniert wegen Mixed-Content-Blockierung nicht (HTTPS→HTTP blockiert). Für bench_chill (19.4 MB) noch halbwegs schnell; für burgstall (214 MB) potentiell langsam.
+1. **PLY load is manual** — step 1 explicitly requires drag-and-drop into the browser. The `viewer.py` `?load=` mechanism does not work because of mixed-content blocking (HTTPS→HTTP blocked). For bench_chill (19.4 MB) still reasonably fast; for burgstall (214 MB) potentially slow.
 
-2. **`embed_url` bleibt leer** — Die Obsidian-Note wird auto-generiert mit `embed_url: ""` und `embed_view_url: ""`. Jay muss nach dem Cloud-Publish manuell die URL ins Frontmatter eintragen. Das ist der einzige Schritt, der JSON-/YAML-Editierung in Obsidian erfordert — fehleranfällig und vergessbar.
+2. **`embed_url` stays empty** — the Obsidian note is auto-generated with `embed_url: ""` and `embed_view_url: ""`. After the cloud publish, Jay has to enter the URL into the frontmatter manually. This is the only step that requires JSON/YAML editing in Obsidian — error-prone and easy to forget.
 
-3. **Cloud-Publish ist Pflicht für Obsidian-Embed** — Ohne superspl.at-Share-URL hat die Note keinen funktionierenden Viewer. Der gesamte "Obsidian-3D-Memory"-Workflow hängt an diesem einen manuellen Cloud-Upload-Schritt.
+3. **Cloud publish is mandatory for the Obsidian embed** — without a superspl.at share URL the note has no working viewer. The entire "Obsidian 3D memory" workflow hangs on this single manual cloud-upload step.
 
-4. **SuperSplat-Cleanup ist genuiner Hand-Arbeit** — Floater-Entfernung und Crop sind naturgemäß manuell und können nicht automatisiert werden. Phase 9 sollte diesen Schritt explizit als "verbleibt manuell" framen — das ist kein Bug, das ist Intention.
+4. **SuperSplat cleanup is genuinely hand work** — floater removal and crop are inherently manual and cannot be automated. Phase 9 should explicitly frame this step as "remains manual" — that is not a bug, that is intentional.
 
-**Pain-Points aus der burgstall-Note:**
+**Pain points from the burgstall note:**
 
-5. **214 MB PLY — Upload-Zeit** — Ein 214 MB PLY in SuperSplat.com zu laden dauert im Browser erheblich länger als 19.4 MB (bench_chill). Ein lokaler SuperSplat (`http://localhost:3000?load=http://localhost:8765/scene.ply`) lädt von localhost — kein Netzwerk-Transfer, sofortige Verfügbarkeit.
+5. **214 MB PLY — upload time** — loading a 214 MB PLY into SuperSplat.com takes considerably longer in the browser than 19.4 MB (bench_chill). A local SuperSplat (`http://localhost:3000?load=http://localhost:8765/scene.ply`) loads from localhost — no network transfer, immediate availability.
 
-6. **`embed_view_url: ""`** — Ein zweites Embed-URL-Feld existiert bereits in der Note (neben `embed_url`). Dessen Semantik ist unklar (editor vs. viewer?). Das Obsidian-Schema sollte für Phase 9 explizit definiert werden: `embed_url` = lokal (localhost), `embed_view_url` = cloud share.
+6. **`embed_view_url: ""`** — a second embed-URL field already exists in the note (alongside `embed_url`). Its semantics are unclear (editor vs. viewer?). The Obsidian schema should be defined explicitly for Phase 9: `embed_url` = local (localhost), `embed_view_url` = cloud share.
 
-7. **`total_duration_s: 3780` (~63 min)** — Bei langen Trainingsläufen sitzt Jay nicht am Rechner wenn das PLY fertig wird. Das Watch-Folder-Daemon-Modell (Phase 2) ist dafür gebaut — aber SuperSplat auto-open beim Pipeline-Ende wäre störend (unerwünschter Fenster-Popup nach 63 min). Eine **"fertig"-Notification** (macOS Notification Center) wäre wertvoller als Auto-Open. Kandidat für Phase 9 zusätzlich zu Option A.
+7. **`total_duration_s: 3780` (~63 min)** — for long training runs Jay is not at the machine when the PLY finishes. The watch-folder daemon model (Phase 2) is built for that — but a SuperSplat auto-open at pipeline end would be disruptive (an unwanted window popup after 63 min). A **"done" notification** (macOS Notification Center) would be more valuable than auto-open. Candidate for Phase 9 in addition to Option A.
 
-**Was Phase 9 direkt adressieren sollte (priorisiert):**
-1. PLY-Load-Automatisierung (lokaler SuperSplat + `?load=` funktioniert)
-2. `embed_url`-Auto-Fill nach Pipeline-Run (localhost-URL, kein Cloud-Upload nötig)
-3. Ggf. macOS Notification nach Trainingsende
+**What Phase 9 should directly address (prioritized):**
+1. PLY-load automation (local SuperSplat + `?load=` works)
+2. `embed_url` auto-fill after a pipeline run (localhost URL, no cloud upload needed)
+3. Possibly a macOS notification after training ends
 
 ---
 
-## § Optionen-Matrix
+## § Options matrix
 
-| Dimension | **Option A** — SuperSplat Local Auto-Open | **Option B** — Full Local WebUI | **Option C** — Hybrid (A + Capture-Browser) |
+| Dimension | **Option A** — SuperSplat Local Auto-Open | **Option B** — Full Local WebUI | **Option C** — Hybrid (A + capture browser) |
 |---|---|---|---|
-| **Scope** | Fix viewer.py CORS + Setup-Script + embed_url-Auto-Fill | Komplette Web-App (Capture-Browser, Status, Inline-SuperSplat, Obsidian-Button) | Option A + statische Capture-Browser-Seite |
-| **Zeitschätzung** | 1–2 Tage | 4–8 Tage | 2–3 Tage |
-| **Tech-Stack** | Node.js (SuperSplat-Build), Python HTTP-Server (bereits vorhanden) | FastAPI + uvicorn + Jinja2 + Node.js | Node.js + simples generiertes HTML |
-| **Test-Coverage** | Unit (URL-Builder) + Smoke | Unit + Integration + ggf. Playwright | Unit + Smoke |
-| **Reader-UX (Obsidian)** | localhost-URL in embed_url — funktioniert auf Arbeitsrechner | Identisch + Cloud-URL-Button | Identisch wie A |
-| **Mobile-UX** | ❌ (localhost nicht erreichbar) | ❌ (identisch — Cloud-URL bleibt manuell) | ❌ identisch |
-| **Risiken** | npm/Node-Prerequisite; SuperSplat-Dev-Server muss laufen | Scope-Creep; neues Framework; längere Implementierungszeit | Moderat — HTML-Generierung einfach zu halten |
-| **Konzeptpapier-Front-Reduktion** | Hoch — löst den CORS-Bug + eliminiert Drag-and-drop + füllt embed_url | Mittel-Hoch — zusätzlicher Wert gering vs. Aufwand | Hoch + marginale Capture-Browser-Verbesserung |
-| **Adressiert Kern-Pain-Points (§11)** | #1, #2, #5, #7 | #1–#7 | #1, #2, #5, #6, #7 |
+| **Scope** | Fix viewer.py CORS + setup script + embed_url auto-fill | Complete web app (capture browser, status, inline SuperSplat, Obsidian button) | Option A + static capture-browser page |
+| **Time estimate** | 1–2 days | 4–8 days | 2–3 days |
+| **Tech stack** | Node.js (SuperSplat build), Python HTTP server (already present) | FastAPI + uvicorn + Jinja2 + Node.js | Node.js + simple generated HTML |
+| **Test coverage** | Unit (URL builder) + smoke | Unit + integration + possibly Playwright | Unit + smoke |
+| **Reader UX (Obsidian)** | localhost URL in embed_url — works on the work machine | Identical + cloud-URL button | Identical to A |
+| **Mobile UX** | ❌ (localhost not reachable) | ❌ (identical — cloud URL remains manual) | ❌ identical |
+| **Risks** | npm/Node prerequisite; SuperSplat dev server must be running | Scope creep; new framework; longer implementation time | Moderate — HTML generation easy to keep simple |
+| **Concept-paper friction reduction** | High — fixes the CORS bug + eliminates drag-and-drop + fills embed_url | Medium-high — additional value low vs. effort | High + marginal capture-browser improvement |
+| **Addresses core pain points (§11)** | #1, #2, #5, #7 | #1–#7 | #1, #2, #5, #6, #7 |
 
 ---
 
-## § Architekt-Hypothese (explizit als Hypothese markiert — keine Empfehlung)
+## § Architect hypothesis (explicitly marked as a hypothesis — not a recommendation)
 
-**Architekt-Hypothese (Jay/Cowork):** "Alles in einer Web-UI lokal vereinen" — Option B Full WebUI ist die richtige Richtung.
+**Architect hypothesis (Jay/Cowork):** "Unite everything locally in a web UI" — Option B Full WebUI is the right direction.
 
-**CC-Gegenposition nach Recon:**
+**CC counter-position after recon:**
 
-Die Hypothese ist konzeptionell kohärent, aber der Zeitaufwand ist unverhältnismäßig zu den zusätzlichen Gains über Option A hinaus. Die drei größten Pain-Points (PLY-Load-Friction, `embed_url` leer, 214 MB lokaler Transfer) werden alle durch Option A gelöst — der Web-UI-Layer fügt keine Lösung für diese Kern-Probleme hinzu, er fügt nur eine Alternative Darstellung hinzu (Browser statt Terminal).
+The hypothesis is conceptually coherent, but the time effort is disproportionate to the additional gains beyond Option A. The three biggest pain points (PLY-load friction, empty `embed_url`, 214 MB local transfer) are all solved by Option A — the web-UI layer adds no solution for these core problems, it only adds an alternative presentation (browser instead of terminal).
 
-**Kritischer Befund:** Das `embed_view_url: ""`-Problem (Cloud-Share-URL manuell) bleibt bei **allen** Optionen (A, B, C) offen, solange keine superspl.at-API existiert. Eine Full WebUI löst dieses Problem nicht. Das ist die Grenze, die Phase 9 ehrlich kommunizieren muss.
+**Critical finding:** The `embed_view_url: ""` problem (manual cloud share URL) remains open for **all** options (A, B, C) as long as no superspl.at API exists. A full WebUI does not solve this problem. That is the limit Phase 9 must communicate honestly.
 
-**Mobile-UX** ist die einzige Dimension, wo B/C gegenüber A einen echten Mehrwert hätte — aber auch B/C lösen das nicht, weil localhost-URLs auf Mobile nie funktionieren.
+**Mobile UX** is the only dimension where B/C would have real added value over A — but B/C do not solve it either, because localhost URLs never work on mobile.
 
-**CC-Hypothese:** Option A + macOS-Notification ist der effizienteste Zug für Phase 9. Option C (+ minimale Capture-Browser-Seite) wäre ein sinnvoller Bonus, wenn die Zieldefinition "etwas Visuelles für den Workflow-Überblick" beinhaltet. Option B sollte als Phase-10-Kandidat framed werden, wenn konkrete Nutzungsfeedback-Signale (mehr als 1 Person nutzt die Pipeline, mehr als 10 Captures pro Woche) vorliegen.
+**CC hypothesis:** Option A + a macOS notification is the most efficient move for Phase 9. Option C (+ a minimal capture-browser page) would be a sensible bonus if the goal definition includes "something visual for the workflow overview". Option B should be framed as a Phase-10 candidate once concrete usage-feedback signals (more than 1 person uses the pipeline, more than 10 captures per week) are present.
 
-**Wenn die Architekt-Hypothese B bevorzugt:** Dann sollte der Plan B in Inkremente aufgeteilt werden — B₁ = Option A (1-2 Tage, sofort nutzbar), B₂ = Capture-Browser (1-2 Tage), B₃ = Pipeline-Control im Browser (2-3 Tage). Kein Big-Bang-B.
+**If the architect hypothesis favors B:** then plan B should be split into increments — B₁ = Option A (1-2 days, immediately usable), B₂ = capture browser (1-2 days), B₃ = pipeline control in the browser (2-3 days). No big-bang B.
