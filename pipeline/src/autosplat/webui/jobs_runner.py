@@ -9,6 +9,7 @@ Tracks JobState per capture_id and supports cancel via process termination.
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 import time
 from collections import deque
@@ -21,6 +22,8 @@ from autosplat.logging import get_logger
 from autosplat.watcher import _now_iso
 
 logger = get_logger(__name__)
+
+RUNS_FILENAME = "runs.jsonl"
 
 JobStatus = Literal["queued", "running", "done", "failed", "cancelled"]
 
@@ -59,10 +62,83 @@ class JobRunner:
     show all runs of a re-triggered capture (SF-G3-3).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, captures_dir: Path | None = None) -> None:
         self._jobs: dict[str, JobState] = {}
         self._history: list[JobState] = []
         self._lock = asyncio.Lock()
+        # When set, finalized jobs are appended to <captures_dir>/<id>/runs.jsonl
+        # so the WebUI's recent-jobs view survives a server restart (V12-2).
+        self.captures_dir = captures_dir
+
+    def _persist_job(self, job: JobState) -> None:
+        """Append a finalized job to <captures_dir>/<capture_id>/runs.jsonl."""
+        if self.captures_dir is None:
+            return
+        capture_dir = self.captures_dir / job.capture_id
+        if not capture_dir.exists():
+            # Capture directory was removed mid-run; skip persist silently.
+            return
+        record = {
+            "capture_id": job.capture_id,
+            "status": job.status,
+            "started_at": job.started_at_walltime,
+            "finished_at": job.finished_at_walltime,
+            "error": job.error,
+        }
+        runs_path = capture_dir / RUNS_FILENAME
+        try:
+            with runs_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except OSError as e:
+            logger.warning(
+                "job_runner.persist_failed",
+                capture_id=job.capture_id,
+                error=str(e),
+            )
+
+    def load_history(self) -> None:
+        """Populate _history from every <capture>/runs.jsonl on startup.
+
+        Malformed lines are skipped — a corrupted single entry must not block
+        the entire load. Captures without runs.jsonl produce no entries.
+        """
+        if self.captures_dir is None or not self.captures_dir.exists():
+            return
+        for capture_dir in self.captures_dir.iterdir():
+            if not capture_dir.is_dir():
+                continue
+            runs_path = capture_dir / RUNS_FILENAME
+            if not runs_path.exists():
+                continue
+            try:
+                lines = runs_path.read_text(encoding="utf-8").splitlines()
+            except OSError as e:
+                logger.warning(
+                    "job_runner.read_failed",
+                    path=str(runs_path),
+                    error=str(e),
+                )
+                continue
+            for line in lines:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "job_runner.skip_malformed",
+                        path=str(runs_path),
+                    )
+                    continue
+                job = JobState(
+                    capture_id=record["capture_id"],
+                    status=record["status"],
+                )
+                if record.get("started_at"):
+                    job.started_at_walltime = record["started_at"]
+                job.finished_at_walltime = record.get("finished_at")
+                job.error = record.get("error")
+                self._history.append(job)
 
     def get_job(self, capture_id: str) -> JobState | None:
         return self._jobs.get(capture_id)
@@ -91,7 +167,7 @@ class JobRunner:
         job.status = "running"
         thread = threading.Thread(
             target=_run_pipeline_thread,
-            args=(job, video, cfg),
+            args=(job, video, cfg, self),
             daemon=True,
             name=f"autosplat-job-{capture_id}",
         )
@@ -121,6 +197,7 @@ class JobRunner:
         job.status = "cancelled"
         job.finished_at = time.monotonic()
         job.finished_at_walltime = _now_iso()
+        self._persist_job(job)
         logger.info("job_runner.cancelled", capture_id=capture_id)
         return True
 
@@ -134,7 +211,9 @@ def _find_source_video(capture_path: Path) -> Path | None:
     return None
 
 
-def _run_pipeline_thread(job: JobState, video: Path, cfg: Config) -> None:
+def _run_pipeline_thread(
+    job: JobState, video: Path, cfg: Config, runner: JobRunner
+) -> None:
     """Execute run_pipeline in a background thread, updating job.status."""
     import subprocess
 
@@ -161,6 +240,7 @@ def _run_pipeline_thread(job: JobState, video: Path, cfg: Config) -> None:
         job.status = "done"
         job.finished_at = time.monotonic()
         job.finished_at_walltime = _now_iso()
+        runner._persist_job(job)
         job.append_log(f"Pipeline complete: {result.output_ply}")
         logger.info("job_runner.done", capture_id=job.capture_id, ply=str(result.output_ply))
 
@@ -171,5 +251,6 @@ def _run_pipeline_thread(job: JobState, video: Path, cfg: Config) -> None:
         job.finished_at = time.monotonic()
         job.finished_at_walltime = _now_iso()
         job.error = str(e)
+        runner._persist_job(job)
         job.append_log(f"Pipeline failed: {e}")
         logger.error("job_runner.failed", capture_id=job.capture_id, error=str(e))

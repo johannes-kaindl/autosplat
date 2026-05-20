@@ -76,6 +76,11 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     # Wire up job runner (available for all routes via request.app.state.job_runner)
     from .jobs_runner import JobRunner
-    app.state.job_runner = JobRunner()
+    captures_dir = cfg.paths.captures_dir if cfg is not None else None
+    runner = JobRunner(captures_dir=captures_dir)
+    if captures_dir is not None:
+        # Rehydrate recent-jobs view from runs.jsonl on every cold start (V12-2).
+        runner.load_history()
+    app.state.job_runner = runner
 
     return app

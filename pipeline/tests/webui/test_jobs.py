@@ -193,6 +193,118 @@ def test_list_captures_done_jobrunner_propagates_finished_at(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    import json
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+# ---------------------------------------------------------------------------
+# V12-2 — runs.jsonl persistence
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_cancel_appends_runs_jsonl_when_captures_dir_set(tmp_path: Path) -> None:
+    """V12-2: cancelling a job persists a JSON line to <capture>/runs.jsonl."""
+    capture_dir = tmp_path / "2026-05-20_persist"
+    capture_dir.mkdir()
+    (capture_dir / "clip.mp4").write_bytes(b"fake")
+
+    runner = JobRunner(captures_dir=tmp_path)
+
+    from autosplat.config import load_config
+
+    cfg = load_config(include_xdg=False)
+    with patch("autosplat.webui.jobs_runner._run_pipeline_thread"):
+        job = await runner.start_job("2026-05-20_persist", capture_dir, cfg)
+
+    job.status = "running"
+    await runner.cancel_job("2026-05-20_persist")
+
+    runs_path = capture_dir / "runs.jsonl"
+    assert runs_path.exists(), "runs.jsonl should be created on cancel"
+    records = _read_jsonl(runs_path)
+    assert len(records) == 1
+    assert records[0]["capture_id"] == "2026-05-20_persist"
+    assert records[0]["status"] == "cancelled"
+    assert ISO_UTC_RE.match(records[0]["started_at"])
+    assert ISO_UTC_RE.match(records[0]["finished_at"])
+
+
+def test_jobrunner_no_persist_when_captures_dir_none(tmp_path: Path) -> None:
+    """V12-2: without captures_dir, no runs.jsonl is written — backward compat."""
+    capture_dir = tmp_path / "2026-05-20_nopersist"
+    capture_dir.mkdir()
+
+    runner = JobRunner()  # no captures_dir
+    job = JobState(capture_id="2026-05-20_nopersist", status="cancelled")
+    job.finished_at_walltime = "2026-05-20T12:00:00Z"
+    runner._persist_job(job)  # should no-op
+
+    assert not (capture_dir / "runs.jsonl").exists()
+
+
+def test_load_history_populates_from_runs_jsonl(tmp_path: Path) -> None:
+    """V12-2: JobRunner.load_history reads runs.jsonl across all captures."""
+    import json
+
+    capture_a = tmp_path / "2026-05-20_cap_a"
+    capture_a.mkdir()
+    (capture_a / "runs.jsonl").write_text(json.dumps({
+        "capture_id": "2026-05-20_cap_a",
+        "status": "done",
+        "started_at": "2026-05-20T08:00:00Z",
+        "finished_at": "2026-05-20T08:30:00Z",
+        "error": None,
+    }) + "\n")
+    capture_b = tmp_path / "2026-05-20_cap_b"
+    capture_b.mkdir()
+    (capture_b / "runs.jsonl").write_text(json.dumps({
+        "capture_id": "2026-05-20_cap_b",
+        "status": "failed",
+        "started_at": "2026-05-20T09:00:00Z",
+        "finished_at": "2026-05-20T09:05:00Z",
+        "error": "boom",
+    }) + "\n")
+
+    runner = JobRunner(captures_dir=tmp_path)
+    runner.load_history()
+
+    history = runner.all_jobs()
+    assert len(history) == 2
+    by_id = {j.capture_id: j for j in history}
+    assert by_id["2026-05-20_cap_a"].status == "done"
+    assert by_id["2026-05-20_cap_a"].finished_at_walltime == "2026-05-20T08:30:00Z"
+    assert by_id["2026-05-20_cap_b"].status == "failed"
+    assert by_id["2026-05-20_cap_b"].error == "boom"
+
+
+def test_load_history_skips_malformed_lines(tmp_path: Path) -> None:
+    """V12-2: malformed JSON lines are skipped without breaking the load."""
+    capture_dir = tmp_path / "2026-05-20_partial_corrupt"
+    capture_dir.mkdir()
+    # one bad line, one good line
+    (capture_dir / "runs.jsonl").write_text(
+        "{not valid json\n"
+        '{"capture_id": "2026-05-20_partial_corrupt", "status": "done", '
+        '"started_at": "2026-05-20T10:00:00Z", "finished_at": "2026-05-20T10:30:00Z"}\n'
+    )
+
+    runner = JobRunner(captures_dir=tmp_path)
+    runner.load_history()
+
+    history = runner.all_jobs()
+    assert len(history) == 1
+    assert history[0].capture_id == "2026-05-20_partial_corrupt"
+
+
+def test_load_history_no_op_when_captures_dir_missing(tmp_path: Path) -> None:
+    """V12-2: load_history on a non-existent captures_dir is a clean no-op."""
+    runner = JobRunner(captures_dir=tmp_path / "does-not-exist")
+    runner.load_history()
+    assert runner.all_jobs() == []
+
+
 def test_list_captures_sorts_same_day_by_finished_at_desc(tmp_path: Path) -> None:
     """SF-NEW-3: two captures from the same day must order by finished_at DESC.
 
