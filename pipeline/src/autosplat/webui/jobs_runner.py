@@ -18,6 +18,7 @@ from typing import Literal
 
 from autosplat.config import Config
 from autosplat.logging import get_logger
+from autosplat.watcher import _now_iso
 
 logger = get_logger(__name__)
 
@@ -30,6 +31,9 @@ class JobState:
     status: JobStatus
     started_at: float = field(default_factory=time.monotonic)
     finished_at: float | None = None
+    # Wall-clock ISO-UTC timestamps; monotonic siblings stay for duration math.
+    started_at_walltime: str = field(default_factory=_now_iso)
+    finished_at_walltime: str | None = None
     log_lines: deque[str] = field(default_factory=lambda: deque(maxlen=500))
     error: str | None = None
     _proc: object = field(default=None, repr=False)  # subprocess.Popen handle
@@ -116,6 +120,7 @@ class JobRunner:
 
         job.status = "cancelled"
         job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
         logger.info("job_runner.cancelled", capture_id=capture_id)
         return True
 
@@ -155,6 +160,7 @@ def _run_pipeline_thread(job: JobState, video: Path, cfg: Config) -> None:
             return
         job.status = "done"
         job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
         job.append_log(f"Pipeline complete: {result.output_ply}")
         logger.info("job_runner.done", capture_id=job.capture_id, ply=str(result.output_ply))
 
@@ -163,6 +169,7 @@ def _run_pipeline_thread(job: JobState, video: Path, cfg: Config) -> None:
             return
         job.status = "failed"
         job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
         job.error = str(e)
         job.append_log(f"Pipeline failed: {e}")
         logger.error("job_runner.failed", capture_id=job.capture_id, error=str(e))

@@ -79,7 +79,7 @@ def list_captures(
     failed_by_path = {e.path: e for e in state.failed}
 
     captures: list[CaptureInfo] = []
-    for entry in sorted(captures_dir.iterdir(), reverse=True):
+    for entry in captures_dir.iterdir():
         if not entry.is_dir():
             continue
         if not _CAPTURE_DIR_RE.match(entry.name):
@@ -110,9 +110,19 @@ def list_captures(
             status = "failed"
             stage = None
             started_at = None
-            finished_at = None
+            finished_at = job.finished_at_walltime
             duration_s = None
             reason = job.error
+        elif job is not None and job.status == "done":
+            # SF-G3-1: WebUI-completed jobs must surface their wall-clock
+            # finished_at — otherwise Recent Captures rendered "—" because
+            # this branch used to fall through to the ply-not-None path.
+            status = "done"
+            stage = "export"
+            started_at = job.started_at_walltime
+            finished_at = job.finished_at_walltime
+            duration_s = None
+            reason = None
         elif in_progress_path == path_str:
             status = "running"
             stage = state.in_progress.stage if state.in_progress else None
@@ -175,6 +185,11 @@ def list_captures(
             )
         )
 
+    # SF-NEW-3: order by wall-clock finished_at DESC (most-recent first),
+    # falling back to capture name DESC for captures without a timestamp
+    # (idle/queued/running) so within-day order stays deterministic.
+    captures.sort(key=lambda c: c.id, reverse=True)
+    captures.sort(key=lambda c: c.finished_at or "", reverse=True)
     return captures
 
 
