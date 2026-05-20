@@ -6,6 +6,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.1.2] — 2026-05-20 — Hotfix Release
+
+Closes the three v1.1.1 backlog items: wall-clock job timestamps + within-day sort, zero ruff findings, and a job-specific status badge. WebUI- and hygiene-only — no change to the capture/train/export algorithm.
+
+### Fixed
+
+- **[SF-G3-1] + [SF-NEW-3]** Wall-clock job timestamps + within-day sort (`cc84d2f`) — `JobState` now carries `started_at_walltime` and `finished_at_walltime` as ISO-Z strings (monotonic siblings stay for duration math). `state.py` grew an explicit `done`-branch so WebUI-completed jobs surface their `finished_at` instead of falling through to the ply-not-None path with `finished_at=None` — Recent Captures used to render `—` for every WebUI-completed run. `list_captures` now sorts by `finished_at DESC` with capture-name DESC as a tiebreaker; within a single day, captures order by the time they actually finished rather than alphabetically by capture name.
+- **[SF-G3-2]** Job-status badge cancelled/queued rendering (`ba373cc`) — the jobs view rendered cancelled/queued `JobState`s as a grey "ready" badge because `capture_badge` had no branches for them and `JobState` has no `stage` attribute (so failed jobs even showed `failed · preflight` regardless of where they actually failed). New sibling `job_badge` macro purpose-built for `JobState`: explicit branches for queued, running, done, failed, cancelled. New CSS class `.s-cancelled` keeps cancelled runs visually distinct from idle/ready captures. `capture_badge` stays unchanged — it remains the right macro for `CaptureInfo`.
+
+### Changed (Hygiene)
+
+- **[SF-H1-1]** Zero ruff findings (`9e81b7e`) — `uv run ruff check src/ tests/` now passes cleanly (23 pre-existing findings resolved). Three categories: 11x F401 unused imports across test files (auto-fixed), 3x I001 unsorted import blocks (auto-fixed), 7x SIM117 nested `with`-statements collapsed via PEP 617 multi-context syntax, and 2x B904 `raise typer.Exit(...) from None` in `cli.py` (the inner RuntimeError is already user-facing-printed, so the chained traceback was noise).
+
+### Design Notes
+
+- **`job_badge` vs `capture_badge` separation** — the two macros now own different status enums. `capture_badge` knows the pipeline stages (preflight → export) and the CaptureInfo lifecycle (idle/running/done/failed). `job_badge` knows the JobRunner lifecycle (queued/running/done/failed/cancelled) and has no stage information. Code that pulls a `CaptureInfo` calls `capture_badge`; code that pulls a `JobState` calls `job_badge`.
+- **Wall-clock timestamps coexist with monotonic** — `JobState` keeps both `started_at`/`finished_at` (monotonic `float`, for duration math) and `started_at_walltime`/`finished_at_walltime` (ISO-Z strings, for display + sorting). Replacing monotonic with wall-clock would have broken the `(finished_at - started_at) / 60` duration computation in `jobs_inner.html`.
+
+### Known Issues
+
+- All v1.1.1 known issues resolved. Remaining v1.2 candidates: multi-slot `WatcherState` (or a JobRunner extension) for parallel-run tracking; persistent JobRunner history via `runs.jsonl` append-log.
+
+### Tests
+
+206 unit tests (204 passed, 2 opt-in E2E skipped) — +6 over v1.1.1 (5 SF-G3-1 / SF-NEW-3 regression tests + 1 SF-G3-2 integration test). `ruff check src/ tests/` → "All checks passed!".
+
+### Internal Notes
+
+- 3 atomic fix-commits + 1 release commit. Tags `v1.1.2` and the release-commit are signed by the in-repo Identity (Johannes Kaindl `<code.jkaindl@mailbox.org>`).
+
+---
+
 ## [v1.1.1] — 2026-05-18 — Hotfix Release
 
 Resolves all three v1.1.0 known issues plus four polish findings from cowork smoke-testing. WebUI-and-pipeline fixes only — no change to the capture/train/export algorithm.

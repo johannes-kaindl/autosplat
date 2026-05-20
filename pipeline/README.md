@@ -1,14 +1,14 @@
 # video-to-3d-gaussian-splat
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.1.1-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
+[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.1.2-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
 [![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
 
 Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running locally on Apple Silicon.
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.1.1 — WebUI Restyle + Hotfix.** Mac Silicon, AGPL-3.0.
+> **Status: v1.1.2 — WebUI Restyle + Hotfix.** Mac Silicon, AGPL-3.0.
 
 ---
 
