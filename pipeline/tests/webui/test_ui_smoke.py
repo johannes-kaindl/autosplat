@@ -22,7 +22,21 @@ def test_dashboard_renders_ksp(app: FastAPI) -> None:
     assert 'class="as-top"' in r.text
     assert 'class="as-side"' in r.text
     assert "as-frame" in r.text
-    assert 'data-aspect="shugo"' in r.text
+    # V12-4: data-aspect is set by anti-flash JS reading URL/localStorage
+    # rather than hardcoded; assert the wiring is present.
+    assert "autosplat-aspect" in r.text
+    assert "URLSearchParams" in r.text
+
+
+def test_dashboard_dev_overlay_wiring_present(app: FastAPI) -> None:
+    """V12-4: ?dev=1 wiring is in the response (client-side persist + apply)."""
+    with TestClient(app) as client:
+        r = client.get("/")
+    assert r.status_code == 200
+    # The dev-mode toggle persists in localStorage as autosplat-annot
+    # and gets applied to the body via data-annot="on".
+    assert "autosplat-annot" in r.text
+    assert "data-annot" in r.text
 
 
 def test_captures_list_renders_ksp(app: FastAPI) -> None:

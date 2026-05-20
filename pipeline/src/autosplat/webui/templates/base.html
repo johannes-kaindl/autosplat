@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-aspect="shugo">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,12 +7,25 @@
   <link rel="stylesheet" href="/static/css/tokens.css">
   <link rel="stylesheet" href="/static/css/autosplat.css">
   {% block extra_css %}{% endblock %}
-  {# Anti-flash: restore theme before first paint #}
+  {# Anti-flash: restore theme/aspect before first paint. URL-params (V12-4
+     developer mode) win and persist: ?aspect=shugo|gunshi|kantoku|sensei,
+     ?dev=1|0 for the HTMX-polling overlay. #}
   <script>
     (function () {
+      var u = new URLSearchParams(location.search);
       var t = localStorage.getItem('autosplat-theme') || 'dark';
       if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
-      if (localStorage.getItem('autosplat-aspect')) localStorage.removeItem('autosplat-aspect');
+
+      var aspect = u.get('aspect');
+      if (aspect) localStorage.setItem('autosplat-aspect', aspect);
+      document.documentElement.setAttribute(
+        'data-aspect', localStorage.getItem('autosplat-aspect') || 'shugo'
+      );
+
+      var dev = u.get('dev');
+      if (dev !== null) {
+        localStorage.setItem('autosplat-annot', dev === '1' ? 'on' : 'off');
+      }
     })();
   </script>
   <script src="/static/js/htmx.min.js"></script>
@@ -125,7 +138,7 @@
   </div>
 </footer>
 
-{# ── Theme JS ─────────────────────────────────────────────────────────────── #}
+{# ── Theme JS + V12-4 dev-overlay activation ──────────────────────────────── #}
 <script>
 (function () {
   var btn = document.getElementById('as-theme-btn');
@@ -146,6 +159,12 @@
   btn.addEventListener('click', function () {
     applyTheme(localStorage.getItem('autosplat-theme') === 'light' ? 'dark' : 'light');
   });
+
+  // V12-4: HTMX-polling debug overlay (cyan = hx-trigger, amber = hx-target).
+  // Activate with `?dev=1`, deactivate with `?dev=0` — persists in localStorage.
+  if (localStorage.getItem('autosplat-annot') === 'on') {
+    document.body.setAttribute('data-annot', 'on');
+  }
 })();
 </script>
 
