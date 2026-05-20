@@ -92,6 +92,31 @@ def test_partial_jobs(app: FastAPI) -> None:
     assert 'class="as-main-inner"' in r.text
 
 
+def test_partial_jobs_renders_cancelled_status(app: FastAPI) -> None:
+    """SF-G3-2: a cancelled JobState renders an explicit 'cancelled' badge.
+
+    Before the fix, capture_badge (which jobs_inner.html used) had no branch
+    for JobState.status == 'cancelled', so cancelled jobs rendered as a
+    grey 'ready' badge — misleading because the run had actually been
+    aborted, not idle.
+    """
+    from autosplat.webui.jobs_runner import JobState
+
+    runner = app.state.job_runner
+    aborted = JobState(capture_id="2026-05-20_user_abort", status="cancelled")
+    runner._history.append(aborted)
+
+    with TestClient(app) as client:
+        r = client.get("/partials/jobs")
+    assert r.status_code == 200
+    # Badge text appears inside as-stage-badge span — check the label, not
+    # the capture id, by anchoring on the closing </span>.
+    assert "cancelled</span>" in r.text, (
+        "Expected a 'cancelled' badge label; got body without it. "
+        "capture_badge probably still falls through to 's-ready'."
+    )
+
+
 def test_partial_captures(app: FastAPI) -> None:
     """GET /partials/captures → 200, HTML fragment (HTMX self-renewal target)."""
     with TestClient(app) as client:

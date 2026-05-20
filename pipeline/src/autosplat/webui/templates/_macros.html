@@ -41,6 +41,26 @@
 {%- endmacro -%}
 
 
+{# ── Job status badge ─────────────────────────────────────────────────────── #}
+{# Companion to capture_badge for JobState objects (no stage attribute, plus a #}
+{# 'cancelled' value capture_badge doesn't know about — SF-G3-2).             #}
+{%- macro job_badge(job) -%}
+  {%- if job.status == 'running' -%}
+    <span class="as-stage-badge s-brush live"><span class="dot"></span>running</span>
+  {%- elif job.status == 'queued' -%}
+    <span class="as-stage-badge s-ready"><span class="dot"></span>queued</span>
+  {%- elif job.status == 'done' -%}
+    <span class="as-stage-badge s-done"><span class="dot"></span>done</span>
+  {%- elif job.status == 'failed' -%}
+    <span class="as-stage-badge s-failed"><span class="dot"></span>failed</span>
+  {%- elif job.status == 'cancelled' -%}
+    <span class="as-stage-badge s-cancelled"><span class="dot"></span>cancelled</span>
+  {%- else -%}
+    <span class="as-stage-badge s-ready"><span class="dot"></span>{{ job.status }}</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+
 {# ── Explicit badge by slot name ──────────────────────────────────────────── #}
 {%- macro stage_badge(slot, live=False, label=None) -%}
 <span class="as-stage-badge s-{{ slot }}{% if live %} live{% endif %}"><span class="dot"></span>{{ label if label else slot }}</span>

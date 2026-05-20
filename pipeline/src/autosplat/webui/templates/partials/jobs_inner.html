@@ -1,5 +1,5 @@
 {%- from "_icons.html" import icon -%}
-{%- from "_macros.html" import capture_badge -%}
+{%- from "_macros.html" import job_badge -%}
 {%- set total = (active_jobs|length if active_jobs else 0) + (recent_jobs|length if recent_jobs else 0) -%}
 <div class="as-main-inner"
      hx-get="/partials/jobs"
@@ -40,7 +40,7 @@
           {% for job in active_jobs %}
           <tr>
             <td class="mono"><a href="/captures/{{ job.capture_id }}" style="color:var(--fg-primary);text-decoration:none">{{ job.capture_id }}</a></td>
-            <td>{{ capture_badge(job) }}</td>
+            <td>{{ job_badge(job) }}</td>
             <td class="dim" style="font-size:11px;max-width:480px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
               {{ job.get_log_tail()[-1] if job.get_log_tail() else "—" }}
             </td>
@@ -79,7 +79,7 @@
           {% for job in recent_jobs %}
           <tr>
             <td class="mono"><a href="/captures/{{ job.capture_id }}" style="color:var(--fg-primary);text-decoration:none">{{ job.capture_id }}</a></td>
-            <td>{{ capture_badge(job) }}</td>
+            <td>{{ job_badge(job) }}</td>
             <td class="num">
               {%- if job.finished_at and job.started_at -%}
                 {{ '%.1f'|format((job.finished_at - job.started_at) / 60) }} min

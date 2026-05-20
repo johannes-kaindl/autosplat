@@ -627,6 +627,9 @@ html, body { height: 100%; margin: 0; }
 .as-stage-badge.s-ready      { --c: var(--fg-secondary); }
 .as-stage-badge.s-ready      { background: var(--surface-inset); }
 .as-stage-badge.s-ready .dot { box-shadow: none; }
+.as-stage-badge.s-cancelled  { --c: var(--fg-tertiary); }
+.as-stage-badge.s-cancelled  { background: var(--surface-inset); }
+.as-stage-badge.s-cancelled .dot { box-shadow: none; opacity: 0.6; }
 .as-stage-badge.live .dot    { animation: as-pulse 2.4s var(--ease-pulse) infinite; }
 
 /* ====== Progress bar ===================================================== */
