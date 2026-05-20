@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -78,7 +77,6 @@ def _mock_pipeline_stages(tmp_path: Path, fake_ply: Path) -> dict:
 
 def _cfg_with_viewer_target(target: str, obsidian_enabled: bool, tmp_path: Path):
     """Build a Config with the given viewer.target and obsidian.enabled settings."""
-    from autosplat.config import ObsidianConfig, ViewerConfig
 
     cfg = load_config(include_xdg=False)
     # Pydantic models are immutable; build replacement instances.
@@ -110,21 +108,23 @@ def _run_with_mocks(video: Path, cfg, patches: dict, tmp_path: Path, state=None)
 
     `state`, when given, is passed through to run_pipeline for status reporting.
     """
-    with patch("autosplat.pipeline.preflight_mod.run_preflight", patches["preflight"]):
-        with patch("autosplat.pipeline.preprocess_mod.extract_frames", patches["preprocess"]):
-            with patch("autosplat.pipeline.sfm_mod.run_colmap", patches["sfm"]):
-                with patch("autosplat.pipeline.quality_mod.check_sfm_quality", patches["quality"]):
-                    with patch("autosplat.pipeline.train_mod.run_brush", patches["train"]):
-                        with patch("autosplat.pipeline.export_mod.export_capture", patches["export"]):
-                            with patch("autosplat.pipeline.obsidian_mod.read_ply_header", patches["ply_header"]):
-                                with patch("autosplat.pipeline.obsidian_mod.write_capture_note") as mock_write:
-                                    with patch("autosplat.pipeline.viewer_mod.open_in_viewer"):
-                                        result = run_pipeline(
-                                            video, cfg,
-                                            output_dir_override=tmp_path / "captures",
-                                            state=state,
-                                        )
-                                        return result, mock_write
+    with (
+        patch("autosplat.pipeline.preflight_mod.run_preflight", patches["preflight"]),
+        patch("autosplat.pipeline.preprocess_mod.extract_frames", patches["preprocess"]),
+        patch("autosplat.pipeline.sfm_mod.run_colmap", patches["sfm"]),
+        patch("autosplat.pipeline.quality_mod.check_sfm_quality", patches["quality"]),
+        patch("autosplat.pipeline.train_mod.run_brush", patches["train"]),
+        patch("autosplat.pipeline.export_mod.export_capture", patches["export"]),
+        patch("autosplat.pipeline.obsidian_mod.read_ply_header", patches["ply_header"]),
+        patch("autosplat.pipeline.obsidian_mod.write_capture_note") as mock_write,
+        patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
+    ):
+        result = run_pipeline(
+            video, cfg,
+            output_dir_override=tmp_path / "captures",
+            state=state,
+        )
+        return result, mock_write
 
 
 def test_embed_url_populated_for_supersplat_local(tmp_path: Path) -> None:

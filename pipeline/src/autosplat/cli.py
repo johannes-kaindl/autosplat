@@ -348,7 +348,7 @@ def serve(
                     pass
         except RuntimeError as exc:
             err_console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(EXIT_USER_ERROR)
+            raise typer.Exit(EXIT_USER_ERROR) from None
     else:
         try:
             with viewer_mod.serve_directory(ply.parent, effective_ply_port) as ply_base:
@@ -361,7 +361,7 @@ def serve(
                     pass
         except RuntimeError as exc:
             err_console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(EXIT_USER_ERROR)
+            raise typer.Exit(EXIT_USER_ERROR) from None
 
 
 @app.command()

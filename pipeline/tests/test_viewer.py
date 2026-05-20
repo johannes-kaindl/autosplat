@@ -11,8 +11,13 @@ from unittest.mock import patch
 import pytest
 
 from autosplat.config import ViewerConfig, load_config
-from autosplat.viewer import PLAYCANVAS_VIEWER_URL, SUPERSPLAT_URL, _build_viewer_url, open_in_viewer, serve_directory
-
+from autosplat.viewer import (
+    PLAYCANVAS_VIEWER_URL,
+    SUPERSPLAT_URL,
+    _build_viewer_url,
+    open_in_viewer,
+    serve_directory,
+)
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 

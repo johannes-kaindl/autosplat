@@ -77,9 +77,11 @@ def serve_supersplat_local(
     ply_port: int,
 ) -> Iterator[dict[str, str]]:
     """Start SuperSplat static server + PLY server. Yields URL dict."""
-    with serve_directory(supersplat_dist, supersplat_port) as ss_base:
-        with serve_directory(ply_dir, ply_port) as ply_base:
-            yield {"supersplat": ss_base, "ply": ply_base}
+    with (
+        serve_directory(supersplat_dist, supersplat_port) as ss_base,
+        serve_directory(ply_dir, ply_port) as ply_base,
+    ):
+        yield {"supersplat": ss_base, "ply": ply_base}
 
 
 def open_in_viewer(ply_path: Path, cfg: ViewerConfig) -> None:
