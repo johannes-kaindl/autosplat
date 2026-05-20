@@ -38,6 +38,10 @@
 
 {# ── Top bar ─────────────────────────────────────────────────────────────── #}
 <header class="as-top">
+  {# V12-3: mobile-only hamburger; toggles .mobile-sidebar-open on .as-frame #}
+  <button class="as-hamburger" id="as-hamburger-btn" type="button" aria-label="Toggle sidebar">
+    {{ icon('menu', 16) }}
+  </button>
   <a href="/" class="as-brand" style="text-decoration:none">
     <div class="as-brand-mark">A·</div>
     <div class="as-brand-wm">autosplat</div>
@@ -73,6 +77,9 @@
     <span class="as-theme-label">Dark</span>
   </button>
 </header>
+
+{# V12-3: backdrop closes mobile sidebar on tap; only renders when open #}
+<div class="as-sidebar-backdrop" id="as-sidebar-backdrop"></div>
 
 {# ── Sidebar ─────────────────────────────────────────────────────────────── #}
 <aside class="as-side">
@@ -164,6 +171,20 @@
   // Activate with `?dev=1`, deactivate with `?dev=0` — persists in localStorage.
   if (localStorage.getItem('autosplat-annot') === 'on') {
     document.body.setAttribute('data-annot', 'on');
+  }
+
+  // V12-3: mobile sidebar toggle (only triggered when the hamburger is visible
+  // via the ≤767px media query). Open/close via class on .as-frame, plus a
+  // backdrop that closes on tap.
+  var ham = document.getElementById('as-hamburger-btn');
+  var backdrop = document.getElementById('as-sidebar-backdrop');
+  if (ham && backdrop) {
+    ham.addEventListener('click', function () {
+      document.body.classList.toggle('mobile-sidebar-open');
+    });
+    backdrop.addEventListener('click', function () {
+      document.body.classList.remove('mobile-sidebar-open');
+    });
   }
 })();
 </script>

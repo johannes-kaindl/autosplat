@@ -1164,3 +1164,76 @@ html, body { height: 100%; margin: 0; }
 }
 .as-rad-cell .lbl { font-family: var(--font-mono); font-size: 10px; color: var(--fg-secondary); text-align: center; }
 .as-rad-cell .lbl b { display: block; color: var(--fg-primary); font-weight: 600; }
+
+
+/* ====== Responsive layout (V12-3 / SF-G1-1) =============================== */
+/* Breakpoints: Desktop ≥1024px (default rules above), Tablet 768-1023px,
+   Mobile <768px. Mobile collapses the sidebar off-canvas and slides it in
+   when .mobile-sidebar-open is set on .as-frame by the hamburger toggle.   */
+
+/* Classes used by templates that previously had inline grid styles —
+   needed so media queries can override the column count.                  */
+.as-dashboard-cols    { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5); }
+.as-brush-metrics-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+
+/* ── Hamburger button: only visible on mobile ─────────────────────────── */
+.as-hamburger {
+  display: none;
+  width: 32px; height: 32px;
+  align-items: center; justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--fg-secondary);
+  cursor: pointer;
+  margin-right: var(--space-2);
+}
+.as-hamburger:hover { background: var(--surface-raised); color: var(--fg-primary); }
+.as-hamburger svg { stroke: currentColor; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── Backdrop behind open mobile sidebar (tap-to-close) ───────────────── */
+.as-sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(0, 0, 0, 0.4);
+}
+.as-frame.mobile-sidebar-open .as-sidebar-backdrop { display: block; }
+
+/* ── Tablet: narrower sidebar + stat-tiles to 2-col ──────────────────── */
+@media (max-width: 1023px) {
+  .as-frame { grid-template-columns: 200px 1fr; }
+  .as-stats { grid-template-columns: repeat(2, 1fr); }
+  .as-dashboard-cols { grid-template-columns: 1fr; }
+}
+
+/* ── Mobile: single-column frame, sidebar off-canvas, dense layout ───── */
+@media (max-width: 767px) {
+  .as-frame {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "topbar"
+      "main"
+      "footer";
+  }
+  .as-hamburger { display: inline-flex; }
+  /* Sidebar slides in from the left when toggled */
+  .as-side {
+    position: fixed; top: 48px; left: 0; bottom: 32px;
+    width: min(280px, 80vw);
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform var(--dur-fast) var(--ease-signal);
+    box-shadow: var(--shadow-card);
+  }
+  .as-frame.mobile-sidebar-open .as-side {
+    transform: translateX(0);
+  }
+  .as-stats { grid-template-columns: repeat(2, 1fr); }
+  .as-brush-metrics-cols { grid-template-columns: repeat(2, 1fr); }
+  /* Two-column layouts collapse to stack */
+  .as-dashboard-cols { grid-template-columns: 1fr; }
+  /* Tables get horizontal-scroll with touch-friendly inertia */
+  .as-tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Tighter main padding so content uses the viewport */
+  .as-main-inner { padding: var(--space-4) var(--space-4) var(--space-4) var(--space-4); }
+}
