@@ -1,4 +1,6 @@
-const ACCEPT = /\.(sog|ply)$/i;
+// the PlayCanvas SOG loader cannot read blob: URLs, so user uploads
+// are limited to .ply; the bundled demo splat is SOG (served over http)
+const ACCEPT = /\.ply$/i;
 
 export function initDropzone({ stage, hint, fileInput, openButton, onFile }) {
   function handleFile(file) {
