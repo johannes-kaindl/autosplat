@@ -7,11 +7,21 @@ const CAMERA_CONTROLS_URL =
   'https://cdn.jsdelivr.net/npm/playcanvas@2.18.1/scripts/esm/camera-controls.mjs';
 const ORBIT_SPEED = 8; // degrees per second
 
-// Start pose for the church demo splat (tuned in Task 4).
-const SPLAT_LEVEL = { x: -19, y: 10, z: 180 };
-const SPLAT_OFFSET = { x: 2.4, y: 2.4, z: -1.2 };
-const CAMERA_POS = { x: 1.878, y: 1.115, z: -5.222 };
-const CAMERA_FOCUS = { x: 0.656, y: -0.107, z: 0.212 };
+// Pose for the church demo splat — tuned in-browser in Task 4.
+const DEMO_POSE = {
+  level: { x: -19, y: 10, z: 180 },
+  offset: { x: 2.4, y: 2.4, z: -1.2 },
+  cameraPos: { x: 1.878, y: 1.115, z: -5.222 },
+  cameraFocus: { x: 0.656, y: -0.107, z: 0.212 }
+};
+// Pose for user-supplied splats — z:180 is the common Brush/COLMAP flip;
+// the user re-frames with orbit/pan/zoom.
+const DEFAULT_POSE = {
+  level: { x: 0, y: 0, z: 180 },
+  offset: { x: 0, y: 0, z: 0 },
+  cameraPos: { x: 0, y: 0, z: 4 },
+  cameraFocus: { x: 0, y: 0, z: 0 }
+};
 
 export function createViewer(hostElement) {
   const canvas = document.createElement('canvas');
@@ -27,7 +37,7 @@ export function createViewer(hostElement) {
 
   const camera = new Entity('camera');
   camera.addComponent('camera', { clearColor: [0.055, 0.059, 0.075, 1] });
-  camera.setPosition(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z);
+  camera.setPosition(DEMO_POSE.cameraPos.x, DEMO_POSE.cameraPos.y, DEMO_POSE.cameraPos.z);
   app.root.addChild(camera);
 
   let cc = null;
@@ -51,30 +61,44 @@ export function createViewer(hostElement) {
     canvas.addEventListener(ev, () => { autoOrbit = false; });
   }
 
-  function applyStartPose() {
-    if (cc) cc.reset(
-      new Vec3(CAMERA_FOCUS.x, CAMERA_FOCUS.y, CAMERA_FOCUS.z),
-      new Vec3(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z));
-  }
-
-  async function loadSplat(url, filename) {
+  async function loadSplat(source, filename) {
     await cameraReady;
-    const asset = new Asset('splat', 'gsplat', { url, filename });
-    await new Promise((resolve, reject) => {
-      asset.once('load', resolve);
-      asset.once('error', reject);
-      app.assets.add(asset);
-      app.assets.load(asset);
-    });
+    const isFile = source instanceof File;
+    const pose = isFile ? DEFAULT_POSE : DEMO_POSE;
+
+    let url = source;
+    let name = filename;
+    let revoke = null;
+    if (isFile) {
+      url = URL.createObjectURL(source);
+      name = source.name;
+      revoke = url;
+    }
+
+    const asset = new Asset('splat', 'gsplat', { url, filename: name });
+    try {
+      await new Promise((resolve, reject) => {
+        asset.once('load', resolve);
+        asset.once('error', reject);
+        app.assets.add(asset);
+        app.assets.load(asset);
+      });
+    } finally {
+      if (revoke) URL.revokeObjectURL(revoke);
+    }
+
     if (splatPivot) splatPivot.destroy();
     splatPivot = new Entity('splat-pivot');
     splatEntity = new Entity('splat');
     splatEntity.addComponent('gsplat', { asset });
-    splatEntity.setLocalEulerAngles(SPLAT_LEVEL.x, SPLAT_LEVEL.y, SPLAT_LEVEL.z);
-    splatEntity.setLocalPosition(SPLAT_OFFSET.x, SPLAT_OFFSET.y, SPLAT_OFFSET.z);
+    splatEntity.setLocalEulerAngles(pose.level.x, pose.level.y, pose.level.z);
+    splatEntity.setLocalPosition(pose.offset.x, pose.offset.y, pose.offset.z);
     splatPivot.addChild(splatEntity);
     app.root.addChild(splatPivot);
-    applyStartPose();
+
+    if (cc) cc.reset(
+      new Vec3(pose.cameraFocus.x, pose.cameraFocus.y, pose.cameraFocus.z),
+      new Vec3(pose.cameraPos.x, pose.cameraPos.y, pose.cameraPos.z));
   }
 
   return {
