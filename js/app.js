@@ -23,7 +23,7 @@ async function load(source, filename) {
   try {
     await viewer.loadSplat(source, filename);
   } catch {
-    showError('Konnte die Datei nicht laden — unterstützt: .sog, .ply');
+    showError('Konnte die Datei nicht laden — unterstützt: .ply');
   } finally {
     spinner.hidden = true;
   }
@@ -43,7 +43,6 @@ setInterval(syncOrbitButton, 500);
 
 btnReset.addEventListener('click', async () => {
   await load(DEMO_URL, 'scene.sog');
-  viewer.setAutoOrbit(true);
   syncOrbitButton();
 });
 
@@ -54,7 +53,7 @@ initDropzone({
   openButton: document.getElementById('btn-load'),
   onFile: (file, badName) => {
     if (file) load(file);
-    else showError(`Nicht unterstützt: ${badName} — erlaubt sind .sog und .ply`);
+    else showError(`Nicht unterstützt: ${badName} — erlaubt ist .ply`);
   }
 });
 

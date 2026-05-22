@@ -88,17 +88,17 @@ export function createViewer(hostElement) {
       revoke = url;
     }
 
-    const asset = new Asset('splat', 'gsplat', { url, filename: name });
+    // loadFromUrlAndFilename: the filename drives format detection, so
+    // blob: URLs (which carry no extension) load correctly.
+    let asset;
     try {
-      await new Promise((resolve, reject) => {
-        asset.once('load', resolve);
-        asset.once('error', reject);
-        app.assets.add(asset);
-        app.assets.load(asset);
+      asset = await new Promise((resolve, reject) => {
+        app.assets.loadFromUrlAndFilename(url, name, 'gsplat', (err, a) => {
+          if (err) reject(err); else resolve(a);
+        });
       });
     } catch {
       if (revoke) URL.revokeObjectURL(revoke);
-      asset.unload();
       throw new Error('splat-load-failed');
     }
     if (revoke) URL.revokeObjectURL(revoke);
@@ -115,6 +115,8 @@ export function createViewer(hostElement) {
     if (cc) cc.reset(
       new Vec3(pose.cameraFocus.x, pose.cameraFocus.y, pose.cameraFocus.z),
       new Vec3(pose.cameraPos.x, pose.cameraPos.y, pose.cameraPos.z));
+
+    autoOrbit = true; // a freshly loaded splat always starts orbiting
   }
 
   return {

@@ -4,15 +4,16 @@ Static viewer PWA for 3D Gaussian Splats — a showcase for the
 [autosplat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
 pipeline and a general-purpose splat viewer.
 
-Renders `.sog` and `.ply` splats in the browser via the PlayCanvas
-Engine. No build step, no server, no upload — drag a splat onto the
-page and it renders locally.
+Renders Gaussian Splats in the browser via the PlayCanvas Engine —
+the bundled demo is a compressed `.sog`; drop your own `.ply` splat
+to view it. No build step, no server, no upload — everything renders
+locally.
 
 ## Features
 
 - Live Gaussian-Splat rendering with auto-orbit
 - Orbit / pan / zoom camera (left-drag, right-drag, wheel)
-- Drag-and-drop or file-picker for your own `.sog` / `.ply` splats
+- Drag-and-drop or file-picker for your own `.ply` splats
 - Installable PWA, offline-capable app shell
 - WebGL2 fallback to a still image
 
