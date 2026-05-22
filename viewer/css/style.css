@@ -6,6 +6,8 @@
   --panel: rgba(14, 15, 19, 0.72);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* the hidden attribute must always win over later display rules */
+[hidden] { display: none !important; }
 html, body { background: var(--bg); color: var(--fg);
   font-family: system-ui, -apple-system, sans-serif; }
 
