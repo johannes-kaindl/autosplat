@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>autosplat viewer — 3D Gaussian Splats im Browser</title>
   <meta name="description" content="Trainierte 3D Gaussian Splats direkt im Browser ansehen. Showcase der autosplat-Pipeline.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0e0f13">
+  <meta property="og:title" content="autosplat viewer">
+  <meta property="og:description" content="3D Gaussian Splats im Browser ansehen">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta property="og:type" content="website">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
   {
@@ -64,5 +70,11 @@
   </footer>
 
   <script type="module" src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () =>
+        navigator.serviceWorker.register('service-worker.js'));
+    }
+  </script>
 </body>
 </html>
