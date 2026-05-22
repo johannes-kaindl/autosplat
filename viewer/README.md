@@ -9,8 +9,6 @@ pipeline and a general-purpose splat viewer.
 
 **▶ Live: <https://jkaindl.codeberg.page/autosplat-viewer/>**
 
-![autosplat-viewer rendering the church demo splat](assets/viewer-demo.gif)
-
 Renders Gaussian Splats in the browser via the PlayCanvas Engine — the
 bundled demo is a compressed `.sog`; drop your own `.ply` splat to view
 it. No build step, no server, no upload — everything renders locally.
