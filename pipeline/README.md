@@ -44,8 +44,6 @@ The companion project **[autosplat-viewer](https://codeberg.org/jkaindl/autospla
 is a static PWA that renders Gaussian Splats right in the browser — drop
 in a `.ply`, orbit around it, install it as an app. No setup required.
 
-[![autosplat-viewer rendering a Gaussian Splat](https://jkaindl.codeberg.page/autosplat-viewer/assets/viewer-demo.gif)](https://jkaindl.codeberg.page/autosplat-viewer/)
-
 **▶ Try it live: <https://jkaindl.codeberg.page/autosplat-viewer/>**
 
 ---
