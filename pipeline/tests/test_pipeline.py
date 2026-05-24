@@ -551,3 +551,90 @@ def test_adaptive_retry_wipes_colmap_and_skips_preprocess_on_retry(
     second_seen_db, second_skip = seen[1]
     assert second_seen_db is False
     assert second_skip is not None and "preprocess" in second_skip
+
+
+def test_adaptive_retry_drops_sfm_from_skip_on_retry(tmp_path: Path) -> None:
+    """If skip_stages came in containing 'sfm' (e.g. from resume), the retry
+    MUST remove it — otherwise wiping colmap/ leaves nothing to feed the
+    quality gate or training, and the new matcher never gets a chance."""
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    captures_root = tmp_path / "captures"
+    capture_dir = captures_root / _make_capture_name(video)
+    colmap_dir = capture_dir / "colmap"
+    colmap_dir.mkdir(parents=True)
+    (colmap_dir / "sparse").mkdir()
+    (colmap_dir / "database.db").write_bytes(b"stale")
+
+    seen_skips: list[set[str] | None] = []
+
+    def fake_run(*args, **kwargs):
+        seen_skips.append(kwargs.get("skip_stages"))
+        if len(seen_skips) == 1:
+            raise _quality_gate_failure(hint={"colmap": {"matcher": "exhaustive"}})
+        return MagicMock(spec=["capture_dir", "output_ply"])
+
+    with patch("autosplat.pipeline.run_pipeline", side_effect=fake_run):
+        run_pipeline_with_adaptive_retry(
+            video,
+            cfg,
+            output_dir_override=captures_root,
+            skip_stages={"preprocess", "sfm"},
+        )
+
+    assert seen_skips[0] == {"preprocess", "sfm"}
+    second = seen_skips[1]
+    assert second is not None
+    assert "preprocess" in second
+    assert "sfm" not in second
+
+
+def test_run_pipeline_runs_quality_gate_when_sfm_skipped(tmp_path: Path) -> None:
+    """When `sfm` is in skip_stages the pipeline must still validate the
+    existing sparse model — otherwise resuming a capture whose SfM produced
+    too few cameras would let Brush train on garbage."""
+    from autosplat.pipeline import _make_capture_name
+    from autosplat.quality import QualityGateFailure
+
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    captures_root = tmp_path / "captures"
+    capture_dir = captures_root / _make_capture_name(video)
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+    sparse_zero = capture_dir / "colmap" / "sparse" / "0"
+    sparse_zero.mkdir(parents=True)
+    # Pretend the prior run only registered 3 cameras — well below the gate.
+    (sparse_zero / "images.bin").write_bytes(b"\x03" + b"\0" * 7)
+    (sparse_zero / "points3D.bin").write_bytes(b"\x00" + b"\0" * 7)
+
+    quality_calls: list[tuple] = []
+
+    def fake_quality(sfm_res, *, frames_kept, cfg, colmap_cfg):
+        quality_calls.append((sfm_res.cameras_registered, frames_kept))
+        raise QualityGateFailure(
+            reason="low_camera_ratio: 0.01 < 0.5",
+            retry_hint={"colmap": {"matcher": "exhaustive"}},
+        )
+
+    with (
+        patch("autosplat.pipeline.preflight_mod.run_preflight"),
+        patch("autosplat.pipeline.quality_mod.check_sfm_quality", side_effect=fake_quality),
+        patch(
+            "autosplat.pipeline.preprocess_mod.extract_frames",
+            return_value=MagicMock(extracted_count=1, kept_count=1),
+        ),
+        pytest.raises(QualityGateFailure),
+    ):
+        run_pipeline(
+            video,
+            cfg,
+            output_dir_override=captures_root,
+            skip_stages={"sfm"},
+        )
+
+    # quality_gate ran exactly once with the parsed sparse-model counts
+    assert len(quality_calls) == 1
+    assert quality_calls[0][0] == 3  # 3 cameras parsed from sparse/0

@@ -221,20 +221,32 @@ def run_pipeline(
     if state is not None:
         state.update_stage("sfm")
     if "sfm" in skip:
-        cams = points = 0
-        logger.info("pipeline.skip", stage="sfm")
+        # Resume path: re-parse the existing sparse model so quality_gate can
+        # still validate it (without this, a previous low-camera SfM would
+        # silently sail through and Brush would train on garbage).
+        cams, points = sfm_mod._parse_mapper_stats(colmap_dir / "sparse")
+        sfm_res = sfm_mod.SfmResult(
+            workspace=colmap_dir,
+            database_path=colmap_dir / "database.db",
+            sparse_dir=colmap_dir / "sparse",
+            cameras_registered=cams,
+            points=points,
+            duration_s=0.0,
+        )
+        logger.info("pipeline.skip", stage="sfm", cameras=cams, points=points)
     else:
         sfm_res = sfm_mod.run_colmap(frames_dir, colmap_dir, config.colmap)
         cams = sfm_res.cameras_registered
         points = sfm_res.points
 
-        # ── Quality-Gate (Phase 3, spec §11.3) ─────────────────────────
-        # Bails out *before* the expensive Brush stage when SfM output is
-        # too thin to produce a usable splat. Raises QualityGateFailure with
-        # a structured retry-hint that the watcher can apply on the next try.
-        quality_mod.check_sfm_quality(
-            sfm_res, frames_kept=kept, cfg=config.quality_gate, colmap_cfg=config.colmap
-        )
+    # ── Quality-Gate (Phase 3, spec §11.3) ─────────────────────────────
+    # Bails out *before* the expensive Brush stage when SfM output is too
+    # thin to produce a usable splat. Runs whether SfM was just produced or
+    # resumed from disk — the latter is critical for `autosplat resume` on
+    # a capture whose prior matcher run only registered a handful of frames.
+    quality_mod.check_sfm_quality(
+        sfm_res, frames_kept=kept, cfg=config.quality_gate, colmap_cfg=config.colmap
+    )
 
     # ── Training ───────────────────────────────────────────────────────
     if state is not None:
@@ -457,6 +469,10 @@ def run_pipeline_with_adaptive_retry(
             override = e.retry_hint
             skip = set(skip) if skip else set()
             skip.add("preprocess")
+            # If we got here via resume (sfm skipped), drop it so the retry
+            # actually re-runs SfM with the new matcher — otherwise we'd
+            # wipe colmap/ and then try to parse a non-existent sparse model.
+            skip.discard("sfm")
             logger.warning(
                 "pipeline.adaptive_retry",
                 reason=e.reason,
