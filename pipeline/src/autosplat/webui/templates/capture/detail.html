@@ -184,6 +184,33 @@
       </div>
       {% endif %}
 
+      {% if capture.status in ('done', 'failed', 'idle') and capture.has_log %}
+      <div class="as-card">
+        <div class="as-card-head">
+          <span class="t">add another pass</span><span class="spacer"></span>
+          {{ icon('plus', 13) }}
+        </div>
+        <div class="as-card-body" style="display:flex;flex-direction:column;gap:10px">
+          <p style="margin:0;font-family:var(--font-body);font-size:12.5px;color:var(--fg-secondary);line-height:1.55">
+            Combine another video into this capture. Frames + SfM + training
+            are rebuilt with the larger set — useful when a single pass
+            doesn't reconstruct (see CAPTURE-GUIDE.md).
+          </p>
+          {% if add_video_error %}
+          <div style="color:var(--stage-failed);font-family:var(--font-mono);font-size:11px">{{ add_video_error }}</div>
+          {% endif %}
+          <form method="post" action="/captures/{{ capture.id }}/add-video"
+                style="display:flex;flex-direction:column;gap:8px">
+            <input type="text" name="video_path" required
+                   placeholder="~/Documents/pass_b.mp4"
+                   value="{{ add_video_path or '' }}"
+                   style="background:var(--surface-inset);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--space-2);font-family:var(--font-mono);font-size:12px;color:var(--fg-primary);outline:none">
+            <button type="submit" class="as-btn sm">{{ icon('plus', 12) }} Add video & rebuild</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
       {% if capture.status == 'done' %}
       <form method="post" action="/captures/{{ capture.id }}/delete"
             onsubmit="return confirm('Delete capture? This cannot be undone.')">

@@ -197,9 +197,7 @@ def compress_ply(
             f"No installed backend can produce {fmt}. {install_hint_for(fmt)}"
         )
     if fmt not in backend.formats:
-        raise CompressorNotAvailable(
-            f"Backend ({backend.via}) does not support {fmt!r}."
-        )
+        raise CompressorNotAvailable(f"Backend ({backend.via}) does not support {fmt!r}.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / f"{ply.stem}.{fmt}"

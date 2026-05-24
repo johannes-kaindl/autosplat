@@ -55,7 +55,9 @@ def serve_directory(directory: Path, port: int) -> Iterator[str]:
     try:
         httpd = _ReuseAddrTCPServer(("127.0.0.1", port), handler)
     except OSError as exc:
-        raise RuntimeError(f"Port {port} already in use — use --ply-port / --supersplat-port to choose a different port") from exc
+        raise RuntimeError(
+            f"Port {port} already in use — use --ply-port / --supersplat-port to choose a different port"
+        ) from exc
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     actual_port = httpd.server_address[1]

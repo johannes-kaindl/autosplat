@@ -51,7 +51,11 @@ def _check_binary(name: str, *, required: bool = True) -> CheckResult:
             timeout=5,
             check=False,
         )
-        version_line = (version.stdout or version.stderr).splitlines()[0] if (version.stdout or version.stderr) else "version unknown"
+        version_line = (
+            (version.stdout or version.stderr).splitlines()[0]
+            if (version.stdout or version.stderr)
+            else "version unknown"
+        )
     except (subprocess.SubprocessError, OSError) as e:
         version_line = f"version check failed: {e}"
     return CheckResult(name=name, ok=True, detail=f"{path} ({version_line})", required=required)

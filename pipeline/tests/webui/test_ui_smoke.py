@@ -88,7 +88,7 @@ def test_static_css_has_responsive_breakpoints(app: FastAPI) -> None:
         r = client.get("/static/css/autosplat.css")
     assert r.status_code == 200
     assert "@media (max-width: 1023px)" in r.text  # tablet
-    assert "@media (max-width: 767px)" in r.text   # mobile
+    assert "@media (max-width: 767px)" in r.text  # mobile
     assert ".as-hamburger" in r.text
     assert "mobile-sidebar-open" in r.text
 
@@ -100,7 +100,7 @@ def test_dashboard_includes_hamburger_and_backdrop(app: FastAPI) -> None:
     assert r.status_code == 200
     assert 'id="as-hamburger-btn"' in r.text
     assert 'id="as-sidebar-backdrop"' in r.text
-    assert 'mobile-sidebar-open' in r.text  # JS toggle reference
+    assert "mobile-sidebar-open" in r.text  # JS toggle reference
 
 
 def test_static_htmx_js(app: FastAPI) -> None:

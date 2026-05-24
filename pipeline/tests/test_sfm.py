@@ -93,9 +93,7 @@ def test_parse_mapper_stats_text(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (out / "points3D.txt").write_text(
-        "# header\n"
-        "1 x y z r g b err 1 2\n"
-        "2 x y z r g b err 1 2\n",
+        "# header\n1 x y z r g b err 1 2\n2 x y z r g b err 1 2\n",
         encoding="utf-8",
     )
     assert _parse_mapper_stats(tmp_path / "sparse") == (3, 2)

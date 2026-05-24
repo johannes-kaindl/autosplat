@@ -53,9 +53,7 @@ def _load_watcher_state() -> WatcherState:
     return WatcherState.load()
 
 
-def list_captures(
-    captures_dir: Path, job_runner: JobRunner | None = None
-) -> list[CaptureInfo]:
+def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> list[CaptureInfo]:
     """Discover all capture directories and overlay live status.
 
     Status is resolved from two sources, JobRunner first:

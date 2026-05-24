@@ -63,6 +63,7 @@ async def jobs_partial(request: Request) -> HTMLResponse:
 async def captures_list_partial(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
     from autosplat.webui.state import list_captures as _list
+
     captures = _list(captures_dir, _job_runner(request))
     return _templates(request).TemplateResponse(
         request,
@@ -91,10 +92,12 @@ async def capture_log_partial(request: Request, capture_id: str) -> HTMLResponse
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     lines = read_log_tail(capture.path, max_lines=40) if capture.has_log else []
-    rows = "".join(
-        f'<div class="as-log-row info"><span class="msg">{line}</span></div>'
-        for line in lines
-    ) or '<div class="as-log-row info"><span class="msg">— no log entries —</span></div>'
+    rows = (
+        "".join(
+            f'<div class="as-log-row info"><span class="msg">{line}</span></div>' for line in lines
+        )
+        or '<div class="as-log-row info"><span class="msg">— no log entries —</span></div>'
+    )
     return HTMLResponse(content=rows)
 
 

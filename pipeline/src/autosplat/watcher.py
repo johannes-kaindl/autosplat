@@ -184,15 +184,12 @@ class WatcherState:
         return cls(
             queue=list(data.get("queue", [])),
             in_progress=(
-                InProgress.from_dict(data["in_progress"])
-                if data.get("in_progress")
-                else None
+                InProgress.from_dict(data["in_progress"]) if data.get("in_progress") else None
             ),
             completed=[CompletedEntry.from_dict(d) for d in data.get("completed", [])],
             failed=[FailedEntry.from_dict(d) for d in data.get("failed", [])],
             retry_state={
-                k: RetryRecord.from_dict(v)
-                for k, v in (data.get("retry_state") or {}).items()
+                k: RetryRecord.from_dict(v) for k, v in (data.get("retry_state") or {}).items()
             },
             state_file=state_file,
         )
@@ -218,6 +215,7 @@ class WatcherState:
         except Exception:
             # Best-effort cleanup of the temp file on failure.
             import contextlib
+
             with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
             raise
@@ -254,9 +252,7 @@ class WatcherState:
             # Crash-safety net between pop and run_pipeline's begin(): keep the
             # video path in both fields. run_pipeline.begin() then re-keys
             # `path` to the capture directory, leaving source_video intact.
-            self.in_progress = InProgress(
-                path=path, started_at=_now_iso(), source_video=path
-            )
+            self.in_progress = InProgress(path=path, started_at=_now_iso(), source_video=path)
             override = None
             record = self.retry_state.get(path)
             if record is not None and record.next_override:
@@ -295,7 +291,9 @@ class WatcherState:
             self.in_progress.stage = stage
             self.save()
 
-    def mark_done(self, output_ply: Path, duration_s: float, *, max_history: int | None = None) -> None:
+    def mark_done(
+        self, output_ply: Path, duration_s: float, *, max_history: int | None = None
+    ) -> None:
         with self.lock:
             if self.in_progress is None:
                 return
@@ -393,9 +391,7 @@ def recover_state(
         capture_path = orphan.path
         record = state.retry_state.get(video) or RetryRecord()
         retries_remaining = (
-            retry_cfg is not None
-            and retry_cfg.enabled
-            and record.attempts < retry_cfg.max_retries
+            retry_cfg is not None and retry_cfg.enabled and record.attempts < retry_cfg.max_retries
         )
 
         if retries_remaining:
@@ -461,10 +457,7 @@ def reconcile_failure(
     record = state.retry_state.get(path) or RetryRecord()
     record.last_reason = reason
 
-    can_retry = (
-        retry_cfg.enabled
-        and record.attempts < retry_cfg.max_retries
-    )
+    can_retry = retry_cfg.enabled and record.attempts < retry_cfg.max_retries
 
     if can_retry:
         state.retry_state[path] = record
@@ -627,9 +620,7 @@ class WatchDaemon:
                     retry_cfg=self._retry_cfg,
                     max_history=self._status_cfg.max_history,
                 )
-                logger.error(
-                    "watcher.process_failed", path=path, error=str(e), outcome=outcome
-                )
+                logger.error("watcher.process_failed", path=path, error=str(e), outcome=outcome)
                 if outcome == "retry":
                     self._work_queue.put(path)
             finally:

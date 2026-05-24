@@ -24,16 +24,16 @@
   <form method="post" action="/captures/new"
         style="max-width:620px;display:flex;flex-direction:column;gap:var(--space-3)">
     <label style="display:flex;flex-direction:column;gap:var(--space-2)">
-      <span class="as-eyebrow">Video file path</span>
-      <input type="text" name="video_path" required autofocus
-             placeholder="~/Documents/clip.mp4"
-             value="{{ video_path or '' }}"
-             style="background:var(--surface-inset);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--space-3);font-family:var(--font-mono);font-size:13px;color:var(--fg-primary);outline:none">
+      <span class="as-eyebrow">Video file path(s) — one per line</span>
+      <textarea name="video_paths" rows="3" required autofocus
+                placeholder="~/Documents/clip.mp4"
+                style="background:var(--surface-inset);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--space-3);font-family:var(--font-mono);font-size:13px;color:var(--fg-primary);outline:none;resize:vertical">{{ video_paths or video_path or '' }}</textarea>
     </label>
     <p class="as-sub" style="font-size:11px;margin:0">
-      Absolute or <code>~</code>-relative path to a <code>.mp4</code>, <code>.mov</code>
-      or <code>.m4v</code> file on this machine. The capture is named
-      <code>&lt;date&gt;_&lt;filename&gt;</code>.
+      Absolute or <code>~</code>-relative path(s) to <code>.mp4</code>,
+      <code>.mov</code> or <code>.m4v</code> files on this machine. Multiple
+      lines combine into one multi-video capture (see CAPTURE-GUIDE). The
+      capture is named <code>&lt;date&gt;_&lt;first-filename&gt;</code>.
     </p>
     <div style="display:flex;gap:var(--space-2)">
       <button type="submit" class="as-btn primary">Start pipeline</button>

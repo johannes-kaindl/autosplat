@@ -75,12 +75,12 @@ def test_capture_detail_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
 
 
 def test_capture_new_form_returns_200(app: FastAPI) -> None:
-    """GET /captures/new renders the form — not shadowed by /{capture_id}."""
+    """GET /captures/new renders the multi-video form — not shadowed by /{capture_id}."""
     with TestClient(app) as client:
         response = client.get("/captures/new")
     assert response.status_code == 200
     assert "New capture" in response.text
-    assert 'name="video_path"' in response.text
+    assert 'name="video_paths"' in response.text
 
 
 def test_capture_new_submit_starts_job_and_redirects(app: FastAPI, tmp_path: Path) -> None:
@@ -191,6 +191,89 @@ def test_capture_detail_failed_shows_resume_button(app: FastAPI, tmp_path: Path)
     assert response.status_code == 200
     assert 'action="/captures/2026-05-22_failed_one/resume"' in response.text
     assert "Resume" in response.text
+
+
+def test_capture_new_submit_accepts_multiple_videos(app: FastAPI, tmp_path: Path) -> None:
+    """The form accepts a newline-separated list of paths in video_paths
+    and launches a single multi-video capture (NOT one job per video)."""
+    v1 = tmp_path / "pass_a.mp4"
+    v2 = tmp_path / "pass_b.mp4"
+    v1.write_bytes(b"\0")
+    v2.write_bytes(b"\0")
+
+    with (
+        TestClient(app) as client,
+        patch("autosplat.webui.jobs_runner._run_pipeline_thread") as mocked,
+    ):
+        response = client.post(
+            "/captures/new",
+            data={"video_paths": f"{v1}\n{v2}"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("_pass_a")
+    args = mocked.call_args.args
+    # Thread receives the videos list (3rd positional arg = videos; signature
+    # may have changed but the list-of-paths should be present somewhere).
+    assert any(arg == [v1, v2] for arg in args)
+
+
+def test_capture_new_submit_single_video_textbox_still_works(app: FastAPI, tmp_path: Path) -> None:
+    """Backwards-compat: the legacy single-line `video_path` field still
+    launches a single-video capture if no multi-line `video_paths` is given."""
+    video = tmp_path / "only.mp4"
+    video.write_bytes(b"\0")
+
+    with TestClient(app) as client, patch("autosplat.webui.jobs_runner._run_pipeline_thread"):
+        response = client.post(
+            "/captures/new",
+            data={"video_path": str(video)},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("_only")
+
+
+def test_capture_add_video_route_launches_job(app: FastAPI, tmp_path: Path) -> None:
+    """POST /captures/{id}/add-video kicks off an add-video job thread and
+    redirects to the capture detail page."""
+    capture_dir = tmp_path / "2026-05-22_first_pass"
+    capture_dir.mkdir()
+    new_video = tmp_path / "pass_b.mp4"
+    new_video.write_bytes(b"\0")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with (
+        TestClient(app) as client,
+        patch("autosplat.webui.jobs_runner._run_add_video_thread") as mocked,
+    ):
+        response = client.post(
+            "/captures/2026-05-22_first_pass/add-video",
+            data={"video_path": str(new_video)},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/captures/2026-05-22_first_pass"
+    mocked.assert_called_once()
+
+
+def test_capture_add_video_route_400_for_missing_video(app: FastAPI, tmp_path: Path) -> None:
+    """Pointing at a file that doesn't exist returns 400 with the form re-
+    rendered + an error message — not a 5xx from the worker."""
+    capture_dir = tmp_path / "2026-05-22_existing"
+    capture_dir.mkdir()
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/captures/2026-05-22_existing/add-video",
+            data={"video_path": str(tmp_path / "nope.mp4")},
+            follow_redirects=False,
+        )
+    assert response.status_code == 400
 
 
 def test_capture_detail_done_hides_resume_button(app: FastAPI, tmp_path: Path) -> None:

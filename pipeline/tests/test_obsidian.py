@@ -209,9 +209,7 @@ def test_filename_pattern_supports_capture_name(tmp_path: Path) -> None:
 
 
 def test_format_filename_helper_accepts_known_placeholders() -> None:
-    name = _format_filename(
-        "{capture_date}_{video_stem}_{capture_name}.md", _data()
-    )
+    name = _format_filename("{capture_date}_{video_stem}_{capture_name}.md", _data())
     assert name == "2026-05-14_bench_chill_2026-05-14_bench_chill.md"
 
 
@@ -228,8 +226,7 @@ def test_rewrite_preserves_user_tail(tmp_path: Path) -> None:
     # Simulate user edit: append free-form notes after the auto-block.
     existing = (vault / "3D Memories" / "2026-05-14 bench_chill.md").read_text()
     user_addition = (
-        existing
-        + "\n## My field notes\nGreat shot of the bench in low-angle sunlight.\n"
+        existing + "\n## My field notes\nGreat shot of the bench in low-angle sunlight.\n"
     )
     (vault / "3D Memories" / "2026-05-14 bench_chill.md").write_text(user_addition)
 
@@ -316,9 +313,7 @@ def test_rewrite_preserves_user_set_embed_url(tmp_path: Path) -> None:
 
     # User fills it in (manually editing the frontmatter — common smoke-test path)
     text = note_path.read_text()
-    user_edit = text.replace(
-        "embed_url: null", "embed_url: https://superspl.at/scene/abc123"
-    )
+    user_edit = text.replace("embed_url: null", "embed_url: https://superspl.at/scene/abc123")
     note_path.write_text(user_edit)
 
     # Re-run — data still has embed_url=None

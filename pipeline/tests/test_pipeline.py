@@ -13,6 +13,7 @@ import pytest
 from autosplat.config import load_config
 from autosplat.pipeline import (
     _make_capture_name,
+    add_video_to_capture,
     detect_completed_stages,
     read_source_video_from_log,
     resume_capture,
@@ -124,7 +125,11 @@ def test_detect_completed_stages_through_export(tmp_path: Path) -> None:
 
 
 def test_read_source_video_from_log_returns_video_path(tmp_path: Path) -> None:
-    """The first pipeline.start event in pipeline.log carries the source video."""
+    """The first pipeline.start event in pipeline.log carries the source video.
+
+    Always-list contract (v1.3.0+): even a single-video capture comes back
+    as a one-element list so callers don't have to branch on shape.
+    """
     capture_dir = tmp_path / "cap"
     capture_dir.mkdir()
     video = tmp_path / "input.mp4"
@@ -137,7 +142,7 @@ def test_read_source_video_from_log_returns_video_path(tmp_path: Path) -> None:
         '{"event": "preflight.passed", "level": "info"}\n',
         encoding="utf-8",
     )
-    assert read_source_video_from_log(capture_dir) == video
+    assert read_source_video_from_log(capture_dir) == [video]
 
 
 def test_read_source_video_from_log_missing_log(tmp_path: Path) -> None:
@@ -145,6 +150,115 @@ def test_read_source_video_from_log_missing_log(tmp_path: Path) -> None:
     capture_dir = tmp_path / "cap"
     capture_dir.mkdir()
     assert read_source_video_from_log(capture_dir) is None
+
+
+def test_read_source_video_from_log_returns_list_for_multi_video(tmp_path: Path) -> None:
+    """Multi-video captures log `videos: [...]` instead of `video: str`.
+    The reader returns every path so resume can re-feed the whole set."""
+    capture_dir = tmp_path / "cap"
+    capture_dir.mkdir()
+    v1 = tmp_path / "pass_a.mp4"
+    v2 = tmp_path / "pass_b.mp4"
+    v1.write_bytes(b"\0")
+    v2.write_bytes(b"\0")
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "videos": ["' + str(v1) + '", "' + str(v2) + '"]}\n',
+        encoding="utf-8",
+    )
+    result = read_source_video_from_log(capture_dir)
+    assert result == [v1, v2]
+
+
+def test_read_source_video_from_log_legacy_single_video_wraps_in_list(
+    tmp_path: Path,
+) -> None:
+    """Old single-video captures (pre-v1.3.0) only stored `video: str`. The
+    reader still wraps the result in a single-element list so the new caller
+    contract (always-list) holds."""
+    capture_dir = tmp_path / "cap"
+    capture_dir.mkdir()
+    video = tmp_path / "src.mp4"
+    video.write_bytes(b"\0")
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "video": "' + str(video) + '"}\n',
+        encoding="utf-8",
+    )
+    assert read_source_video_from_log(capture_dir) == [video]
+
+
+# ─── run_pipeline multi-video support ──────────────────────────────────────
+
+
+def test_run_pipeline_with_list_routes_to_multi_extractor(tmp_path: Path) -> None:
+    """When the videos param is a list of two paths, run_pipeline must dispatch
+    to extract_frames_from_many (not the single-video extract_frames) so per-
+    video prefixes are used."""
+    v1 = tmp_path / "pass_a.mp4"
+    v2 = tmp_path / "pass_b.mp4"
+    v1.write_bytes(b"\0")
+    v2.write_bytes(b"\0")
+    cfg = _cfg_with_viewer_target("none", obsidian_enabled=False, tmp_path=tmp_path)
+    fake_ply = _fake_ply(tmp_path)
+    patches = _mock_pipeline_stages(tmp_path, fake_ply)
+
+    with (
+        patch("autosplat.pipeline.preflight_mod.run_preflight", patches["preflight"]),
+        patch(
+            "autosplat.pipeline.preprocess_mod.extract_frames_from_many",
+            patches["preprocess"],
+        ) as multi_mock,
+        patch("autosplat.pipeline.preprocess_mod.extract_frames") as single_mock,
+        patch("autosplat.pipeline.sfm_mod.run_colmap", patches["sfm"]),
+        patch("autosplat.pipeline.quality_mod.check_sfm_quality", patches["quality"]),
+        patch("autosplat.pipeline.train_mod.run_brush", patches["train"]),
+        patch("autosplat.pipeline.export_mod.export_capture", patches["export"]),
+        patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
+    ):
+        run_pipeline([v1, v2], cfg, output_dir_override=tmp_path / "captures")
+
+    multi_mock.assert_called_once()
+    single_mock.assert_not_called()
+    args, _ = multi_mock.call_args
+    assert args[0] == [v1, v2]
+
+
+def test_run_pipeline_single_video_keeps_legacy_extractor(tmp_path: Path) -> None:
+    """Passing a single Path (the existing call shape) must still hit
+    extract_frames — backwards-compatible API for every existing caller."""
+    video = tmp_path / "single.mp4"
+    video.write_bytes(b"\0")
+    cfg = _cfg_with_viewer_target("none", obsidian_enabled=False, tmp_path=tmp_path)
+    fake_ply = _fake_ply(tmp_path)
+    patches = _mock_pipeline_stages(tmp_path, fake_ply)
+
+    with (
+        patch("autosplat.pipeline.preflight_mod.run_preflight", patches["preflight"]),
+        patch(
+            "autosplat.pipeline.preprocess_mod.extract_frames", patches["preprocess"]
+        ) as single_mock,
+        patch("autosplat.pipeline.preprocess_mod.extract_frames_from_many") as multi_mock,
+        patch("autosplat.pipeline.sfm_mod.run_colmap", patches["sfm"]),
+        patch("autosplat.pipeline.quality_mod.check_sfm_quality", patches["quality"]),
+        patch("autosplat.pipeline.train_mod.run_brush", patches["train"]),
+        patch("autosplat.pipeline.export_mod.export_capture", patches["export"]),
+        patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
+    ):
+        run_pipeline(video, cfg, output_dir_override=tmp_path / "captures")
+
+    single_mock.assert_called_once()
+    multi_mock.assert_not_called()
+
+
+def test_run_pipeline_capture_name_uses_first_video_for_multi(tmp_path: Path) -> None:
+    """capture_dir is named after the first video's stem when multiple are
+    given — predictable and human-readable."""
+    v1 = tmp_path / "first.mp4"
+    v2 = tmp_path / "second.mp4"
+    v1.write_bytes(b"\0")
+    v2.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    result = run_pipeline([v1, v2], cfg, output_dir_override=tmp_path / "captures", dry_run=True)
+    assert result.capture_name.endswith("_first")
 
 
 # ─── resume_capture — orchestrator for `autosplat resume` ──────────────────
@@ -175,7 +289,7 @@ def test_resume_capture_skips_completed_stages_and_targets_dir(
 
     assert result is success
     kwargs = mocked.call_args.kwargs
-    assert mocked.call_args.args[0] == video
+    assert mocked.call_args.args[0] == [video]
     assert kwargs["capture_dir_override"] == capture_dir
     assert kwargs["skip_stages"] == {"preprocess"}
 
@@ -198,7 +312,7 @@ def test_resume_capture_video_override_wins(tmp_path: Path) -> None:
     ) as mocked:
         resume_capture(capture_dir, cfg, video_override=new_video)
 
-    assert mocked.call_args.args[0] == new_video
+    assert mocked.call_args.args[0] == [new_video]
 
 
 def test_resume_capture_rejects_when_export_complete(tmp_path: Path) -> None:
@@ -232,6 +346,83 @@ def test_resume_capture_errors_without_video_source(tmp_path: Path) -> None:
     ):
         resume_capture(capture_dir, cfg)
 
+    mocked.assert_not_called()
+
+
+# ─── add_video_to_capture — extend an existing capture with another video ──
+
+
+def _capture_with_log(tmp_path: Path, name: str, existing_videos: list[Path]) -> Path:
+    capture_dir = tmp_path / name
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "colmap").mkdir()
+    (capture_dir / "training").mkdir()
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+    videos_field = ", ".join(f'"{v}"' for v in existing_videos)
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "videos": [' + videos_field + "]}\n",
+        encoding="utf-8",
+    )
+    return capture_dir
+
+
+def test_add_video_combines_existing_plus_new_and_wipes_stages(tmp_path: Path) -> None:
+    """add_video_to_capture reads existing sources from pipeline.log, appends
+    the new video, wipes the now-invalidated stage artifacts (frames + colmap +
+    training all need to be rebuilt with the larger frame set), and re-runs
+    the pipeline against the same capture_dir."""
+    v1 = tmp_path / "first.mp4"
+    v1.write_bytes(b"\0")
+    new_video = tmp_path / "second.mp4"
+    new_video.write_bytes(b"\0")
+    capture_dir = _capture_with_log(tmp_path, "2024-01-15_first", [v1])
+    cfg = load_config(include_xdg=False)
+
+    with patch(
+        "autosplat.pipeline.run_pipeline_with_adaptive_retry",
+        return_value=MagicMock(spec=["output_ply"]),
+    ) as mocked:
+        add_video_to_capture(capture_dir, new_video, cfg)
+
+    # Stages wiped before pipeline launch
+    assert not (capture_dir / "frames" / "frame_00001.jpg").exists()
+    # Pipeline called with both videos + the existing capture_dir
+    args, kwargs = mocked.call_args
+    assert args[0] == [v1, new_video]
+    assert kwargs["capture_dir_override"] == capture_dir
+
+
+def test_add_video_rejects_when_no_existing_sources_recorded(tmp_path: Path) -> None:
+    """A capture with no pipeline.log (or no recorded sources) can't have a
+    video appended — we'd lose context about which original videos to combine
+    with."""
+    capture_dir = tmp_path / "2024-01-15_bare"
+    capture_dir.mkdir()
+    new_video = tmp_path / "new.mp4"
+    new_video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+
+    with (
+        patch("autosplat.pipeline.run_pipeline_with_adaptive_retry") as mocked,
+        pytest.raises(ValueError, match="No existing source videos"),
+    ):
+        add_video_to_capture(capture_dir, new_video, cfg)
+    mocked.assert_not_called()
+
+
+def test_add_video_rejects_already_included_video(tmp_path: Path) -> None:
+    """Adding a video that's already in the capture's source list is almost
+    certainly a user mistake — abort instead of silently double-extracting."""
+    v1 = tmp_path / "v.mp4"
+    v1.write_bytes(b"\0")
+    capture_dir = _capture_with_log(tmp_path, "2024-01-15_cap", [v1])
+    cfg = load_config(include_xdg=False)
+
+    with (
+        patch("autosplat.pipeline.run_pipeline_with_adaptive_retry") as mocked,
+        pytest.raises(ValueError, match="already part"),
+    ):
+        add_video_to_capture(capture_dir, v1, cfg)
     mocked.assert_not_called()
 
 

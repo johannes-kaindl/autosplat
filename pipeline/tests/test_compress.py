@@ -73,9 +73,7 @@ def test_command_builder_input_then_output(tmp_path: Path) -> None:
 
 
 def test_command_builder_includes_iterations(tmp_path: Path) -> None:
-    cmd = build_compress_command(
-        _fake_backend(), tmp_path / "in.ply", tmp_path / "out.sog", "high"
-    )
+    cmd = build_compress_command(_fake_backend(), tmp_path / "in.ply", tmp_path / "out.sog", "high")
     idx = cmd.index("-i")
     assert cmd[idx + 1] == "30"  # high profile
 
@@ -88,17 +86,13 @@ def test_command_builder_includes_overwrite_flag(tmp_path: Path) -> None:
 
 
 def test_command_builder_filters_harmonics_for_low_quality(tmp_path: Path) -> None:
-    cmd = build_compress_command(
-        _fake_backend(), tmp_path / "in.ply", tmp_path / "out.sog", "low"
-    )
+    cmd = build_compress_command(_fake_backend(), tmp_path / "in.ply", tmp_path / "out.sog", "low")
     idx = cmd.index("-H")
     assert cmd[idx + 1] == "1"
 
 
 def test_command_builder_omits_harmonics_filter_for_high(tmp_path: Path) -> None:
-    cmd = build_compress_command(
-        _fake_backend(), tmp_path / "in.ply", tmp_path / "out.sog", "high"
-    )
+    cmd = build_compress_command(_fake_backend(), tmp_path / "in.ply", tmp_path / "out.sog", "high")
     assert "-H" not in cmd  # SH=3 preserved
 
 

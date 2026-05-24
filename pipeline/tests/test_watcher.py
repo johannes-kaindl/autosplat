@@ -453,9 +453,7 @@ def test_mark_done_prunes_completed_history(tmp_path: Path) -> None:
 def test_mark_failed_prunes_failed_history(tmp_path: Path) -> None:
     state = WatcherState(state_file=tmp_path / "state.json")
     for i in range(50):
-        state.failed.append(
-            FailedEntry(path=f"v{i}.mp4", failed_at="t", reason="x")
-        )
+        state.failed.append(FailedEntry(path=f"v{i}.mp4", failed_at="t", reason="x"))
     state.queue.append("/v51.mp4")
     state.pop_next()
     state.mark_failed("simulated", max_history=50)
@@ -514,9 +512,7 @@ def test_daemon_retries_quality_gate_failure(tmp_path: Path, monkeypatch) -> Non
         return {"output_ply": str(ply), "duration_s": 0.01}
 
     state = WatcherState(state_file=tmp_path / "state.json")
-    daemon = WatchDaemon(
-        folder, state, fake_process, retry_cfg=_retry_cfg(max_retries=3)
-    )
+    daemon = WatchDaemon(folder, state, fake_process, retry_cfg=_retry_cfg(max_retries=3))
     daemon.start(process_existing=True)
     try:
         assert daemon.wait_until_idle(timeout=10.0)
@@ -572,9 +568,7 @@ def test_load_pre_phase2_state(tmp_path: Path) -> None:
             {
                 "queue": ["q1.mp4"],
                 "in_progress": {"path": "ip.mp4", "stage": "training", "started": 1700000000.0},
-                "completed": [
-                    {"path": "old.mp4", "output_ply": "old.ply", "duration_s": 50.0}
-                ],
+                "completed": [{"path": "old.mp4", "output_ply": "old.ply", "duration_s": 50.0}],
             }
         ),
         encoding="utf-8",

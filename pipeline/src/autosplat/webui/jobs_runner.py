@@ -19,7 +19,7 @@ from typing import Literal
 
 from autosplat.config import Config
 from autosplat.logging import get_logger
-from autosplat.pipeline import resume_capture
+from autosplat.pipeline import add_video_to_capture, resume_capture
 from autosplat.watcher import _now_iso
 
 logger = get_logger(__name__)
@@ -226,16 +226,60 @@ class JobRunner:
         )
         return job
 
-    async def start_job_from_video(self, video: Path, cfg: Config) -> JobState:
-        """Start a pipeline run for a video that has no capture dir yet.
+    async def start_job_from_video(self, video: Path | list[Path], cfg: Config) -> JobState:
+        """Start a pipeline run for one or more videos that have no capture dir yet.
 
-        The capture id is derived exactly as run_pipeline derives it
-        (`<date>_<video-stem>`), so the JobState keys onto the capture
-        directory the pipeline will create.
+        `video` accepts either a single Path (legacy single-video flow) or a
+        list of Paths (multi-video capture, v1.3.0+). The capture id comes
+        from the first video's stem — keeps the directory naming predictable
+        when several passes are combined.
         """
         from autosplat.pipeline import _make_capture_name
 
-        capture_id = _make_capture_name(video)
+        videos = [video] if isinstance(video, Path) else list(video)
+        capture_id = _make_capture_name(videos[0])
+        async with self._lock:
+            existing = self._jobs.get(capture_id)
+            if existing and existing.status in ("queued", "running"):
+                await self.cancel_job(capture_id)
+
+            job = JobState(capture_id=capture_id, status="queued")
+            self._jobs[capture_id] = job
+            self._history.append(job)
+
+        job.status = "running"
+        # _run_pipeline_thread routes through run_pipeline_with_adaptive_retry,
+        # which already accepts Path | list[Path] — pass the list as-is for
+        # multi-video, or the single Path for the legacy call path.
+        thread_payload: Path | list[Path] = videos if len(videos) > 1 else videos[0]
+        thread = threading.Thread(
+            target=_run_pipeline_thread,
+            args=(job, thread_payload, cfg, self),
+            daemon=True,
+            name=f"autosplat-job-{capture_id}",
+        )
+        job._thread = thread
+        thread.start()
+        logger.info(
+            "job_runner.start_from_video",
+            capture_id=capture_id,
+            videos=[str(v) for v in videos],
+        )
+        return job
+
+    async def start_add_video_job(
+        self,
+        capture_id: str,
+        capture_path: Path,
+        new_video: Path,
+        cfg: Config,
+    ) -> JobState:
+        """Append `new_video` to an existing capture via add_video_to_capture.
+
+        Wipes frames/colmap/training under the hood, then re-runs the pipeline
+        with the combined video list — useful for rescuing rotation-heavy
+        captures with a second pass.
+        """
         async with self._lock:
             existing = self._jobs.get(capture_id)
             if existing and existing.status in ("queued", "running"):
@@ -247,14 +291,18 @@ class JobRunner:
 
         job.status = "running"
         thread = threading.Thread(
-            target=_run_pipeline_thread,
-            args=(job, video, cfg, self),
+            target=_run_add_video_thread,
+            args=(job, capture_path, new_video, cfg, self),
             daemon=True,
-            name=f"autosplat-job-{capture_id}",
+            name=f"autosplat-addvideo-{capture_id}",
         )
         job._thread = thread
         thread.start()
-        logger.info("job_runner.start_from_video", capture_id=capture_id, video=str(video))
+        logger.info(
+            "job_runner.start_add_video",
+            capture_id=capture_id,
+            new_video=str(new_video),
+        )
         return job
 
     async def cancel_job(self, capture_id: str) -> bool:
@@ -341,7 +389,58 @@ def _run_resume_thread(job: JobState, capture_path: Path, cfg: Config, runner: J
         )
 
 
-def _run_pipeline_thread(job: JobState, video: Path, cfg: Config, runner: JobRunner) -> None:
+def _run_add_video_thread(
+    job: JobState,
+    capture_path: Path,
+    new_video: Path,
+    cfg: Config,
+    runner: JobRunner,
+) -> None:
+    """Worker for start_add_video_job — invokes add_video_to_capture.
+    Same Popen-tracking + persistence pattern as the other two workers."""
+    import subprocess
+
+    try:
+        original_popen = subprocess.Popen
+
+        class _TrackingPopen(original_popen):  # type: ignore[valid-type,misc]
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                job._proc = self
+
+        subprocess.Popen = _TrackingPopen  # type: ignore[misc]
+        try:
+            result = add_video_to_capture(capture_path, new_video, cfg)
+        finally:
+            subprocess.Popen = original_popen  # type: ignore[misc]
+
+        if job.status == "cancelled":
+            return
+        job.status = "done"
+        job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
+        runner._persist_job(job)
+        job.append_log(f"Add-video complete: {result.output_ply}")
+        logger.info(
+            "job_runner.add_video_done",
+            capture_id=job.capture_id,
+            ply=str(result.output_ply),
+        )
+    except Exception as e:
+        if job.status == "cancelled":
+            return
+        job.status = "failed"
+        job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
+        job.error = str(e)
+        runner._persist_job(job)
+        job.append_log(f"Add-video failed: {e}")
+        logger.error("job_runner.add_video_failed", capture_id=job.capture_id, error=str(e))
+
+
+def _run_pipeline_thread(
+    job: JobState, video: Path | list[Path], cfg: Config, runner: JobRunner
+) -> None:
     """Execute run_pipeline in a background thread, updating job.status."""
     import subprocess
 

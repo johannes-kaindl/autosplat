@@ -87,13 +87,19 @@ def detect_completed_stages(capture_dir: Path) -> set[str]:
     return done
 
 
-def read_source_video_from_log(capture_dir: Path) -> Path | None:
-    """Recover the source video path from the capture's `pipeline.log`.
+def read_source_video_from_log(capture_dir: Path) -> list[Path] | None:
+    """Recover the source video paths from the capture's `pipeline.log`.
 
-    Scans for the first `pipeline.start` JSON event and returns its `video`
-    field as a Path. Returns None when the log is absent, no `pipeline.start`
-    event is present, or the recorded path field is missing — callers should
-    fall back to a user-supplied `--video` override.
+    Scans for the first `pipeline.start` JSON event and returns the recorded
+    sources as a list of Paths. Handles both schemas:
+
+      - v1.3.0+: `videos: [str, ...]` — multi-video captures
+      - legacy : `video: str` — single-video captures (pre-v1.3.0)
+
+    The single-video form is wrapped in a one-element list so callers don't
+    need to branch. Returns None when the log is absent, no `pipeline.start`
+    event is present, or neither field is set — callers must then fall back
+    to a user-supplied `--video` override.
     """
     log_path = capture_dir / "pipeline.log"
     if not log_path.is_file():
@@ -107,13 +113,19 @@ def read_source_video_from_log(capture_dir: Path) -> Path | None:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if event.get("event") == "pipeline.start" and event.get("video"):
-            return Path(event["video"])
+        if event.get("event") != "pipeline.start":
+            continue
+        multi = event.get("videos")
+        if isinstance(multi, list) and multi:
+            return [Path(v) for v in multi]
+        single = event.get("video")
+        if single:
+            return [Path(single)]
     return None
 
 
 def run_pipeline(
-    video: Path,
+    video: Path | list[Path],
     config: Config,
     *,
     output_dir_override: Path | None = None,
@@ -123,7 +135,13 @@ def run_pipeline(
     config_override: dict | None = None,
     state: WatcherState | None = None,
 ) -> PipelineResult:
-    """Run the full pipeline on a single video.
+    """Run the full pipeline on one or more source videos.
+
+    `video` accepts either a single Path (legacy single-video call) or a list
+    of Paths (multi-video capture — frames from each video go into the same
+    capture_dir with per-video prefixes, then SfM solves the combined set).
+    Multi-video is the v1.3.0 rescue path for rotation-heavy footage that a
+    single pass can't reconstruct on its own.
 
     Stages are idempotent — re-running on the same capture-dir should resume
     where stages have already produced their outputs.
@@ -134,6 +152,7 @@ def run_pipeline(
     `capture_dir_override`, when given, adopts the existing capture directory
     instead of computing `<today>_<video.stem>`. Used by `autosplat resume`
     to continue a previous (possibly cross-day) run without renaming its dir.
+    For multi-video captures, the capture_name comes from the *first* video.
 
     `state`, when given, is a WatcherState the pipeline reports progress into:
     in_progress at start, the stage on each transition, and a completed entry on
@@ -142,6 +161,10 @@ def run_pipeline(
     in_progress entry is left intact (stage = the failing stage) for the caller
     to resolve (retry vs. mark_failed).
     """
+    videos: list[Path] = [video] if isinstance(video, Path) else list(video)
+    if not videos:
+        raise ValueError("run_pipeline requires at least one video")
+
     if config_override:
         config = apply_override(config, config_override)
         logger.info("pipeline.config_override_applied", override=config_override)
@@ -151,14 +174,16 @@ def run_pipeline(
     if unknown:
         raise ValueError(f"Unknown stages to skip: {unknown}")
 
-    if not video.exists():
-        raise FileNotFoundError(f"Video not found: {video}")
+    for v in videos:
+        if not v.exists():
+            raise FileNotFoundError(f"Video not found: {v}")
 
+    primary_video = videos[0]
     if capture_dir_override is not None:
         capture_dir = capture_dir_override
         capture_name = capture_dir.name
     else:
-        capture_name = _make_capture_name(video)
+        capture_name = _make_capture_name(primary_video)
         captures_root = output_dir_override or config.paths.captures_dir
         capture_dir = captures_root / capture_name
 
@@ -179,7 +204,7 @@ def run_pipeline(
         "pipeline.start",
         capture_name=capture_name,
         capture_dir=str(capture_dir),
-        video=str(video),
+        videos=[str(v) for v in videos],
         skip=list(skip),
         dry_run=dry_run,
     )
@@ -197,23 +222,27 @@ def run_pipeline(
     t0 = time.monotonic()
 
     if state is not None:
-        state.begin(capture_dir, source_video=video)
+        state.begin(capture_dir, source_video=primary_video)
         state.update_stage("preflight")
 
     # ── Pre-flight (Phase 6 / Spec §5 + §9.2) ──────────────────────────
     # ffprobe-validate + duration/resolution/fps plausibility. Fails fast
     # on corrupt or implausible inputs before any extraction work.
-    preflight_mod.run_preflight(video)
+    for v in videos:
+        preflight_mod.run_preflight(v)
 
     # ── Preprocess ─────────────────────────────────────────────────────
     if state is not None:
         state.update_stage("preprocess")
     if "preprocess" in skip:
-        kept = len(list(frames_dir.glob("frame_*.jpg")))
+        kept = len(list(frames_dir.glob("*frame_*.jpg")))
         extracted = kept
         logger.info("pipeline.skip", stage="preprocess", kept=kept)
     else:
-        pp = preprocess_mod.extract_frames(video, frames_dir, config.preprocess)
+        if len(videos) > 1:
+            pp = preprocess_mod.extract_frames_from_many(videos, frames_dir, config.preprocess)
+        else:
+            pp = preprocess_mod.extract_frames(primary_video, frames_dir, config.preprocess)
         extracted = pp.extracted_count
         kept = pp.kept_count
 
@@ -316,7 +345,7 @@ def run_pipeline(
         from . import notification as notif_mod
 
         notif_mod.notify_training_complete(
-            capture_name=_make_capture_name(video),
+            capture_name=capture_name,
             duration_s=training_duration,
         )
 
@@ -330,7 +359,7 @@ def run_pipeline(
         candidate_ply,
         config.export,
         capture_name=capture_name,
-        source_video=video,
+        source_video=primary_video,
         frames_extracted=extracted,
         frames_kept=kept,
         colmap_cameras_registered=cams,
@@ -377,8 +406,8 @@ def run_pipeline(
         note_data = obsidian_mod.CaptureNoteData(
             capture_date=date.today().isoformat(),
             capture_name=capture_name,
-            source_video=str(video),
-            video_stem=video.stem,
+            source_video=", ".join(str(v) for v in videos),
+            video_stem=primary_video.stem,
             frame_count_extracted=extracted,
             frame_count_kept=kept,
             cameras_registered=cams,
@@ -411,7 +440,7 @@ def run_pipeline(
 
 
 def run_pipeline_with_adaptive_retry(
-    video: Path,
+    video: Path | list[Path],
     config: Config,
     *,
     output_dir_override: Path | None = None,
@@ -443,8 +472,9 @@ def run_pipeline_with_adaptive_retry(
     if capture_dir_override is not None:
         capture_dir = capture_dir_override
     else:
+        primary = video if isinstance(video, Path) else video[0]
         captures_root = output_dir_override or config.paths.captures_dir
-        capture_dir = captures_root / _make_capture_name(video)
+        capture_dir = captures_root / _make_capture_name(primary)
 
     attempts = 0
     while True:
@@ -500,8 +530,11 @@ def resume_capture(
     (output/scene.ply present) — the user is meant to delete the output
     and start over in that case, not silently redo everything.
     """
-    video = video_override or read_source_video_from_log(capture_dir)
-    if video is None:
+    if video_override is not None:
+        videos: list[Path] | None = [video_override]
+    else:
+        videos = read_source_video_from_log(capture_dir)
+    if not videos:
         raise ValueError(
             f"Cannot resume {capture_dir}: no source video recorded in "
             "pipeline.log — pass --video to point at the original file."
@@ -515,9 +548,54 @@ def resume_capture(
         )
 
     return run_pipeline_with_adaptive_retry(
-        video,
+        videos,
         config,
         capture_dir_override=capture_dir,
         skip_stages=completed or None,
+        state=state,
+    )
+
+
+def add_video_to_capture(
+    capture_dir: Path,
+    new_video: Path,
+    config: Config,
+    *,
+    state: WatcherState | None = None,
+) -> PipelineResult:
+    """Append a video to an existing capture and re-solve the combined set.
+
+    Workflow: read the existing source videos from pipeline.log, validate the
+    new addition isn't already there, wipe the now-stale stage artifacts
+    (frames/, colmap/, training/ — all need rebuilding with the larger frame
+    set), then run the full pipeline against the same capture_dir with the
+    combined video list.
+
+    This deliberately re-extracts all frames (including from the original
+    video) so the multi-video naming scheme is consistent. The cost is one
+    extra preprocess run; the gain is no special-case migration logic for
+    mixed bare/prefixed frame names.
+
+    Refuses when the capture has no recorded sources (pipeline.log missing
+    or schema-empty) or when `new_video` is already part of the capture.
+    """
+    existing = read_source_video_from_log(capture_dir)
+    if not existing:
+        raise ValueError(
+            f"No existing source videos recorded in {capture_dir}/pipeline.log — "
+            "cannot extend a capture whose origin is unknown."
+        )
+    if new_video in existing:
+        raise ValueError(f"{new_video.name} is already part of this capture's source list.")
+
+    for sub in ("frames", "colmap", "training"):
+        stale = capture_dir / sub
+        if stale.exists():
+            shutil.rmtree(stale)
+
+    return run_pipeline_with_adaptive_retry(
+        [*existing, new_video],
+        config,
+        capture_dir_override=capture_dir,
         state=state,
     )

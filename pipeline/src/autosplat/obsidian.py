@@ -34,7 +34,9 @@ logger = get_logger(__name__)
 
 # Markers framing the auto-generated body region. Anything OUTSIDE these markers
 # is treated as user-editable and preserved on re-run.
-AUTO_BLOCK_START = "<!-- AUTO-GENERATED:START — managed by autosplat, do not edit between markers -->"
+AUTO_BLOCK_START = (
+    "<!-- AUTO-GENERATED:START — managed by autosplat, do not edit between markers -->"
+)
 AUTO_BLOCK_END = "<!-- AUTO-GENERATED:END -->"
 _AUTO_RE = re.compile(
     re.escape(AUTO_BLOCK_START) + r".*?" + re.escape(AUTO_BLOCK_END),
@@ -43,22 +45,24 @@ _AUTO_RE = re.compile(
 
 # Phase 8 B6: keys we (Cowork) own and re-write on every run. Anything else
 # in the existing frontmatter is treated as user-added and preserved.
-_COWORK_MANAGED_KEYS = frozenset({
-    "type",
-    "captured",
-    "source",
-    "frames_extracted",
-    "frames_kept",
-    "cameras_registered",
-    "points3d",
-    "gaussians",
-    "sh_degree",
-    "training_duration_s",
-    "total_duration_s",
-    "output_ply",
-    "output_ply_size_bytes",
-    "tags",
-})
+_COWORK_MANAGED_KEYS = frozenset(
+    {
+        "type",
+        "captured",
+        "source",
+        "frames_extracted",
+        "frames_kept",
+        "cameras_registered",
+        "points3d",
+        "gaussians",
+        "sh_degree",
+        "training_duration_s",
+        "total_duration_s",
+        "output_ply",
+        "output_ply_size_bytes",
+        "tags",
+    }
+)
 
 # Keys we generate but won't overwrite an existing non-null user value.
 # This is the "user filled in embed_url after Cowork wrote null" case.
@@ -81,9 +85,7 @@ def _parse_existing_frontmatter(content: str) -> dict[str, Any]:
         return {}
 
 
-def _merge_frontmatter(
-    new_fm: dict[str, Any], existing_fm: dict[str, Any]
-) -> dict[str, Any]:
+def _merge_frontmatter(new_fm: dict[str, Any], existing_fm: dict[str, Any]) -> dict[str, Any]:
     """Phase 8 B6 merge policy.
 
     Rules:
@@ -133,9 +135,7 @@ class CaptureNoteData(BaseModel):
     output_ply: str
     output_ply_size_bytes: int
     embed_url: str | None = None
-    tags: list[str] = Field(
-        default_factory=lambda: ["3d-memory", "gaussian-splat", "auto-splat"]
-    )
+    tags: list[str] = Field(default_factory=lambda: ["3d-memory", "gaussian-splat", "auto-splat"])
     frontmatter_type: str = "capture"
 
     @field_validator("capture_date")
@@ -372,9 +372,7 @@ def write_capture_note(
         # The default tail (the `## Notes …` section we write) becomes the user tail.
         # Trim everything after END in new_content and replace with preserved tail.
         cutoff = new_content.find(AUTO_BLOCK_END)
-        new_content = (
-            new_content[: cutoff + len(AUTO_BLOCK_END)] + "\n\n" + preserved_tail.lstrip()
-        )
+        new_content = new_content[: cutoff + len(AUTO_BLOCK_END)] + "\n\n" + preserved_tail.lstrip()
 
     note_path.write_text(new_content, encoding="utf-8")
     logger.info(

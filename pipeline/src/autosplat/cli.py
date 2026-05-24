@@ -28,6 +28,7 @@ from .config import XDG_CONFIG_PATH, apply_override, dump_default_config, load_c
 from .doctor import all_required_passed, run_doctor
 from .logging import configure_logging, get_logger
 from .pipeline import (
+    add_video_to_capture,
     detect_completed_stages,
     resume_capture,
     run_pipeline,
@@ -83,7 +84,12 @@ def _find_ply(capture_dir: Path) -> Path | None:
 
 @app.command()
 def process(
-    video: Path = typer.Argument(..., exists=False, help="Path to the video file."),
+    videos: list[Path] = typer.Argument(
+        ...,
+        exists=False,
+        help="Path to one or more video files. Multiple paths produce a single "
+        "multi-video capture (frames from each are combined for SfM).",
+    ),
     config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
     output_dir: Path | None = typer.Option(
         None, "--output-dir", "-o", help="Override captures_dir."
@@ -99,10 +105,17 @@ def process(
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print plan, do not run."),
 ) -> None:
-    """Run the full pipeline once on a single video."""
-    if not video.exists():
-        err_console.print(f"[red]Video not found:[/red] {video}")
-        raise typer.Exit(EXIT_USER_ERROR)
+    """Run the full pipeline on one or more videos.
+
+    Single video: classic capture-from-one-pass.
+    Multiple videos: each is preprocessed with a per-source prefix, then COLMAP
+    solves the combined frame set — useful for rescuing rotation-heavy footage
+    that can't be reconstructed from a single pass (see docs/CAPTURE-GUIDE.md).
+    """
+    for v in videos:
+        if not v.exists():
+            err_console.print(f"[red]Video not found:[/red] {v}")
+            raise typer.Exit(EXIT_USER_ERROR)
 
     cfg = _load_or_die(config)
     if target_frames is not None:
@@ -113,7 +126,7 @@ def process(
     state = WatcherState.load()
     try:
         result = run_pipeline_with_adaptive_retry(
-            video,
+            videos if len(videos) > 1 else videos[0],
             cfg,
             output_dir_override=output_dir,
             skip_stages=set(skip_stage) if skip_stage else None,
@@ -178,6 +191,47 @@ def resume(
         result = resume_capture(capture_dir, cfg, video_override=video, state=state)
     except ValueError as e:
         err_console.print(f"[red]Cannot resume:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except FileNotFoundError as e:
+        err_console.print(f"[red]Missing input:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except Exception as e:
+        if state.in_progress is not None:
+            state.mark_failed(reason=str(e), stage=state.in_progress.stage)
+        err_console.print(f"[red]Pipeline failure:[/red] {e}")
+        raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
+
+    console.print(f"[green]Done:[/green] {result.output_ply}")
+    console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
+    console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+
+
+@app.command("add-video")
+def add_video(
+    capture_dir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, help="Capture directory to extend."
+    ),
+    video: Path = typer.Argument(
+        ..., exists=True, help="Additional source video to combine into this capture."
+    ),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
+) -> None:
+    """Append another video to an existing capture and rebuild SfM/training.
+
+    Useful for rescuing rotation-heavy captures that didn't reconstruct from
+    a single pass — shoot a second pass with more translation and combine
+    the two into one capture. Reads the existing capture's source video(s)
+    from pipeline.log, wipes frames/colmap/training, then re-runs the full
+    pipeline with the combined video list (see docs/CAPTURE-GUIDE.md).
+    """
+    cfg = _load_or_die(config)
+    configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+
+    state = WatcherState.load()
+    try:
+        result = add_video_to_capture(capture_dir, video, cfg, state=state)
+    except ValueError as e:
+        err_console.print(f"[red]Cannot add video:[/red] {e}")
         raise typer.Exit(EXIT_USER_ERROR) from e
     except FileNotFoundError as e:
         err_console.print(f"[red]Missing input:[/red] {e}")

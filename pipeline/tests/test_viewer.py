@@ -92,7 +92,6 @@ def test_open_in_viewer_supersplat_local_no_browser(tmp_path: Path) -> None:
     mock_open.assert_not_called()
 
 
-
 def test_open_in_viewer_auto_open_false_no_browser(tmp_path: Path) -> None:
     ply = tmp_path / "scene.ply"
     ply.write_bytes(b"ply")
@@ -223,6 +222,7 @@ def test_serve_supersplat_local_yields_both_urls(tmp_path: Path) -> None:
     (ply_dir / "scene.ply").write_bytes(b"ply\n")
 
     from autosplat.viewer import serve_supersplat_local
+
     with serve_supersplat_local(dist, 0, ply_dir, 0) as urls:
         # port 0 = OS-assigned; servers are running
         assert "supersplat" in urls
@@ -234,6 +234,7 @@ def test_serve_supersplat_local_yields_both_urls(tmp_path: Path) -> None:
 def test_find_ply_direct(tmp_path: Path) -> None:
     (tmp_path / "scene.ply").write_bytes(b"ply\n")
     from autosplat.cli import _find_ply
+
     assert _find_ply(tmp_path) == tmp_path / "scene.ply"
 
 
@@ -241,9 +242,11 @@ def test_find_ply_in_output_subdir(tmp_path: Path) -> None:
     (tmp_path / "output").mkdir()
     (tmp_path / "output" / "scene.ply").write_bytes(b"ply\n")
     from autosplat.cli import _find_ply
+
     assert _find_ply(tmp_path) == tmp_path / "output" / "scene.ply"
 
 
 def test_find_ply_not_found(tmp_path: Path) -> None:
     from autosplat.cli import _find_ply
+
     assert _find_ply(tmp_path) is None

@@ -53,10 +53,10 @@ class VideoProbe:
 # Plausibility thresholds — chosen wide enough that any "normal drone clip"
 # passes. Tighten only if a workflow produces consistent garbage at edges.
 MIN_DURATION_S = 3.0
-MAX_DURATION_S = 600.0   # 10 min
-MIN_RESOLUTION = 720      # min(width, height) — drops 480p, keeps 720p+
-MIN_FPS = 23.0            # cinema 24, NTSC 23.976
-MAX_FPS = 120.0           # high-speed phones cap here
+MAX_DURATION_S = 600.0  # 10 min
+MIN_RESOLUTION = 720  # min(width, height) — drops 480p, keeps 720p+
+MIN_FPS = 23.0  # cinema 24, NTSC 23.976
+MAX_FPS = 120.0  # high-speed phones cap here
 
 
 def probe_video(video: Path) -> VideoProbe:
@@ -68,18 +68,21 @@ def probe_video(video: Path) -> VideoProbe:
         )
 
     cmd = [
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name,width,height,r_frame_rate:format=duration",
-        "-of", "json",
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_name,width,height,r_frame_rate:format=duration",
+        "-of",
+        "json",
         str(video),
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except subprocess.TimeoutExpired as e:
-        raise PreflightFailure(
-            "ffprobe_timeout", f"ffprobe took >30 s on {video}"
-        ) from e
+        raise PreflightFailure("ffprobe_timeout", f"ffprobe took >30 s on {video}") from e
 
     if result.returncode != 0:
         raise PreflightFailure(
@@ -149,9 +152,7 @@ def run_preflight(video: Path) -> VideoProbe:
     can be tested in isolation.
     """
     if not video.exists():
-        raise PreflightFailure(
-            "video_missing", f"file not found: {video}"
-        )
+        raise PreflightFailure("video_missing", f"file not found: {video}")
 
     probe = probe_video(video)
     check_plausibility(probe)

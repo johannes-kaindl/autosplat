@@ -59,9 +59,7 @@ class BrushOOMError(RuntimeError):
     def __init__(self, resolution_cap_attempted: int, tail: str):
         self.resolution_cap_attempted = resolution_cap_attempted
         self.tail = tail
-        super().__init__(
-            f"Brush OOM at resolution_cap={resolution_cap_attempted}. Tail:\n{tail}"
-        )
+        super().__init__(f"Brush OOM at resolution_cap={resolution_cap_attempted}. Tail:\n{tail}")
 
 
 def _looks_like_oom(text: str) -> bool:
@@ -182,9 +180,7 @@ def run_brush(
     staging_dir = output_dir.parent / "brush_dataset"
     dataset_root = stage_dataset(frames_dir, sparse_dir, staging_dir)
 
-    cmd = build_brush_command(
-        brush_binary, dataset_root, output_dir, cfg, export_name=export_name
-    )
+    cmd = build_brush_command(brush_binary, dataset_root, output_dir, cfg, export_name=export_name)
     eta_s = estimate_wall_time_s(cfg)
     logger.info(
         "train.brush.start",
@@ -245,6 +241,7 @@ def run_brush(
         # Final 100% tick so the bar lands clean.
         if progress_callback is not None:
             import contextlib
+
             with contextlib.suppress(Exception):
                 progress_callback(time.monotonic() - t0, 1.0)
 

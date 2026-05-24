@@ -29,9 +29,7 @@ XDG_CONFIG_PATH = Path("~/.config/autosplat/config.toml").expanduser()
 class PathsConfig(BaseModel):
     """Filesystem roots for the pipeline's runtime artefacts."""
 
-    captures_dir: Path = Field(
-        description="Per-capture working dirs (frames, sparse, training)."
-    )
+    captures_dir: Path = Field(description="Per-capture working dirs (frames, sparse, training).")
     watch_folder: Path = Field(
         description="Default inbox for `autosplat watch`. Files dropped here are auto-processed."
     )
@@ -49,13 +47,14 @@ class PreprocessConfig(BaseModel):
     """ffmpeg keyframe extraction + Laplacian blur filter."""
 
     target_frames: int = Field(
-        ge=10, le=10_000,
+        ge=10,
+        le=10_000,
         description="Keyframe count target. Clamped by min_frame_distance_sec.",
     )
     blur_threshold: float = Field(
         ge=0.0,
         description="Laplacian-variance floor. Frames below are dropped. "
-                    "100 = strict (calibrated for slow passes); 25-50 for fast orbits.",
+        "100 = strict (calibrated for slow passes); 25-50 for fast orbits.",
     )
     min_frame_distance_sec: float = Field(
         ge=0.0,
@@ -68,7 +67,7 @@ class ColmapConfig(BaseModel):
 
     matcher: Literal["sequential", "exhaustive", "spatial", "vocab_tree"] = Field(
         description="Frame-pair matching strategy. sequential is fastest for video; "
-                    "exhaustive is the Phase-3 retry fallback.",
+        "exhaustive is the Phase-3 retry fallback.",
     )
     quality: Literal["low", "medium", "high"] = Field(
         description="Preset for SIFT feature count + max image size.",
@@ -90,7 +89,8 @@ class BrushConfig(BaseModel):
         description="Max image dimension Brush trains on. Mapped to --max-resolution.",
     )
     sh_degree: int = Field(
-        ge=0, le=4,
+        ge=0,
+        le=4,
         description="Spherical-harmonic degree. 0=ambient only, 3=full view-dependent.",
     )
     densify_until_iter: int = Field(
@@ -112,9 +112,7 @@ class ExportConfig(BaseModel):
     copy_to_outputs: bool = Field(
         description="If true, also copies final PLY to outputs_dir/<capture>/."
     )
-    outputs_dir: Path = Field(
-        description="User-facing output root, distinct from captures_dir."
-    )
+    outputs_dir: Path = Field(description="User-facing output root, distinct from captures_dir.")
 
     @field_validator("outputs_dir", mode="before")
     @classmethod
@@ -127,7 +125,8 @@ class ViewerConfig(BaseModel):
 
     auto_open: bool = Field(description="Skip the auto-open if false.")
     local_http_port: int = Field(
-        ge=1024, le=65535,
+        ge=1024,
+        le=65535,
         description="Local server port serving the PLY to the viewer.",
     )
     target: Literal["supersplat", "supersplat-local", "playcanvas", "none"] = Field(
@@ -155,9 +154,7 @@ class ObsidianConfig(BaseModel):
     enabled: bool = Field(
         description="Master switch. False by default — no notes written.",
     )
-    vault_path: Path = Field(
-        description="Absolute path to your Obsidian vault root."
-    )
+    vault_path: Path = Field(description="Absolute path to your Obsidian vault root.")
     captures_subdir: str = Field(
         description="Subdir inside vault for auto-generated capture notes.",
     )
@@ -206,11 +203,14 @@ class QualityGateConfig(BaseModel):
         description="Disable to let Brush run on any SfM output (wastes compute on bad ones).",
     )
     min_camera_ratio: float = Field(
-        default=0.5, ge=0.0, le=1.0,
+        default=0.5,
+        ge=0.0,
+        le=1.0,
         description="Minimum cameras_registered / frames_kept ratio.",
     )
     min_points: int = Field(
-        default=5000, ge=0,
+        default=5000,
+        ge=0,
         description="Minimum sparse-cloud point count.",
     )
 
@@ -223,7 +223,9 @@ class RetryConfig(BaseModel):
         description="Disable to fail-fast on every error (no retries).",
     )
     max_retries: int = Field(
-        default=3, ge=1, le=10,
+        default=3,
+        ge=1,
+        le=10,
         description="Maximum total attempts per capture, including the first try.",
     )
 
@@ -232,7 +234,8 @@ class StatusConfig(BaseModel):
     """state.json pruning to keep file size bounded."""
 
     max_history: int = Field(
-        default=50, ge=1,
+        default=50,
+        ge=1,
         description="FIFO cap for completed + failed entries.",
     )
 
@@ -293,9 +296,7 @@ def load_config(
 ) -> Config:
     """Load and merge config from defaults → XDG → explicit user path."""
     if not PACKAGED_DEFAULT_CONFIG.exists():
-        raise FileNotFoundError(
-            f"Packaged default config missing at {PACKAGED_DEFAULT_CONFIG}"
-        )
+        raise FileNotFoundError(f"Packaged default config missing at {PACKAGED_DEFAULT_CONFIG}")
 
     merged = _load_toml(PACKAGED_DEFAULT_CONFIG)
 

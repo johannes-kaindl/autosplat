@@ -58,31 +58,59 @@ async def capture_new_form(request: Request) -> HTMLResponse:
     )
 
 
-@router.post("/new")
-async def capture_new_submit(request: Request, video_path: str = Form(...)) -> Response:
-    """Validate the submitted video path and launch a new pipeline run."""
-    raw = video_path.strip()
-    video = Path(raw).expanduser()
-    error: str | None = None
-    if not raw:
-        error = "Please enter a video file path."
-    elif not video.is_file():
-        error = f"No file found at: {video}"
-    elif video.suffix.lower() not in {".mp4", ".mov", ".m4v"}:
-        error = f"Unsupported file type '{video.suffix}' — use .mp4, .mov or .m4v."
+_VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v"}
 
+
+def _validate_video_paths(raw_paths: list[str]) -> tuple[list[Path], str | None]:
+    """Parse and validate a list of user-supplied paths. Returns (videos, error)."""
+    cleaned = [p.strip() for p in raw_paths if p.strip()]
+    if not cleaned:
+        return [], "Please enter at least one video file path."
+    videos: list[Path] = []
+    for raw in cleaned:
+        v = Path(raw).expanduser()
+        if not v.is_file():
+            return [], f"No file found at: {v}"
+        if v.suffix.lower() not in _VIDEO_SUFFIXES:
+            return [], f"Unsupported file type '{v.suffix}' — use .mp4, .mov or .m4v."
+        videos.append(v)
+    return videos, None
+
+
+@router.post("/new")
+async def capture_new_submit(
+    request: Request,
+    video_path: str = Form(""),
+    video_paths: str = Form(""),
+) -> Response:
+    """Validate the submitted video path(s) and launch a new pipeline run.
+
+    `video_paths` (newline-separated, multi-video) takes precedence over the
+    legacy single-line `video_path` so v1.2.0 forms still work unchanged.
+    """
+    raw_lines = (
+        [line for line in video_paths.splitlines() if line.strip()]
+        if video_paths.strip()
+        else [video_path]
+    )
+    videos, error = _validate_video_paths(raw_lines)
     if error is not None:
         return _templates(request).TemplateResponse(
             request,
             "capture/new.html",
-            {"version": __version__, "error": error, "video_path": raw},
+            {
+                "version": __version__,
+                "error": error,
+                "video_paths": video_paths or video_path,
+            },
             status_code=400,
         )
 
     job_runner = getattr(request.app.state, "job_runner", None)
     if job_runner is None:
         raise HTTPException(status_code=503, detail="Job runner not available")
-    job = await job_runner.start_job_from_video(video, request.app.state.cfg)
+    payload: Path | list[Path] = videos if len(videos) > 1 else videos[0]
+    job = await job_runner.start_job_from_video(payload, request.app.state.cfg)
     return RedirectResponse(url=f"/captures/{job.capture_id}", status_code=303)
 
 
@@ -170,6 +198,56 @@ async def capture_process(request: Request, capture_id: str) -> RedirectResponse
     job_runner = getattr(request.app.state, "job_runner", None)
     if job_runner is not None:
         await job_runner.start_job(capture_id, capture.path, request.app.state.cfg)
+    return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+@router.post("/{capture_id}/add-video")
+async def capture_add_video(
+    request: Request,
+    capture_id: str,
+    video_path: str = Form(...),
+) -> Response:
+    """Append another source video to an existing capture and rebuild.
+
+    Same `add_video_to_capture` machinery as the `autosplat add-video` CLI,
+    just wrapped in a JobRunner thread so the request returns immediately.
+    """
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+
+    raw = video_path.strip()
+    video = Path(raw).expanduser() if raw else None
+    error: str | None = None
+    if not raw:
+        error = "Please enter a video file path."
+    elif video is None or not video.is_file():
+        error = f"No file found at: {video}"
+    elif video.suffix.lower() not in _VIDEO_SUFFIXES:
+        error = f"Unsupported file type '{video.suffix}' — use .mp4, .mov or .m4v."
+
+    if error is not None:
+        # Re-render the detail page with an error banner instead of redirecting,
+        # so the user keeps the form state and immediately sees what to fix.
+        log_lines: list[str] = []
+        return _templates(request).TemplateResponse(
+            request,
+            "capture/detail.html",
+            {
+                "version": __version__,
+                "capture": capture,
+                "log_lines": log_lines,
+                "add_video_error": error,
+                "add_video_path": raw,
+            },
+            status_code=400,
+        )
+
+    job_runner = getattr(request.app.state, "job_runner", None)
+    if job_runner is None:
+        raise HTTPException(status_code=503, detail="Job runner not available")
+    await job_runner.start_add_video_job(capture_id, capture.path, video, request.app.state.cfg)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
 

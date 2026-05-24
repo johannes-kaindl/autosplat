@@ -165,9 +165,7 @@ def test_brush_oom_error_carries_resolution_cap(tmp_path: Path) -> None:
 
 
 def test_estimate_wall_time_scales_with_steps() -> None:
-    cfg_5k = BrushConfig(
-        max_steps=5000, resolution_cap=1600, sh_degree=3, densify_until_iter=2500
-    )
+    cfg_5k = BrushConfig(max_steps=5000, resolution_cap=1600, sh_degree=3, densify_until_iter=2500)
     cfg_30k = BrushConfig(
         max_steps=30000, resolution_cap=1600, sh_degree=3, densify_until_iter=15000
     )
@@ -180,9 +178,7 @@ def test_estimate_wall_time_calibrated_against_bench_chill() -> None:
     """bench_chill ran 5000 steps at resolution_cap=1600 in 282 s real.
     Heuristic should land within 2× of that — under-estimating is OK,
     massively over-estimating is not."""
-    cfg = BrushConfig(
-        max_steps=5000, resolution_cap=1600, sh_degree=3, densify_until_iter=2500
-    )
+    cfg = BrushConfig(max_steps=5000, resolution_cap=1600, sh_degree=3, densify_until_iter=2500)
     est = estimate_wall_time_s(cfg)
     # Real was 282 s; heuristic produces 5000 * 80 ms = 400 s. Within 2×.
     assert 140 < est < 600
@@ -191,9 +187,7 @@ def test_estimate_wall_time_calibrated_against_bench_chill() -> None:
 def test_estimate_wall_time_scales_with_resolution() -> None:
     """Higher resolution → longer wall-time. Heuristic floors at 0.3× so
     very-low-resolution doesn't go to zero, hence the wide tolerance."""
-    cfg_low = BrushConfig(
-        max_steps=10000, resolution_cap=800, sh_degree=3, densify_until_iter=5000
-    )
+    cfg_low = BrushConfig(max_steps=10000, resolution_cap=800, sh_degree=3, densify_until_iter=5000)
     cfg_high = BrushConfig(
         max_steps=10000, resolution_cap=1600, sh_degree=3, densify_until_iter=5000
     )
