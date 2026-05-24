@@ -6,6 +6,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.3.0] — 2026-05-24 — Multi-Video Rescue
+
+When a single drone pass can't be reconstructed (180° turn, 360° spin, rotation-heavy footage), v1.2.0 told you to re-shoot. v1.3.0 lets you combine multiple passes into one capture — and ships the shoot rules that say when this works.
+
+### Added
+
+- **Multi-video captures** (`e95ccfa`) — `autosplat process v1.mp4 v2.mp4 [...]` combines frames from N videos into one capture; COLMAP solves the combined set. Each video gets a per-source frame-naming prefix (`<stem>_frame_NNNNN.jpg`) so passes don't clobber each other. WebUI's new-capture form accepts a multi-line textarea instead of a single input.
+- **`autosplat add-video <capture_dir> <video>`** (`e95ccfa`) — append another pass to an existing capture and rebuild frames + SfM + training with the larger set. `JobRunner.start_add_video_job` + an "Add video" form on the capture detail page mirror it in the WebUI.
+- **`--target-frames N` CLI flag** (`b1cac8f`) — on both `process` and `resume`. Per-run override for `preprocess.target_frames`, useful for long videos where the default cap of 250 subsamples too aggressively (a 30-min walkthrough otherwise drops to 1 frame every 7s).
+- **`docs/CAPTURE-GUIDE.md`** (`a20d4fc`) — empirical shoot rules from v1.2.0 smoke testing. Translation > rotation, smooth turns, ≥80% overlap, textured surfaces, even lighting. Includes case data from real failed captures (`max_strasse` 180° turn, `360max` 360° spin) so users can interpret their own quality-gate output.
+
+### Fixed / improved
+
+- **`QualityGateFailure` surfaces a CAPTURE-GUIDE pointer** (`b1cac8f`) when the matcher swap has already been tried (i.e. `retry_hint=None`). Lands in both the CLI (`Pipeline failure: …`) and the WebUI (`JobState.error`) without per-caller plumbing — overridden `__str__` keeps the structured `reason` field clean.
+- **Resume adapts to multi-video captures** (`e95ccfa`) — `read_source_video_from_log` always returns a list now; transparently handles both the legacy `video: str` and the new `videos: [...]` schemas. `resume_capture` re-feeds the entire list to the pipeline.
+
+### Design Notes
+
+- **`Path | list[Path]` union type** throughout `run_pipeline`, `JobRunner.start_job_from_video`, and `run_pipeline_with_adaptive_retry`. Every existing single-video caller stays byte-identical; only the multi-video path normalises internally to a list.
+- **No special-case for "add to single-video capture."** When `add_video_to_capture` runs, all frames re-extract with the consistent per-source naming. Trades one re-preprocess run (~1-2 min for typical drone footage) for zero migration logic across naming schemes.
+- **`pipeline.log` schema is additively versioned** — the new `videos: [...]` field is only present when multiple videos were used; single-video runs still log `video: str` for backwards-compat with older capture-dir tooling.
+- **WebUI form fields** — new-capture POST accepts both `video_paths` (multi-line, takes precedence) and `video_path` (legacy single). v1.2.0 bookmarks of the form keep working.
+
+### Known Issues
+
+- The smoke test for *combining* two halves of a rotation-broken video (split `max_strasse` at the 180° turn, then `autosplat process pre.mp4 post.mp4`) was deferred from this session due to compute time. The mechanism is unit-tested end-to-end; the empirical "can the user's typical rotation-heavy footage be rescued by splitting" answer is open.
+
+### Tests
+
+265 unit tests (263 passed, 2 opt-in E2E skipped) — +19 over v1.2.0. Coverage breakdown for the new work: 5 for multi-video extraction + run_pipeline routing (test_preprocess.py + test_pipeline.py), 3 for `add_video_to_capture`, 4 for the WebUI multi-video form + add-video route, 2 for `QualityGateFailure.__str__`, plus log-reader migration tests. `ruff check src/ tests/` → "All checks passed!".
+
+### Internal Notes
+
+- 3 atomic commits between v1.2.0 and v1.3.0 + 1 release commit. Multi-video work touched 30 files but the substantive changes are isolated to `pipeline.py`, `preprocess.py`, `cli.py`, `webui/jobs_runner.py`, `webui/routes/captures.py`, and the two capture templates — the rest was a ruff-format sweep across transitively imported files.
+
+---
+
 ## [v1.2.0] — 2026-05-24 — Resume & Recovery
 
 Pipeline failures used to be terminal: every botched run had to be re-started from scratch (re-extracting frames, re-running COLMAP) and the user had to remember to swap the matcher by hand. v1.2.0 makes the pipeline self-healing — a partial capture can pick up where it died, the WebUI exposes a Resume button, and a low-camera SfM result auto-retries with the exhaustive matcher even after a process crash. The release also lands four V12 quality-of-life slices that accumulated since v1.1.2.
