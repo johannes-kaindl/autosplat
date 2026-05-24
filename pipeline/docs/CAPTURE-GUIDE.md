@@ -102,7 +102,9 @@ A capture log ends with something like:
 ```
 
 - **ratio ≥ 0.5** — the gate would have passed; the failure was something else (read the log).
-- **0.1 ≤ ratio < 0.5** — borderline; the capture *might* still be salvageable with a higher fps_target (more frames, more linking opportunities) or by manually trimming the worst segment and re-running.
+- **0.1 ≤ ratio < 0.5** — borderline; the capture *might* still be salvageable. Two levers worth trying:
+  - More frames: `autosplat process video.mp4 --target-frames 500` (default 250). Helps especially for long videos — a 30-min walkthrough at 250 frames is one frame every 7s, often too sparse.
+  - Manually trim the worst segment in ffmpeg and re-run on the shorter clip.
 - **ratio < 0.1** — structurally broken. The footage doesn't satisfy the "adjacent frames share 3D points" rule. Re-shoot per the rules above; no parameter tweak will rescue this.
 
 ### Resume vs re-shoot

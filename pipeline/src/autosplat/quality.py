@@ -29,6 +29,12 @@ from .sfm import SfmResult
 logger = get_logger(__name__)
 
 
+_CAPTURE_GUIDE_HINT = (
+    " — see docs/CAPTURE-GUIDE.md (rotation-dominated footage and low-texture "
+    "surfaces are common causes; no parameter tweak rescues these)."
+)
+
+
 class QualityGateFailure(Exception):
     """Raised by `check_sfm_quality` when SfM output doesn't meet thresholds.
 
@@ -36,6 +42,11 @@ class QualityGateFailure(Exception):
       - log the structured reason
       - mark the capture failed in state.json
       - decide whether to schedule an adaptive retry with `retry_hint`
+
+    str(exc) appends a pointer to docs/CAPTURE-GUIDE.md when this is a
+    terminal failure (no `retry_hint` left to try). The CLI prints str(exc),
+    the WebUI stores it in `JobState.error`, so the actionable advice lands
+    in both UIs without any per-caller plumbing.
     """
 
     def __init__(
@@ -51,6 +62,11 @@ class QualityGateFailure(Exception):
         self.stage = stage
         self.retry_hint = retry_hint
         self.metrics = metrics or {}
+
+    def __str__(self) -> str:
+        if self.retry_hint is None:
+            return f"{self.reason}{_CAPTURE_GUIDE_HINT}"
+        return self.reason
 
 
 @dataclass
@@ -68,9 +84,7 @@ def evaluate_sfm(
 ) -> QualityCheckResult:
     """Pure helper — computes pass/fail without raising. Useful for tests + status."""
     if frames_kept <= 0:
-        return QualityCheckResult(
-            ok=False, ratio=0.0, points=sfm.points, reason="no_frames_kept"
-        )
+        return QualityCheckResult(ok=False, ratio=0.0, points=sfm.points, reason="no_frames_kept")
     ratio = sfm.cameras_registered / frames_kept
     if ratio < cfg.min_camera_ratio:
         return QualityCheckResult(

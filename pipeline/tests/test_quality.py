@@ -117,6 +117,35 @@ def test_check_raises_on_low_points_without_hint() -> None:
     assert "low_points" in excinfo.value.reason
 
 
+# ─── User-facing capture-guide hint (str(exc) appears in CLI + JobState.error)
+
+
+def test_failure_str_points_to_capture_guide_when_no_retry_hint_remains() -> None:
+    """Terminal failures (matcher already exhaustive, or low_points) carry a
+    pointer to docs/CAPTURE-GUIDE.md in their stringified form so users see
+    the actionable advice in both the CLI traceback and the WebUI error."""
+    with pytest.raises(QualityGateFailure) as excinfo:
+        check_sfm_quality(
+            _sfm(cams=4, points=10000), frames_kept=106, cfg=_cfg(), colmap_cfg=_exh()
+        )
+    msg = str(excinfo.value)
+    assert "low_camera_ratio" in msg
+    assert "CAPTURE-GUIDE" in msg
+
+
+def test_failure_str_omits_capture_guide_hint_when_retry_will_run() -> None:
+    """When a retry hint is set (sequential → exhaustive), the matcher swap
+    will likely fix it on its own — don't preemptively scold the user for
+    their footage. Suppress the capture-guide hint."""
+    with pytest.raises(QualityGateFailure) as excinfo:
+        check_sfm_quality(
+            _sfm(cams=4, points=10000), frames_kept=106, cfg=_cfg(), colmap_cfg=_seq()
+        )
+    msg = str(excinfo.value)
+    assert "low_camera_ratio" in msg
+    assert "CAPTURE-GUIDE" not in msg
+
+
 # ─── retry_hint_for_brush_oom (Phase 6 / Spec §9.2) ─────────────────────────
 
 

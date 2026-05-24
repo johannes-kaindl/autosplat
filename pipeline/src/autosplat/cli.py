@@ -24,7 +24,7 @@ from rich.table import Table
 from . import __version__
 from . import viewer as viewer_mod
 from .compress import CompressorNotAvailable, compress_ply, install_hint_for
-from .config import XDG_CONFIG_PATH, dump_default_config, load_config
+from .config import XDG_CONFIG_PATH, apply_override, dump_default_config, load_config
 from .doctor import all_required_passed, run_doctor
 from .logging import configure_logging, get_logger
 from .pipeline import (
@@ -91,6 +91,12 @@ def process(
     skip_stage: list[str] = typer.Option(
         [], "--skip-stage", help="Stages to skip when resuming. Repeatable."
     ),
+    target_frames: int | None = typer.Option(
+        None,
+        "--target-frames",
+        help="Override preprocess.target_frames for this run "
+        "(useful for long videos where the default 250 subsamples too aggressively).",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print plan, do not run."),
 ) -> None:
     """Run the full pipeline once on a single video."""
@@ -99,6 +105,8 @@ def process(
         raise typer.Exit(EXIT_USER_ERROR)
 
     cfg = _load_or_die(config)
+    if target_frames is not None:
+        cfg = apply_override(cfg, {"preprocess": {"target_frames": target_frames}})
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
 
     # Report status into WatcherState so the WebUI can track this CLI-direct run.
@@ -140,6 +148,12 @@ def resume(
         "-v",
         help="Override the source video (otherwise scraped from pipeline.log).",
     ),
+    target_frames: int | None = typer.Option(
+        None,
+        "--target-frames",
+        help="Override preprocess.target_frames. Only takes effect if "
+        "preprocess hasn't already run (i.e. frames/ is empty).",
+    ),
     config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
 ) -> None:
     """Continue a previous capture from wherever it stopped.
@@ -149,6 +163,8 @@ def resume(
     low camera ratio, etc.) is applied the same way as `process`.
     """
     cfg = _load_or_die(config)
+    if target_frames is not None:
+        cfg = apply_override(cfg, {"preprocess": {"target_frames": target_frames}})
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
 
     completed = detect_completed_stages(capture_dir)
