@@ -4,6 +4,7 @@
 
 Commands (spec §7):
   autosplat process <video>
+  autosplat resume <capture_dir>
   autosplat watch <folder>
   autosplat status
   autosplat config show | init
@@ -26,7 +27,12 @@ from .compress import CompressorNotAvailable, compress_ply, install_hint_for
 from .config import XDG_CONFIG_PATH, dump_default_config, load_config
 from .doctor import all_required_passed, run_doctor
 from .logging import configure_logging, get_logger
-from .pipeline import run_pipeline, run_pipeline_with_adaptive_retry
+from .pipeline import (
+    detect_completed_stages,
+    resume_capture,
+    run_pipeline,
+    run_pipeline_with_adaptive_retry,
+)
 from .watcher import STATE_FILE, WatchDaemon, WatcherState, recover_state
 
 app = typer.Typer(
@@ -113,6 +119,54 @@ def process(
         # Any pipeline failure (RuntimeError, quality-gate, Brush OOM, …):
         # record it in WatcherState before exiting so the run doesn't linger
         # as a stale in_progress entry in the WebUI.
+        if state.in_progress is not None:
+            state.mark_failed(reason=str(e), stage=state.in_progress.stage)
+        err_console.print(f"[red]Pipeline failure:[/red] {e}")
+        raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
+
+    console.print(f"[green]Done:[/green] {result.output_ply}")
+    console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
+    console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+
+
+@app.command()
+def resume(
+    capture_dir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, help="Capture directory to resume."
+    ),
+    video: Path | None = typer.Option(
+        None,
+        "--video",
+        "-v",
+        help="Override the source video (otherwise scraped from pipeline.log).",
+    ),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
+) -> None:
+    """Continue a previous capture from wherever it stopped.
+
+    Re-uses the existing frames / SfM / training artifacts on disk and only
+    re-runs the stages that didn't complete. Adaptive retry (matcher swap on
+    low camera ratio, etc.) is applied the same way as `process`.
+    """
+    cfg = _load_or_die(config)
+    configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+
+    completed = detect_completed_stages(capture_dir)
+    if completed:
+        console.print(f"[dim]Stages already complete:[/dim] {sorted(completed)}")
+    else:
+        console.print("[dim]No prior stage outputs detected — running everything.[/dim]")
+
+    state = WatcherState.load()
+    try:
+        result = resume_capture(capture_dir, cfg, video_override=video, state=state)
+    except ValueError as e:
+        err_console.print(f"[red]Cannot resume:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except FileNotFoundError as e:
+        err_console.print(f"[red]Missing input:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except Exception as e:
         if state.in_progress is not None:
             state.mark_failed(reason=str(e), stage=state.in_progress.stage)
         err_console.print(f"[red]Pipeline failure:[/red] {e}")

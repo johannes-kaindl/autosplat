@@ -13,6 +13,9 @@ import pytest
 from autosplat.config import load_config
 from autosplat.pipeline import (
     _make_capture_name,
+    detect_completed_stages,
+    read_source_video_from_log,
+    resume_capture,
     run_pipeline,
     run_pipeline_with_adaptive_retry,
 )
@@ -48,6 +51,188 @@ def test_unknown_skip_stage_raises(tmp_path: Path) -> None:
     cfg = load_config(include_xdg=False)
     with pytest.raises(ValueError, match="Unknown stages"):
         run_pipeline(video, cfg, output_dir_override=tmp_path, skip_stages={"bogus"})
+
+
+def test_capture_dir_override_targets_existing_dir(tmp_path: Path) -> None:
+    """capture_dir_override adopts an existing capture dir (e.g. yesterday's
+    failed run) instead of computing a fresh `<today>_<stem>` path."""
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    legacy_dir = tmp_path / "captures" / "2024-01-15_legacy_capture"
+    legacy_dir.mkdir(parents=True)
+
+    result = run_pipeline(video, cfg, capture_dir_override=legacy_dir, dry_run=True)
+
+    assert result.capture_dir == legacy_dir
+    assert result.capture_name == "2024-01-15_legacy_capture"
+
+
+# ─── detect_completed_stages — resume-stage discovery ──────────────────────
+
+
+def test_detect_completed_stages_empty_dir(tmp_path: Path) -> None:
+    """No artifacts at all → no stages completed."""
+    capture_dir = tmp_path / "fresh"
+    capture_dir.mkdir()
+    assert detect_completed_stages(capture_dir) == set()
+
+
+def test_detect_completed_stages_preprocess_done(tmp_path: Path) -> None:
+    """At least one extracted frame → preprocess is done."""
+    capture_dir = tmp_path / "cap"
+    frames = capture_dir / "frames"
+    frames.mkdir(parents=True)
+    (frames / "frame_00001.jpg").write_bytes(b"\xff\xd8\xff")
+    assert detect_completed_stages(capture_dir) == {"preprocess"}
+
+
+def test_detect_completed_stages_through_sfm(tmp_path: Path) -> None:
+    """colmap/sparse/0/images.bin present → sfm done (frames implied)."""
+    capture_dir = tmp_path / "cap"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+    sparse = capture_dir / "colmap" / "sparse" / "0"
+    sparse.mkdir(parents=True)
+    (sparse / "images.bin").write_bytes(b"\0" * 16)
+    assert detect_completed_stages(capture_dir) == {"preprocess", "sfm"}
+
+
+def test_detect_completed_stages_through_export(tmp_path: Path) -> None:
+    """A scene.ply in output/ → preprocess + sfm + train + export all done."""
+    capture_dir = tmp_path / "cap"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+    sparse = capture_dir / "colmap" / "sparse" / "0"
+    sparse.mkdir(parents=True)
+    (sparse / "images.bin").write_bytes(b"\0" * 16)
+    training = capture_dir / "training"
+    training.mkdir()
+    (training / "splat.ply").write_bytes(b"ply\n")
+    output = capture_dir / "output"
+    output.mkdir()
+    (output / "scene.ply").write_bytes(b"ply\n")
+    assert detect_completed_stages(capture_dir) == {
+        "preprocess",
+        "sfm",
+        "train",
+        "export",
+    }
+
+
+# ─── read_source_video_from_log — resume source recovery ───────────────────
+
+
+def test_read_source_video_from_log_returns_video_path(tmp_path: Path) -> None:
+    """The first pipeline.start event in pipeline.log carries the source video."""
+    capture_dir = tmp_path / "cap"
+    capture_dir.mkdir()
+    video = tmp_path / "input.mp4"
+    video.write_bytes(b"\0")
+    log = capture_dir / "pipeline.log"
+    log.write_text(
+        '{"event": "pipeline.start", "capture_name": "cap", "video": "'
+        + str(video)
+        + '", "level": "info", "ts": "2026-05-22T18:15:18Z"}\n'
+        '{"event": "preflight.passed", "level": "info"}\n',
+        encoding="utf-8",
+    )
+    assert read_source_video_from_log(capture_dir) == video
+
+
+def test_read_source_video_from_log_missing_log(tmp_path: Path) -> None:
+    """No pipeline.log → None (caller must fall back to --video)."""
+    capture_dir = tmp_path / "cap"
+    capture_dir.mkdir()
+    assert read_source_video_from_log(capture_dir) is None
+
+
+# ─── resume_capture — orchestrator for `autosplat resume` ──────────────────
+
+
+def test_resume_capture_skips_completed_stages_and_targets_dir(
+    tmp_path: Path,
+) -> None:
+    """resume_capture picks up the source video from pipeline.log, computes
+    skip_stages from on-disk artifacts, and calls the retry wrapper with the
+    existing capture_dir preserved (no fresh date-stamped dir)."""
+    capture_dir = tmp_path / "2024-01-15_partial"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+    video = tmp_path / "src.mp4"
+    video.write_bytes(b"\0")
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "video": "' + str(video) + '"}\n',
+        encoding="utf-8",
+    )
+    cfg = load_config(include_xdg=False)
+    success = MagicMock(spec=["capture_dir", "output_ply"])
+
+    with patch(
+        "autosplat.pipeline.run_pipeline_with_adaptive_retry", return_value=success
+    ) as mocked:
+        result = resume_capture(capture_dir, cfg)
+
+    assert result is success
+    kwargs = mocked.call_args.kwargs
+    assert mocked.call_args.args[0] == video
+    assert kwargs["capture_dir_override"] == capture_dir
+    assert kwargs["skip_stages"] == {"preprocess"}
+
+
+def test_resume_capture_video_override_wins(tmp_path: Path) -> None:
+    """An explicit video override beats whatever pipeline.log recorded —
+    handy when the original file has moved."""
+    capture_dir = tmp_path / "2024-01-15_moved"
+    capture_dir.mkdir()
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "video": "/gone/old.mp4"}\n', encoding="utf-8"
+    )
+    new_video = tmp_path / "new.mp4"
+    new_video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+
+    with patch(
+        "autosplat.pipeline.run_pipeline_with_adaptive_retry",
+        return_value=MagicMock(),
+    ) as mocked:
+        resume_capture(capture_dir, cfg, video_override=new_video)
+
+    assert mocked.call_args.args[0] == new_video
+
+
+def test_resume_capture_rejects_when_export_complete(tmp_path: Path) -> None:
+    """A capture with output/scene.ply is already done — resume is a no-op
+    and the user gets a clear refusal instead of redoing the whole pipeline."""
+    capture_dir = tmp_path / "2024-01-15_done"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+    video = tmp_path / "src.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+
+    with (
+        patch("autosplat.pipeline.run_pipeline_with_adaptive_retry") as mocked,
+        pytest.raises(ValueError, match="already complete"),
+    ):
+        resume_capture(capture_dir, cfg, video_override=video)
+
+    mocked.assert_not_called()
+
+
+def test_resume_capture_errors_without_video_source(tmp_path: Path) -> None:
+    """No pipeline.log AND no --video → clear error, no pipeline call."""
+    capture_dir = tmp_path / "2024-01-15_bare"
+    capture_dir.mkdir()
+    cfg = load_config(include_xdg=False)
+
+    with (
+        patch("autosplat.pipeline.run_pipeline_with_adaptive_retry") as mocked,
+        pytest.raises(ValueError, match="source video"),
+    ):
+        resume_capture(capture_dir, cfg)
+
+    mocked.assert_not_called()
 
 
 # ─── Helpers for embed_url tests ────────────────────────────────────────────

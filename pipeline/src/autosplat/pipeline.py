@@ -8,6 +8,7 @@ both the one-shot `process` CLI command and the `watch` daemon.
 
 from __future__ import annotations
 
+import json
 import shutil
 import time
 from dataclasses import dataclass
@@ -51,11 +52,72 @@ def _make_capture_name(video: Path) -> str:
     return f"{date.today().isoformat()}_{video.stem}"
 
 
+def detect_completed_stages(capture_dir: Path) -> set[str]:
+    """Return the subset of SKIPPABLE_STAGES whose outputs already exist.
+
+    Powers `autosplat resume`: each stage is detected by the artifact it
+    leaves on disk, so a half-finished run can pick up where the previous
+    process died (host sleep, OOM, Ctrl-C) without redoing work.
+
+    Detection rules:
+      preprocess — any `frames/frame_*.jpg`
+      sfm        — `colmap/sparse/0/images.{bin,txt}` (mapper output)
+      train      — any `*.ply` under `training/`
+      export     — `output/scene.ply` (or legacy `scene.ply` at capture root)
+    """
+    done: set[str] = set()
+
+    frames_dir = capture_dir / "frames"
+    if frames_dir.is_dir() and any(frames_dir.glob("frame_*.jpg")):
+        done.add("preprocess")
+
+    sparse_zero = capture_dir / "colmap" / "sparse" / "0"
+    if sparse_zero.is_dir() and (
+        (sparse_zero / "images.bin").exists() or (sparse_zero / "images.txt").exists()
+    ):
+        done.add("sfm")
+
+    training_dir = capture_dir / "training"
+    if training_dir.is_dir() and any(training_dir.rglob("*.ply")):
+        done.add("train")
+
+    if (capture_dir / "output" / "scene.ply").exists() or (capture_dir / "scene.ply").exists():
+        done.add("export")
+
+    return done
+
+
+def read_source_video_from_log(capture_dir: Path) -> Path | None:
+    """Recover the source video path from the capture's `pipeline.log`.
+
+    Scans for the first `pipeline.start` JSON event and returns its `video`
+    field as a Path. Returns None when the log is absent, no `pipeline.start`
+    event is present, or the recorded path field is missing — callers should
+    fall back to a user-supplied `--video` override.
+    """
+    log_path = capture_dir / "pipeline.log"
+    if not log_path.is_file():
+        return None
+
+    for raw in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("event") == "pipeline.start" and event.get("video"):
+            return Path(event["video"])
+    return None
+
+
 def run_pipeline(
     video: Path,
     config: Config,
     *,
     output_dir_override: Path | None = None,
+    capture_dir_override: Path | None = None,
     skip_stages: set[str] | None = None,
     dry_run: bool = False,
     config_override: dict | None = None,
@@ -68,6 +130,10 @@ def run_pipeline(
 
     `config_override` is a nested dict (e.g. `{"colmap": {"matcher": "exhaustive"}}`)
     deep-merged into `config` before any work — used by Phase-3 adaptive retry.
+
+    `capture_dir_override`, when given, adopts the existing capture directory
+    instead of computing `<today>_<video.stem>`. Used by `autosplat resume`
+    to continue a previous (possibly cross-day) run without renaming its dir.
 
     `state`, when given, is a WatcherState the pipeline reports progress into:
     in_progress at start, the stage on each transition, and a completed entry on
@@ -88,9 +154,13 @@ def run_pipeline(
     if not video.exists():
         raise FileNotFoundError(f"Video not found: {video}")
 
-    capture_name = _make_capture_name(video)
-    captures_root = output_dir_override or config.paths.captures_dir
-    capture_dir = captures_root / capture_name
+    if capture_dir_override is not None:
+        capture_dir = capture_dir_override
+        capture_name = capture_dir.name
+    else:
+        capture_name = _make_capture_name(video)
+        captures_root = output_dir_override or config.paths.captures_dir
+        capture_dir = captures_root / capture_name
 
     capture_dir.mkdir(parents=True, exist_ok=True)
     (capture_dir / "source").mkdir(exist_ok=True)
@@ -333,6 +403,7 @@ def run_pipeline_with_adaptive_retry(
     config: Config,
     *,
     output_dir_override: Path | None = None,
+    capture_dir_override: Path | None = None,
     skip_stages: set[str] | None = None,
     dry_run: bool = False,
     state: WatcherState | None = None,
@@ -357,8 +428,11 @@ def run_pipeline_with_adaptive_retry(
     override: dict | None = None
     skip = set(skip_stages) if skip_stages else None
 
-    captures_root = output_dir_override or config.paths.captures_dir
-    capture_dir = captures_root / _make_capture_name(video)
+    if capture_dir_override is not None:
+        capture_dir = capture_dir_override
+    else:
+        captures_root = output_dir_override or config.paths.captures_dir
+        capture_dir = captures_root / _make_capture_name(video)
 
     attempts = 0
     while True:
@@ -368,6 +442,7 @@ def run_pipeline_with_adaptive_retry(
                 video,
                 config,
                 output_dir_override=output_dir_override,
+                capture_dir_override=capture_dir_override,
                 skip_stages=skip,
                 dry_run=dry_run,
                 config_override=override,
@@ -389,3 +464,44 @@ def run_pipeline_with_adaptive_retry(
                 attempt=attempts,
                 max_attempts=max_attempts,
             )
+
+
+def resume_capture(
+    capture_dir: Path,
+    config: Config,
+    *,
+    video_override: Path | None = None,
+    state: WatcherState | None = None,
+) -> PipelineResult:
+    """Continue a previous capture from wherever it stopped.
+
+    Powers `autosplat resume`. Resolves the source video (explicit override
+    wins, otherwise scrape `pipeline.log`), inspects which stages already
+    have outputs, then runs `run_pipeline_with_adaptive_retry` against the
+    existing capture directory — never a new date-stamped one.
+
+    Refuses early when the capture's export stage has already completed
+    (output/scene.ply present) — the user is meant to delete the output
+    and start over in that case, not silently redo everything.
+    """
+    video = video_override or read_source_video_from_log(capture_dir)
+    if video is None:
+        raise ValueError(
+            f"Cannot resume {capture_dir}: no source video recorded in "
+            "pipeline.log — pass --video to point at the original file."
+        )
+
+    completed = detect_completed_stages(capture_dir)
+    if "export" in completed:
+        raise ValueError(
+            f"{capture_dir} is already complete (output/scene.ply exists) — "
+            "delete the output to re-run or use `autosplat process`."
+        )
+
+    return run_pipeline_with_adaptive_retry(
+        video,
+        config,
+        capture_dir_override=capture_dir,
+        skip_stages=completed or None,
+        state=state,
+    )
