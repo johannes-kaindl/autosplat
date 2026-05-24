@@ -11,7 +11,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autosplat.config import load_config
-from autosplat.pipeline import _make_capture_name, run_pipeline
+from autosplat.pipeline import (
+    _make_capture_name,
+    run_pipeline,
+    run_pipeline_with_adaptive_retry,
+)
+from autosplat.quality import QualityGateFailure
 
 
 def test_capture_name_format(tmp_path: Path) -> None:
@@ -46,6 +51,7 @@ def test_unknown_skip_stage_raises(tmp_path: Path) -> None:
 
 
 # ─── Helpers for embed_url tests ────────────────────────────────────────────
+
 
 def _fake_ply(tmp_path: Path) -> Path:
     """Create a minimal .ply file so export_capture can stat() it."""
@@ -120,7 +126,8 @@ def _run_with_mocks(video: Path, cfg, patches: dict, tmp_path: Path, state=None)
         patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
     ):
         result = run_pipeline(
-            video, cfg,
+            video,
+            cfg,
             output_dir_override=tmp_path / "captures",
             state=state,
         )
@@ -244,3 +251,118 @@ def test_run_pipeline_leaves_in_progress_on_failure(tmp_path: Path) -> None:
     assert state.in_progress.path == str(capture_dir)
     assert state.in_progress.stage == "sfm"
     assert state.completed == []
+
+
+# ─── run_pipeline_with_adaptive_retry — in-process Phase-3 retry ────────────
+
+
+def _quality_gate_failure(hint: dict | None = None) -> QualityGateFailure:
+    return QualityGateFailure(
+        reason="low_camera_ratio: 0.01 < 0.5",
+        stage="sfm_validation",
+        retry_hint=hint,
+        metrics={"cameras_registered": 3, "frames_kept": 244},
+    )
+
+
+def test_adaptive_retry_applies_hint_and_succeeds_on_second_attempt(
+    tmp_path: Path,
+) -> None:
+    """QualityGateFailure with a retry_hint → wrapper re-runs with the hint as
+    config_override and succeeds. Two run_pipeline calls; second one carries
+    the override."""
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    success_result = MagicMock(spec=["capture_dir", "output_ply"])
+
+    hint = {"colmap": {"matcher": "exhaustive"}}
+    call_log: list[dict | None] = []
+
+    def fake_run(*args, **kwargs):
+        call_log.append(kwargs.get("config_override"))
+        if len(call_log) == 1:
+            raise _quality_gate_failure(hint=hint)
+        return success_result
+
+    with patch("autosplat.pipeline.run_pipeline", side_effect=fake_run) as mocked:
+        result = run_pipeline_with_adaptive_retry(
+            video, cfg, output_dir_override=tmp_path / "captures"
+        )
+
+    assert result is success_result
+    assert mocked.call_count == 2
+    assert call_log == [None, hint]
+
+
+def test_adaptive_retry_reraises_when_hint_is_none(tmp_path: Path) -> None:
+    """QualityGateFailure without retry_hint → no retry; bubble up unchanged."""
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+
+    with (
+        patch(
+            "autosplat.pipeline.run_pipeline",
+            side_effect=_quality_gate_failure(hint=None),
+        ) as mocked,
+        pytest.raises(QualityGateFailure),
+    ):
+        run_pipeline_with_adaptive_retry(video, cfg, output_dir_override=tmp_path / "captures")
+
+    assert mocked.call_count == 1
+
+
+def test_adaptive_retry_disabled_via_config(tmp_path: Path) -> None:
+    """cfg.retry.enabled=False → no retry even when a hint is present."""
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    cfg = cfg.model_copy(update={"retry": cfg.retry.model_copy(update={"enabled": False})})
+
+    with (
+        patch(
+            "autosplat.pipeline.run_pipeline",
+            side_effect=_quality_gate_failure(hint={"colmap": {"matcher": "exhaustive"}}),
+        ) as mocked,
+        pytest.raises(QualityGateFailure),
+    ):
+        run_pipeline_with_adaptive_retry(video, cfg, output_dir_override=tmp_path / "captures")
+
+    assert mocked.call_count == 1
+
+
+def test_adaptive_retry_wipes_colmap_and_skips_preprocess_on_retry(
+    tmp_path: Path,
+) -> None:
+    """Between attempts the wrapper deletes <capture_dir>/colmap (stale matcher
+    DB) and adds 'preprocess' to skip_stages so the kept frames are reused."""
+    video = tmp_path / "scene.mp4"
+    video.write_bytes(b"\0")
+    cfg = load_config(include_xdg=False)
+    captures_root = tmp_path / "captures"
+    capture_dir = captures_root / _make_capture_name(video)
+    colmap_dir = capture_dir / "colmap"
+    sentinel = colmap_dir / "database.db"
+
+    success_result = MagicMock(spec=["capture_dir", "output_ply"])
+    seen: list[tuple[bool, set[str] | None]] = []
+
+    def fake_run(*args, **kwargs):
+        seen.append((sentinel.exists(), kwargs.get("skip_stages")))
+        if len(seen) == 1:
+            # Simulate the first SfM attempt having populated colmap/.
+            colmap_dir.mkdir(parents=True, exist_ok=True)
+            sentinel.write_bytes(b"stale-sequential-db")
+            raise _quality_gate_failure(hint={"colmap": {"matcher": "exhaustive"}})
+        return success_result
+
+    with patch("autosplat.pipeline.run_pipeline", side_effect=fake_run):
+        run_pipeline_with_adaptive_retry(video, cfg, output_dir_override=captures_root)
+
+    # First call: clean state, no skip_stages.
+    assert seen[0] == (False, None)
+    # Second call: colmap/ was wiped before the retry, preprocess is skipped.
+    second_seen_db, second_skip = seen[1]
+    assert second_seen_db is False
+    assert second_skip is not None and "preprocess" in second_skip

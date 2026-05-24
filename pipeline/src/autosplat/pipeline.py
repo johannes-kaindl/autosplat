@@ -8,6 +8,7 @@ both the one-shot `process` CLI command and the `watch` daemon.
 
 from __future__ import annotations
 
+import shutil
 import time
 from dataclasses import dataclass
 from datetime import date
@@ -25,6 +26,7 @@ from . import train as train_mod
 from . import viewer as viewer_mod
 from .config import Config, apply_override
 from .logging import configure_logging, get_logger
+from .quality import QualityGateFailure
 
 if TYPE_CHECKING:
     from .watcher import WatcherState
@@ -230,6 +232,7 @@ def run_pipeline(
 
     if config.viewer.notify_on_complete:
         from . import notification as notif_mod
+
         notif_mod.notify_training_complete(
             capture_name=_make_capture_name(video),
             duration_s=training_duration,
@@ -314,9 +317,7 @@ def run_pipeline(
     logger.info("pipeline.done", duration_s=duration, output_ply=str(exp.output_ply))
 
     if state is not None:
-        state.mark_done(
-            exp.output_ply, duration, max_history=config.status.max_history
-        )
+        state.mark_done(exp.output_ply, duration, max_history=config.status.max_history)
 
     return PipelineResult(
         capture_name=capture_name,
@@ -325,3 +326,66 @@ def run_pipeline(
         metadata_path=exp.metadata_path,
         duration_s=duration,
     )
+
+
+def run_pipeline_with_adaptive_retry(
+    video: Path,
+    config: Config,
+    *,
+    output_dir_override: Path | None = None,
+    skip_stages: set[str] | None = None,
+    dry_run: bool = False,
+    state: WatcherState | None = None,
+) -> PipelineResult:
+    """run_pipeline + in-process Phase-3 adaptive retry on QualityGateFailure.
+
+    The watch-folder daemon already has its own daemon-level retry (persistent
+    state, queue re-enqueue). This wrapper provides the same loop for one-shot
+    callers (CLI `process`, WebUI JobRunner) that don't carry daemon state.
+
+    On a QualityGateFailure carrying a structured `retry_hint`, the wrapper:
+      1. wipes `<capture_dir>/colmap/` (the matcher swap invalidates feature
+         matches and the sparse model — leaving them around mixes data from
+         two matchers in one DB)
+      2. adds `preprocess` to skip_stages (frames are still valid — cheap win)
+      3. re-runs `run_pipeline` with `config_override=hint`
+
+    Stops when (a) the hint is None, (b) `cfg.retry.enabled=False`, or
+    (c) `cfg.retry.max_retries` is reached — then re-raises the last failure.
+    """
+    max_attempts = config.retry.max_retries if config.retry.enabled else 1
+    override: dict | None = None
+    skip = set(skip_stages) if skip_stages else None
+
+    captures_root = output_dir_override or config.paths.captures_dir
+    capture_dir = captures_root / _make_capture_name(video)
+
+    attempts = 0
+    while True:
+        attempts += 1
+        try:
+            return run_pipeline(
+                video,
+                config,
+                output_dir_override=output_dir_override,
+                skip_stages=skip,
+                dry_run=dry_run,
+                config_override=override,
+                state=state,
+            )
+        except QualityGateFailure as e:
+            if e.retry_hint is None or attempts >= max_attempts:
+                raise
+            colmap_dir = capture_dir / "colmap"
+            if colmap_dir.exists():
+                shutil.rmtree(colmap_dir)
+            override = e.retry_hint
+            skip = set(skip) if skip else set()
+            skip.add("preprocess")
+            logger.warning(
+                "pipeline.adaptive_retry",
+                reason=e.reason,
+                retry_hint=override,
+                attempt=attempts,
+                max_attempts=max_attempts,
+            )

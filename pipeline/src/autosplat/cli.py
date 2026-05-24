@@ -26,7 +26,7 @@ from .compress import CompressorNotAvailable, compress_ply, install_hint_for
 from .config import XDG_CONFIG_PATH, dump_default_config, load_config
 from .doctor import all_required_passed, run_doctor
 from .logging import configure_logging, get_logger
-from .pipeline import run_pipeline
+from .pipeline import run_pipeline, run_pipeline_with_adaptive_retry
 from .watcher import STATE_FILE, WatchDaemon, WatcherState, recover_state
 
 app = typer.Typer(
@@ -79,7 +79,9 @@ def _find_ply(capture_dir: Path) -> Path | None:
 def process(
     video: Path = typer.Argument(..., exists=False, help="Path to the video file."),
     config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
-    output_dir: Path | None = typer.Option(None, "--output-dir", "-o", help="Override captures_dir."),
+    output_dir: Path | None = typer.Option(
+        None, "--output-dir", "-o", help="Override captures_dir."
+    ),
     skip_stage: list[str] = typer.Option(
         [], "--skip-stage", help="Stages to skip when resuming. Repeatable."
     ),
@@ -96,7 +98,7 @@ def process(
     # Report status into WatcherState so the WebUI can track this CLI-direct run.
     state = WatcherState.load()
     try:
-        result = run_pipeline(
+        result = run_pipeline_with_adaptive_retry(
             video,
             cfg,
             output_dir_override=output_dir,
@@ -140,17 +142,13 @@ def watch(
 
     def _process(video: Path, *, config_override: dict | None = None) -> dict:
         if config_override:
-            console.print(
-                f"[blue]Processing (retry, override={config_override}):[/blue] {video}"
-            )
+            console.print(f"[blue]Processing (retry, override={config_override}):[/blue] {video}")
         else:
             console.print(f"[blue]Processing:[/blue] {video}")
         result = run_pipeline(video, cfg, config_override=config_override, state=state)
         return {"output_ply": str(result.output_ply), "duration_s": result.duration_s}
 
-    daemon = WatchDaemon(
-        folder, state, _process, retry_cfg=cfg.retry, status_cfg=cfg.status
-    )
+    daemon = WatchDaemon(folder, state, _process, retry_cfg=cfg.retry, status_cfg=cfg.status)
     daemon.start(process_existing=True)
 
     if once:
@@ -294,11 +292,21 @@ def compress(
 
 @app.command()
 def serve(
-    capture_dir: Path = typer.Argument(..., help="Directory containing scene.ply (output of a pipeline run)."),
-    with_supersplat: bool = typer.Option(False, "--with-supersplat", help="Also start local SuperSplat server."),
-    ply_port: int | None = typer.Option(None, "--ply-port", help="PLY server port (default from config)."),
-    supersplat_port: int | None = typer.Option(None, "--supersplat-port", help="SuperSplat server port (default from config)."),
-    no_open_browser: bool = typer.Option(False, "--no-open-browser", help="Don't open browser automatically."),
+    capture_dir: Path = typer.Argument(
+        ..., help="Directory containing scene.ply (output of a pipeline run)."
+    ),
+    with_supersplat: bool = typer.Option(
+        False, "--with-supersplat", help="Also start local SuperSplat server."
+    ),
+    ply_port: int | None = typer.Option(
+        None, "--ply-port", help="PLY server port (default from config)."
+    ),
+    supersplat_port: int | None = typer.Option(
+        None, "--supersplat-port", help="SuperSplat server port (default from config)."
+    ),
+    no_open_browser: bool = typer.Option(
+        False, "--no-open-browser", help="Don't open browser automatically."
+    ),
     config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
 ) -> None:
     """Serve a PLY capture in the browser (optionally with local SuperSplat)."""
@@ -310,16 +318,17 @@ def serve(
         raise typer.Exit(EXIT_USER_ERROR)
 
     effective_ply_port = ply_port or cfg.viewer.local_http_port
-    effective_ss_port  = supersplat_port or cfg.viewer.supersplat_local_port
+    effective_ss_port = supersplat_port or cfg.viewer.supersplat_local_port
 
     import signal
     import threading
+
     stop_event = threading.Event()
 
     def _handle_signal(signum: int, frame: object) -> None:
         stop_event.set()
 
-    signal.signal(signal.SIGINT,  _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
     if with_supersplat:
@@ -327,7 +336,9 @@ def serve(
         if not dist_path.is_absolute():
             dist_path = Path.cwd() / dist_path
         if not (dist_path / "index.html").exists():
-            console.print(f"[red]SuperSplat dist not found at {dist_path}. Run: bash scripts/setup_supersplat.sh[/red]")
+            console.print(
+                f"[red]SuperSplat dist not found at {dist_path}. Run: bash scripts/setup_supersplat.sh[/red]"
+            )
             raise typer.Exit(EXIT_USER_ERROR)
 
         try:

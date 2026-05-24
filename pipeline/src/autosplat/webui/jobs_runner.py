@@ -145,11 +145,7 @@ class JobRunner:
         worker thread has died (process suspended/killed mid-run) is marked
         'failed' — otherwise it hangs as a phantom job forever.
         """
-        if (
-            job.status == "running"
-            and job._thread is not None
-            and not job._thread.is_alive()
-        ):
+        if job.status == "running" and job._thread is not None and not job._thread.is_alive():
             job.status = "failed"
             job.error = "interrupted — the run ended without producing a result"
             job.finished_at = time.monotonic()
@@ -238,6 +234,7 @@ class JobRunner:
         if proc is not None:
             try:
                 import subprocess
+
                 if isinstance(proc, subprocess.Popen) and proc.poll() is None:
                     proc.terminate()
                     try:
@@ -264,13 +261,11 @@ def _find_source_video(capture_path: Path) -> Path | None:
     return None
 
 
-def _run_pipeline_thread(
-    job: JobState, video: Path, cfg: Config, runner: JobRunner
-) -> None:
+def _run_pipeline_thread(job: JobState, video: Path, cfg: Config, runner: JobRunner) -> None:
     """Execute run_pipeline in a background thread, updating job.status."""
     import subprocess
 
-    from autosplat.pipeline import run_pipeline
+    from autosplat.pipeline import run_pipeline_with_adaptive_retry
 
     try:
         # Monkey-patch subprocess.Popen so we can capture the Brush process handle
@@ -284,7 +279,7 @@ def _run_pipeline_thread(
 
         subprocess.Popen = _TrackingPopen  # type: ignore[misc]
         try:
-            result = run_pipeline(video, cfg)
+            result = run_pipeline_with_adaptive_retry(video, cfg)
         finally:
             subprocess.Popen = original_popen  # type: ignore[misc]
 
