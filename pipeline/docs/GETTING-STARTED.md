@@ -45,9 +45,14 @@ If anything is RED: see [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
 
 ### 1. Pick a good video
 
-If you have a 360° drone orbit of a textured object at 30 fps — perfect. Drop it into `import/` (or any path you remember).
+If you have a drone arc *around* a textured subject (walking-pace, slow translation, lots of stone/brick/foliage in frame) — perfect. Drop it into `import/` (or any path you remember).
 
-If you only have a fly-through video at 60 fps over a low-texture scene (sky, snow, water) — be aware that the SfM stage may fail, see `PHASE-0-CALIBRATION.md` for the `ice_bird` case study. Try anyway, the quality-gate will tell you.
+A few things that look like good drone footage but reliably break SfM:
+- **Spinning in place** (360° yaw from a fixed point) — no parallax, COLMAP can't triangulate.
+- **Abrupt 180°+ turns mid-flight** — even with the exhaustive matcher, loop closure rarely fires.
+- **Low-texture surfaces** (snow, sky, water, fresh asphalt, painted walls) — no features for SIFT to lock onto.
+
+If you're not sure, read [`CAPTURE-GUIDE.md`](CAPTURE-GUIDE.md) before you go fly — it's a 5-minute read that saves hours of failed pipeline runs.
 
 ### 2. Run the pipeline
 

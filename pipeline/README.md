@@ -178,11 +178,13 @@ auto-splat-pipeline/
 ## Documentation index
 
 **New here?** Start with [`GETTING-STARTED.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/GETTING-STARTED.md).
+**About to shoot a video?** Read [`CAPTURE-GUIDE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md) first — most pipeline failures are capture-side, not code-side.
 **Curious about the moving parts?** Read [`CONCEPTS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONCEPTS.md).
 
 ### Reference
 - [`AUTO-SPLAT PIPELINE — Spec & Implementation Plan.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/AUTO-SPLAT%20PIPELINE%20%E2%80%94%20Spec%20%26%20Implementation%20Plan.md) — authoritative spec
 - [`ARCHITECTURE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/ARCHITECTURE.md) — module map, capture-dir layout, stage I/O
+- [`CAPTURE-GUIDE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md) — how to shoot a video COLMAP can actually solve (rotation/texture/lighting rules)
 - [`CONFIGURATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONFIGURATION.md) — every TOML key, with example overlays in [`examples/`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/examples)
 - [`WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) — user-facing recipes (one-shot, watch, status, viewer, Obsidian, smoke-test)
 - [`PLY-OUTPUT-FORMAT.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PLY-OUTPUT-FORMAT.md) — INRIA/Kerbl 3DGS PLY reference + viewer compat matrix + measured compression ratios
