@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v1.2.0] — 2026-05-24 — Resume & Recovery
+
+Pipeline failures used to be terminal: every botched run had to be re-started from scratch (re-extracting frames, re-running COLMAP) and the user had to remember to swap the matcher by hand. v1.2.0 makes the pipeline self-healing — a partial capture can pick up where it died, the WebUI exposes a Resume button, and a low-camera SfM result auto-retries with the exhaustive matcher even after a process crash. The release also lands four V12 quality-of-life slices that accumulated since v1.1.2.
+
+### Added
+
+- **Adaptive matcher retry in CLI + WebUI** (`32f329e`) — the watcher daemon's Phase-3 retry mechanism (`QualityGateFailure → retry_hint → swap matcher`) was only wired into the long-running `watch` daemon. `autosplat process` and the WebUI's `JobRunner` now share it via a new in-process `run_pipeline_with_adaptive_retry` wrapper. A 180° drone turn that breaks the sequential matcher with 3/244 cameras self-rescues with exhaustive, frames intact.
+- **`autosplat resume <capture_dir>` CLI command** (`6b0b429`) — continues a previous capture from on-disk state. `detect_completed_stages` inspects `frames/`, `colmap/sparse/0/`, `training/*.ply`, `output/scene.ply` and computes the skip-set; `read_source_video_from_log` scrapes the original video path from `pipeline.log` (no new manifest file — works for every existing capture). New `capture_dir_override` parameter on `run_pipeline` so the resumed run keeps its original date-stamped directory instead of forking `<today>_<stem>`.
+- **WebUI Resume button** (`70161fe`) — failed captures show a Resume button (replacing the broken-for-real-captures Retry that routed through `/process`). `POST /captures/{id}/resume` calls a new `JobRunner.start_resume_job` that spins up a worker thread running `resume_capture(...)`. Shares the existing cancellation/persistence/runs.jsonl path.
+- **New-capture run-start flow** (`d9eb069`, V12-1) — the dashboard's "New capture" button now actually starts a pipeline run from a video path (it previously linked back to the captures list). `GET/POST /captures/new` with path validation (`.mp4`/`.mov`/`.m4v`, file-exists check).
+- **Persistent job history via `runs.jsonl`** (`9d5c7f8`, V12-2) — the JobRunner appends one record per finalized job to `<captures_dir>/<id>/runs.jsonl` (status, start/finish timestamps, error). On startup, `load_history()` rehydrates the in-memory history so a WebUI restart no longer wipes the "Recent jobs" view. Append-only, crash-safe.
+- **Responsive WebUI layout + mobile sidebar** (`c21be7b`, V12-3) — three breakpoints (Desktop ≥1024px / Tablet ≤1023px / Mobile ≤767px). Sidebar narrows then slides off-canvas; stat-tiles collapse 4→2 columns; hamburger button toggles `.mobile-sidebar-open` on body with tap-to-close backdrop; tables scroll horizontally on mobile.
+- **URL-param developer mode** (`19f308c`, V12-4) — reactivates the latent aspect subthemes (`?aspect=shugo|gunshi|kantoku|sensei`) and the HTMX-annot debug overlay (`?dev=1`) without adding a settings UI. Both persist in localStorage; URL-params set/clear them.
+
+### Fixed
+
+- **Quality gate runs on resumed SfM** (`248b92c`) — resuming a capture whose previous SfM stage produced a bad sparse model (e.g. only 3/244 cameras) used to silently skip the quality gate and let Brush train on garbage — the gate lived inside the SfM `else` branch. `run_pipeline` now re-parses `sparse/0` via `_parse_mapper_stats` when `sfm` is in `skip_stages` and feeds the synthesized `SfmResult` into `check_sfm_quality`. The adaptive-retry wrapper also drops `"sfm"` from `skip_stages` on retry so the matcher swap actually re-runs SfM.
+- **Stale-job liveness reconciliation** (`d9eb069`) — jobs whose worker thread died mid-run (e.g. host sleep) used to hang as phantom `running` entries forever. `JobRunner._reconcile` now flips them to `failed` with `interrupted — the run ended without producing a result` on the next read.
+- **Version-source consistency** — `pyproject.toml` and `src/autosplat/__init__.py` now agree (both `1.2.0`). Pre-v1.2.0 drift had `__init__.py` stuck on `1.1.1` while pyproject moved to `1.1.2`.
+
+### Design Notes
+
+- **Adaptive retry vs. resume — orthogonal mechanisms.** Adaptive retry (in-process) catches `QualityGateFailure` during a live pipeline and retries the next stage with the hint set; frames stay in memory. Resume (cross-process) is the answer when the process is fully gone (sleep / crash / Ctrl-C): it reads disk artifacts and the original log to reconstruct the run. Both share the same stage-skip plumbing.
+- **No manifest file for resume.** Source video is scraped from the `pipeline.start` JSON event in `pipeline.log`. Works for every existing capture without any migration; user can override with `--video` if the original file has moved.
+- **Resume refuses on a complete capture.** If `output/scene.ply` exists, `resume_capture` raises immediately instead of silently redoing the whole pipeline. Delete the output to re-run, or use `autosplat process`.
+- **WebUI Retry → Resume.** The old Retry button POSTed to `/process`, whose `JobRunner.start_job` finds the source video via `_find_source_video(capture_path)` — a glob inside the capture directory that's typically empty for real (non-fixture) captures. Resume scrapes from the log instead, so it works for every real failed capture.
+
+### Known Issues
+
+- Resume is **single-attempt aware**: the adaptive-retry wrapper restarts mid-pipeline up to `cfg.retry.max_retries` times, but cross-process resume always starts at the highest already-completed stage. A capture that died during Brush won't re-do SfM with a new matcher — by that point the SfM passed quality, so there'd be no signal to do so anyway.
+
+### Tests
+
+246 unit tests (244 passed, 2 opt-in E2E skipped) — +40 over v1.1.2. New coverage: 11 for adaptive-retry + resume helpers + `resume_capture` orchestrator (test_pipeline.py), 4 for `JobRunner.start_resume_job` + the WebUI resume route + the detail-template button (test_jobs.py / test_captures.py), 2 for quality-gate-on-resumed-SfM, plus the V12-2/3/4 + new-capture-flow regression tests landed in earlier commits. `ruff check src/ tests/` → "All checks passed!".
+
+### Internal Notes
+
+- 8 atomic commits between v1.1.2 and v1.2.0 (4 V12 slices + 4 resume/retry slices). Tags `v1.2.0` and the release-commit are signed by the in-repo identity.
+
+---
+
 ## [v1.1.2] — 2026-05-20 — Hotfix Release
 
 Closes the three v1.1.1 backlog items: wall-clock job timestamps + within-day sort, zero ruff findings, and a job-specific status badge. WebUI- and hygiene-only — no change to the capture/train/export algorithm.
