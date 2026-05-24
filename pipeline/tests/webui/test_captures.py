@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from starlette.testclient import TestClient
@@ -71,3 +72,71 @@ def test_capture_detail_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
         response = client.get("/captures/2026-05-16_smoke")
     assert response.status_code == 200
     assert "2026-05-16_smoke" in response.text
+
+
+def test_capture_new_form_returns_200(app: FastAPI) -> None:
+    """GET /captures/new renders the form — not shadowed by /{capture_id}."""
+    with TestClient(app) as client:
+        response = client.get("/captures/new")
+    assert response.status_code == 200
+    assert "New capture" in response.text
+    assert 'name="video_path"' in response.text
+
+
+def test_capture_new_submit_starts_job_and_redirects(app: FastAPI, tmp_path: Path) -> None:
+    """Posting a valid video path launches a job and 303-redirects to the capture."""
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"fake-video-bytes")
+
+    with TestClient(app) as client, patch(
+        "autosplat.webui.jobs_runner._run_pipeline_thread"
+    ):
+        response = client.post(
+            "/captures/new",
+            data={"video_path": str(video)},
+            follow_redirects=False,
+        )
+    assert response.status_code == 303
+    location = response.headers["location"]
+    assert location.startswith("/captures/")
+    assert location.endswith("_clip")
+
+
+def test_capture_new_submit_missing_file_shows_error(app: FastAPI, tmp_path: Path) -> None:
+    """A non-existent path re-renders the form with a 400 and an error message."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/captures/new",
+            data={"video_path": str(tmp_path / "nope.mp4")},
+            follow_redirects=False,
+        )
+    assert response.status_code == 400
+    assert "No file found" in response.text
+
+
+def test_capture_new_submit_wrong_extension_shows_error(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    """A non-video file is rejected with a 400 and an error message."""
+    bad = tmp_path / "notes.txt"
+    bad.write_text("not a video")
+    with TestClient(app) as client:
+        response = client.post(
+            "/captures/new",
+            data={"video_path": str(bad)},
+            follow_redirects=False,
+        )
+    assert response.status_code == 400
+    assert "Unsupported file type" in response.text
+
+
+def test_capture_new_submit_empty_path_shows_error(app: FastAPI) -> None:
+    """A blank path is rejected server-side even though the input is required."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/captures/new",
+            data={"video_path": "   "},
+            follow_redirects=False,
+        )
+    assert response.status_code == 400
+    assert "Please enter" in response.text

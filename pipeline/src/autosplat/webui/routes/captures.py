@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import shutil
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from autosplat import __version__
@@ -42,6 +43,42 @@ async def captures_list(request: Request) -> HTMLResponse:
         "capture/list.html",
         {"captures": captures, "captures_dir": str(captures_dir), "stats": stats, "active_capture": active},
     )
+
+
+@router.get("/new", response_class=HTMLResponse)
+async def capture_new_form(request: Request) -> HTMLResponse:
+    """Render the form for starting a pipeline run from a video file path."""
+    return _templates(request).TemplateResponse(
+        request, "capture/new.html", {"version": __version__}
+    )
+
+
+@router.post("/new")
+async def capture_new_submit(request: Request, video_path: str = Form(...)) -> Response:
+    """Validate the submitted video path and launch a new pipeline run."""
+    raw = video_path.strip()
+    video = Path(raw).expanduser()
+    error: str | None = None
+    if not raw:
+        error = "Please enter a video file path."
+    elif not video.is_file():
+        error = f"No file found at: {video}"
+    elif video.suffix.lower() not in {".mp4", ".mov", ".m4v"}:
+        error = f"Unsupported file type '{video.suffix}' — use .mp4, .mov or .m4v."
+
+    if error is not None:
+        return _templates(request).TemplateResponse(
+            request,
+            "capture/new.html",
+            {"version": __version__, "error": error, "video_path": raw},
+            status_code=400,
+        )
+
+    job_runner = getattr(request.app.state, "job_runner", None)
+    if job_runner is None:
+        raise HTTPException(status_code=503, detail="Job runner not available")
+    job = await job_runner.start_job_from_video(video, request.app.state.cfg)
+    return RedirectResponse(url=f"/captures/{job.capture_id}", status_code=303)
 
 
 @router.get("/{capture_id}", response_class=HTMLResponse)

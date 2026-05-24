@@ -334,3 +334,87 @@ def test_list_captures_sorts_same_day_by_finished_at_desc(tmp_path: Path) -> Non
     assert ids.index("2026-05-20_aaa") < ids.index("2026-05-20_zzz"), (
         f"expected later finished_at first, got order {ids}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Liveness reconcile — stale "running" jobs whose worker thread has died
+# ---------------------------------------------------------------------------
+
+
+def test_get_job_reconciles_dead_thread_to_failed() -> None:
+    """A job that claims 'running' but whose worker thread has died is
+    reconciled to 'failed' — covers hard aborts (suspend/kill mid-run)."""
+    import threading
+
+    runner = JobRunner()
+    job = JobState(capture_id="2026-05-22_stale", status="running")
+    dead = threading.Thread(target=lambda: None)
+    dead.start()
+    dead.join()  # thread has finished → not alive
+    job._thread = dead
+    runner._jobs[job.capture_id] = job
+    runner._history.append(job)
+
+    reconciled = runner.get_job("2026-05-22_stale")
+    assert reconciled is not None
+    assert reconciled.status == "failed"
+    assert "interrupted" in (reconciled.error or "")
+
+
+def test_get_job_keeps_running_when_thread_alive() -> None:
+    """A job whose worker thread is still alive must stay 'running'."""
+    import threading
+
+    runner = JobRunner()
+    job = JobState(capture_id="2026-05-22_live", status="running")
+    stop = threading.Event()
+    alive = threading.Thread(target=stop.wait)
+    alive.start()
+    job._thread = alive
+    runner._jobs[job.capture_id] = job
+    try:
+        assert runner.get_job("2026-05-22_live").status == "running"
+    finally:
+        stop.set()
+        alive.join()
+
+
+def test_all_jobs_reconciles_dead_thread() -> None:
+    """all_jobs() also reconciles — the jobs view must not show stale 'running'."""
+    import threading
+
+    runner = JobRunner()
+    job = JobState(capture_id="2026-05-22_stale2", status="running")
+    dead = threading.Thread(target=lambda: None)
+    dead.start()
+    dead.join()
+    job._thread = dead
+    runner._history.append(job)
+
+    assert runner.all_jobs()[0].status == "failed"
+
+
+# ---------------------------------------------------------------------------
+# start_job_from_video — launch a run for a video that has no capture dir yet
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_start_job_from_video_derives_capture_id(tmp_path: Path) -> None:
+    """start_job_from_video derives the capture id (date_stem) from the video."""
+    from datetime import date
+
+    from autosplat.config import load_config
+
+    runner = JobRunner()
+    video = tmp_path / "herkules.mp4"
+    video.write_bytes(b"fake")
+    cfg = load_config(include_xdg=False)
+
+    with patch("autosplat.webui.jobs_runner._run_pipeline_thread"):
+        job = await runner.start_job_from_video(video, cfg)
+
+    expected_id = f"{date.today().isoformat()}_herkules"
+    assert job.capture_id == expected_id
+    assert runner._jobs[expected_id] is job
+    assert job in runner._history

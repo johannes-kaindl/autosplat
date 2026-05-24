@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}New capture{% endblock %}
+
+{% block crumbs %}
+<span class="sep">/</span><a href="/captures/" style="color:var(--fg-secondary);text-decoration:none">captures</a><span class="sep">/</span><span class="cur">new</span>
+{% endblock %}
+
+{% block content %}
+<div class="as-main-inner">
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span><span class="sep">·</span><span>new capture</span>
+    </div>
+    <h1 class="as-h1">New capture</h1>
+    <p class="as-sub">Point the pipeline at a video file — it runs preflight → preprocess → COLMAP → quality gate → Brush training → export.</p>
+  </div>
+
+  {% if error %}
+  <div style="background:var(--surface-inset);border:1px solid var(--stage-failed);color:var(--stage-failed);padding:var(--space-3);border-radius:var(--radius-md);margin-bottom:var(--space-4);font-family:var(--font-mono);font-size:12px">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/captures/new"
+        style="max-width:620px;display:flex;flex-direction:column;gap:var(--space-3)">
+    <label style="display:flex;flex-direction:column;gap:var(--space-2)">
+      <span class="as-eyebrow">Video file path</span>
+      <input type="text" name="video_path" required autofocus
+             placeholder="~/Documents/clip.mp4"
+             value="{{ video_path or '' }}"
+             style="background:var(--surface-inset);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--space-3);font-family:var(--font-mono);font-size:13px;color:var(--fg-primary);outline:none">
+    </label>
+    <p class="as-sub" style="font-size:11px;margin:0">
+      Absolute or <code>~</code>-relative path to a <code>.mp4</code>, <code>.mov</code>
+      or <code>.m4v</code> file on this machine. The capture is named
+      <code>&lt;date&gt;_&lt;filename&gt;</code>.
+    </p>
+    <div style="display:flex;gap:var(--space-2)">
+      <button type="submit" class="as-btn primary">Start pipeline</button>
+      <a href="/captures/" class="as-btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

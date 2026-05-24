@@ -140,11 +140,33 @@ class JobRunner:
                 job.error = record.get("error")
                 self._history.append(job)
 
+    def _reconcile(self, job: JobState) -> None:
+        """Liveness check: a job that still claims to be 'running' but whose
+        worker thread has died (process suspended/killed mid-run) is marked
+        'failed' — otherwise it hangs as a phantom job forever.
+        """
+        if (
+            job.status == "running"
+            and job._thread is not None
+            and not job._thread.is_alive()
+        ):
+            job.status = "failed"
+            job.error = "interrupted — the run ended without producing a result"
+            job.finished_at = time.monotonic()
+            job.finished_at_walltime = _now_iso()
+            self._persist_job(job)
+            logger.warning("job_runner.reconciled_stale", capture_id=job.capture_id)
+
     def get_job(self, capture_id: str) -> JobState | None:
-        return self._jobs.get(capture_id)
+        job = self._jobs.get(capture_id)
+        if job is not None:
+            self._reconcile(job)
+        return job
 
     def all_jobs(self) -> list[JobState]:
         """Every job ever started, in start order — multiple runs per capture."""
+        for job in self._history:
+            self._reconcile(job)
         return list(self._history)
 
     async def start_job(self, capture_id: str, capture_path: Path, cfg: Config) -> JobState:
@@ -174,6 +196,37 @@ class JobRunner:
         job._thread = thread
         thread.start()
         logger.info("job_runner.start", capture_id=capture_id, video=str(video))
+        return job
+
+    async def start_job_from_video(self, video: Path, cfg: Config) -> JobState:
+        """Start a pipeline run for a video that has no capture dir yet.
+
+        The capture id is derived exactly as run_pipeline derives it
+        (`<date>_<video-stem>`), so the JobState keys onto the capture
+        directory the pipeline will create.
+        """
+        from autosplat.pipeline import _make_capture_name
+
+        capture_id = _make_capture_name(video)
+        async with self._lock:
+            existing = self._jobs.get(capture_id)
+            if existing and existing.status in ("queued", "running"):
+                await self.cancel_job(capture_id)
+
+            job = JobState(capture_id=capture_id, status="queued")
+            self._jobs[capture_id] = job
+            self._history.append(job)
+
+        job.status = "running"
+        thread = threading.Thread(
+            target=_run_pipeline_thread,
+            args=(job, video, cfg, self),
+            daemon=True,
+            name=f"autosplat-job-{capture_id}",
+        )
+        job._thread = thread
+        thread.start()
+        logger.info("job_runner.start_from_video", capture_id=capture_id, video=str(video))
         return job
 
     async def cancel_job(self, capture_id: str) -> bool:

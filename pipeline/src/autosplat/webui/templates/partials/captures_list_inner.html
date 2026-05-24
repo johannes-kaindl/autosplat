@@ -28,7 +28,7 @@
     <span class="as-chip">running <span class="ct">{{ captures|selectattr('status','eq','running')|list|length }}</span></span>
     <span class="as-chip">failed <span class="ct">{{ captures|selectattr('status','eq','failed')|list|length }}</span></span>
     <span class="as-filter-spacer"></span>
-    <a href="/captures/" class="as-btn primary">{{ icon('plus', 13) }} New capture</a>
+    <a href="/captures/new" class="as-btn primary">{{ icon('plus', 13) }} New capture</a>
   </div>
 
   {# Captures table #}
