@@ -41,7 +41,12 @@ async def captures_list(request: Request) -> HTMLResponse:
     return _templates(request).TemplateResponse(
         request,
         "capture/list.html",
-        {"captures": captures, "captures_dir": str(captures_dir), "stats": stats, "active_capture": active},
+        {
+            "captures": captures,
+            "captures_dir": str(captures_dir),
+            "stats": stats,
+            "active_capture": active,
+        },
     )
 
 
@@ -105,9 +110,7 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
 
     # Check if SuperSplat is mounted (app.mount sets it in app.routes)
-    supersplat_available = any(
-        getattr(r, "name", None) == "supersplat" for r in request.app.routes
-    )
+    supersplat_available = any(getattr(r, "name", None) == "supersplat" for r in request.app.routes)
 
     # Build the iframe embed URL — SuperSplat loads the PLY via ?load=
     embed_url = ""
@@ -167,6 +170,24 @@ async def capture_process(request: Request, capture_id: str) -> RedirectResponse
     job_runner = getattr(request.app.state, "job_runner", None)
     if job_runner is not None:
         await job_runner.start_job(capture_id, capture.path, request.app.state.cfg)
+    return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+@router.post("/{capture_id}/resume")
+async def capture_resume(request: Request, capture_id: str) -> RedirectResponse:
+    """Continue a previous capture from on-disk state via resume_capture.
+
+    Uses the same stage-skipping + adaptive-retry logic as `autosplat resume`,
+    just wrapped in a background JobRunner thread so the WebUI stays responsive.
+    """
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    job_runner = getattr(request.app.state, "job_runner", None)
+    if job_runner is None:
+        raise HTTPException(status_code=503, detail="Job runner not available")
+    await job_runner.start_resume_job(capture_id, capture.path, request.app.state.cfg)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
 

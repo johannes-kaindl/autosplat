@@ -88,9 +88,7 @@ def test_capture_new_submit_starts_job_and_redirects(app: FastAPI, tmp_path: Pat
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"fake-video-bytes")
 
-    with TestClient(app) as client, patch(
-        "autosplat.webui.jobs_runner._run_pipeline_thread"
-    ):
+    with TestClient(app) as client, patch("autosplat.webui.jobs_runner._run_pipeline_thread"):
         response = client.post(
             "/captures/new",
             data={"video_path": str(video)},
@@ -114,9 +112,7 @@ def test_capture_new_submit_missing_file_shows_error(app: FastAPI, tmp_path: Pat
     assert "No file found" in response.text
 
 
-def test_capture_new_submit_wrong_extension_shows_error(
-    app: FastAPI, tmp_path: Path
-) -> None:
+def test_capture_new_submit_wrong_extension_shows_error(app: FastAPI, tmp_path: Path) -> None:
     """A non-video file is rejected with a 400 and an error message."""
     bad = tmp_path / "notes.txt"
     bad.write_text("not a video")
@@ -140,3 +136,73 @@ def test_capture_new_submit_empty_path_shows_error(app: FastAPI) -> None:
         )
     assert response.status_code == 400
     assert "Please enter" in response.text
+
+
+# ─── V12-6 — resume route ────────────────────────────────────────────────────
+
+
+def test_capture_resume_route_launches_job_and_redirects(app: FastAPI, tmp_path: Path) -> None:
+    """POST /captures/{id}/resume launches a resume job and 303-redirects
+    back to the capture's detail page."""
+    capture_dir = tmp_path / "2026-05-22_max_strasse"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with (
+        TestClient(app) as client,
+        patch("autosplat.webui.jobs_runner._run_resume_thread") as mocked,
+    ):
+        response = client.post("/captures/2026-05-22_max_strasse/resume", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/captures/2026-05-22_max_strasse"
+    mocked.assert_called_once()
+
+
+def test_capture_resume_route_404_for_unknown_capture(app: FastAPI, tmp_path: Path) -> None:
+    """Resuming a capture that doesn't exist on disk returns 404."""
+    app.state.cfg.paths.captures_dir = tmp_path
+    with TestClient(app) as client:
+        response = client.post("/captures/2099-01-01_nope/resume", follow_redirects=False)
+    assert response.status_code == 404
+
+
+def test_capture_detail_failed_shows_resume_button(app: FastAPI, tmp_path: Path) -> None:
+    """A failed capture's detail page surfaces a Resume button that POSTs
+    to the resume route (replacing the broken-for-real-captures Retry)."""
+    capture_dir = tmp_path / "2026-05-22_failed_one"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "video": "/tmp/v.mp4"}\n', encoding="utf-8"
+    )
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    from autosplat.webui.jobs_runner import JobState
+
+    runner = app.state.job_runner
+    runner._jobs["2026-05-22_failed_one"] = JobState(
+        capture_id="2026-05-22_failed_one", status="failed", error="boom"
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-22_failed_one")
+
+    assert response.status_code == 200
+    assert 'action="/captures/2026-05-22_failed_one/resume"' in response.text
+    assert "Resume" in response.text
+
+
+def test_capture_detail_done_hides_resume_button(app: FastAPI, tmp_path: Path) -> None:
+    """A completed capture must not show a Resume button — resume_capture
+    would refuse it anyway, so hide the dead control."""
+    capture_dir = tmp_path / "2026-05-22_done_one"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-22_done_one")
+
+    assert response.status_code == 200
+    assert "/resume" not in response.text

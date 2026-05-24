@@ -105,9 +105,7 @@ def test_list_captures_overlays_running_jobrunner_state(tmp_path: Path) -> None:
     capture_dir.mkdir()
 
     runner = JobRunner()
-    runner._jobs["2026-05-17_g2_9"] = JobState(
-        capture_id="2026-05-17_g2_9", status="running"
-    )
+    runner._jobs["2026-05-17_g2_9"] = JobState(capture_id="2026-05-17_g2_9", status="running")
 
     assert list_captures(tmp_path)[0].status == "idle"
     assert list_captures(tmp_path, runner)[0].status == "running"
@@ -195,6 +193,7 @@ def test_list_captures_done_jobrunner_propagates_finished_at(tmp_path: Path) -> 
 
 def _read_jsonl(path: Path) -> list[dict]:
     import json
+
     return [json.loads(line) for line in path.read_text().splitlines() if line]
 
 
@@ -250,22 +249,32 @@ def test_load_history_populates_from_runs_jsonl(tmp_path: Path) -> None:
 
     capture_a = tmp_path / "2026-05-20_cap_a"
     capture_a.mkdir()
-    (capture_a / "runs.jsonl").write_text(json.dumps({
-        "capture_id": "2026-05-20_cap_a",
-        "status": "done",
-        "started_at": "2026-05-20T08:00:00Z",
-        "finished_at": "2026-05-20T08:30:00Z",
-        "error": None,
-    }) + "\n")
+    (capture_a / "runs.jsonl").write_text(
+        json.dumps(
+            {
+                "capture_id": "2026-05-20_cap_a",
+                "status": "done",
+                "started_at": "2026-05-20T08:00:00Z",
+                "finished_at": "2026-05-20T08:30:00Z",
+                "error": None,
+            }
+        )
+        + "\n"
+    )
     capture_b = tmp_path / "2026-05-20_cap_b"
     capture_b.mkdir()
-    (capture_b / "runs.jsonl").write_text(json.dumps({
-        "capture_id": "2026-05-20_cap_b",
-        "status": "failed",
-        "started_at": "2026-05-20T09:00:00Z",
-        "finished_at": "2026-05-20T09:05:00Z",
-        "error": "boom",
-    }) + "\n")
+    (capture_b / "runs.jsonl").write_text(
+        json.dumps(
+            {
+                "capture_id": "2026-05-20_cap_b",
+                "status": "failed",
+                "started_at": "2026-05-20T09:00:00Z",
+                "finished_at": "2026-05-20T09:05:00Z",
+                "error": "boom",
+            }
+        )
+        + "\n"
+    )
 
     runner = JobRunner(captures_dir=tmp_path)
     runner.load_history()
@@ -417,4 +426,59 @@ async def test_start_job_from_video_derives_capture_id(tmp_path: Path) -> None:
     expected_id = f"{date.today().isoformat()}_herkules"
     assert job.capture_id == expected_id
     assert runner._jobs[expected_id] is job
+
+
+# ---------------------------------------------------------------------------
+# V12-6 — resume support (autosplat resume via WebUI)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_start_resume_job_invokes_resume_capture(tmp_path: Path) -> None:
+    """start_resume_job spins up a background thread that calls
+    resume_capture(capture_path, cfg) — *not* run_pipeline_with_adaptive_retry
+    — and registers the job under the capture's directory name."""
+    from autosplat.config import load_config
+
+    capture_path = tmp_path / "2026-05-22_max_strasse"
+    capture_path.mkdir()
+    cfg = load_config(include_xdg=False)
+    runner = JobRunner()
+
+    with patch("autosplat.webui.jobs_runner.resume_capture") as mocked_resume:
+        mocked_resume.return_value = type("R", (), {"output_ply": tmp_path / "out.ply"})()
+        job = await runner.start_resume_job("2026-05-22_max_strasse", capture_path, cfg)
+        # The thread runs synchronously enough in tests; give it a beat.
+        if job._thread is not None:
+            job._thread.join(timeout=2)
+
+    assert job.capture_id == "2026-05-22_max_strasse"
+    mocked_resume.assert_called_once()
+    args = mocked_resume.call_args.args
+    assert args[0] == capture_path
+    assert args[1] is cfg
+
+
+@pytest.mark.anyio
+async def test_start_resume_job_records_failure(tmp_path: Path) -> None:
+    """A ValueError from resume_capture (e.g. already complete, no source
+    video) lands on the job as status=failed with the error message — not
+    swallowed silently."""
+    from autosplat.config import load_config
+
+    capture_path = tmp_path / "2026-05-22_done"
+    capture_path.mkdir()
+    cfg = load_config(include_xdg=False)
+    runner = JobRunner()
+
+    with patch(
+        "autosplat.webui.jobs_runner.resume_capture",
+        side_effect=ValueError("already complete"),
+    ):
+        job = await runner.start_resume_job("2026-05-22_done", capture_path, cfg)
+        if job._thread is not None:
+            job._thread.join(timeout=2)
+
+    assert job.status == "failed"
+    assert job.error is not None and "already complete" in job.error
     assert job in runner._history

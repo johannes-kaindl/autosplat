@@ -38,9 +38,13 @@
         {% if capture.status == 'done' and capture.has_ply %}
         <a href="/captures/{{ capture.id }}/scene.ply" class="as-btn ghost" download>{{ icon('download', 13) }} PLY</a>
         <a href="/captures/{{ capture.id }}/view" class="as-btn primary">{{ icon('eye', 14) }} View splat</a>
-        {% elif capture.status in ('idle', 'failed', 'queued') %}
+        {% elif capture.status == 'failed' %}
+        <form method="post" action="/captures/{{ capture.id }}/resume">
+          <button type="submit" class="as-btn primary">{{ icon('play', 13) }} Resume</button>
+        </form>
+        {% elif capture.status in ('idle', 'queued') %}
         <form method="post" action="/captures/{{ capture.id }}/process">
-          <button type="submit" class="as-btn primary">{{ icon('play', 13) }} {% if capture.status == 'failed' %}Retry{% else %}Process{% endif %}</button>
+          <button type="submit" class="as-btn primary">{{ icon('play', 13) }} Process</button>
         </form>
         {% endif %}
       </div>

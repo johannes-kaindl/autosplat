@@ -19,6 +19,7 @@ from typing import Literal
 
 from autosplat.config import Config
 from autosplat.logging import get_logger
+from autosplat.pipeline import resume_capture
 from autosplat.watcher import _now_iso
 
 logger = get_logger(__name__)
@@ -194,6 +195,37 @@ class JobRunner:
         logger.info("job_runner.start", capture_id=capture_id, video=str(video))
         return job
 
+    async def start_resume_job(self, capture_id: str, capture_path: Path, cfg: Config) -> JobState:
+        """Continue a previous capture from on-disk state via `resume_capture`.
+
+        Mirrors `start_job` for cancellation and persistence, but the worker
+        thread invokes `resume_capture(capture_path, cfg)` so only the stages
+        that didn't produce artifacts are re-run. The source video is scraped
+        from the capture's pipeline.log — no need to track it separately.
+        """
+        async with self._lock:
+            existing = self._jobs.get(capture_id)
+            if existing and existing.status in ("queued", "running"):
+                await self.cancel_job(capture_id)
+
+            job = JobState(capture_id=capture_id, status="queued")
+            self._jobs[capture_id] = job
+            self._history.append(job)
+
+        job.status = "running"
+        thread = threading.Thread(
+            target=_run_resume_thread,
+            args=(job, capture_path, cfg, self),
+            daemon=True,
+            name=f"autosplat-resume-{capture_id}",
+        )
+        job._thread = thread
+        thread.start()
+        logger.info(
+            "job_runner.start_resume", capture_id=capture_id, capture_path=str(capture_path)
+        )
+        return job
+
     async def start_job_from_video(self, video: Path, cfg: Config) -> JobState:
         """Start a pipeline run for a video that has no capture dir yet.
 
@@ -259,6 +291,54 @@ def _find_source_video(capture_path: Path) -> Path | None:
         if candidates:
             return candidates[0]
     return None
+
+
+def _run_resume_thread(job: JobState, capture_path: Path, cfg: Config, runner: JobRunner) -> None:
+    """Worker for start_resume_job — invokes resume_capture instead of the
+    fresh-run wrapper. Failure (already complete, missing source video) is
+    captured on the job, not raised."""
+    import subprocess
+
+    try:
+        original_popen = subprocess.Popen
+
+        class _TrackingPopen(original_popen):  # type: ignore[valid-type,misc]
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                job._proc = self
+
+        subprocess.Popen = _TrackingPopen  # type: ignore[misc]
+        try:
+            result = resume_capture(capture_path, cfg)
+        finally:
+            subprocess.Popen = original_popen  # type: ignore[misc]
+
+        if job.status == "cancelled":
+            return
+        job.status = "done"
+        job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
+        runner._persist_job(job)
+        job.append_log(f"Resume complete: {result.output_ply}")
+        logger.info(
+            "job_runner.resume_done",
+            capture_id=job.capture_id,
+            ply=str(result.output_ply),
+        )
+    except Exception as e:
+        if job.status == "cancelled":
+            return
+        job.status = "failed"
+        job.finished_at = time.monotonic()
+        job.finished_at_walltime = _now_iso()
+        job.error = str(e)
+        runner._persist_job(job)
+        job.append_log(f"Resume failed: {e}")
+        logger.error(
+            "job_runner.resume_failed",
+            capture_id=job.capture_id,
+            error=str(e),
+        )
 
 
 def _run_pipeline_thread(job: JobState, video: Path, cfg: Config, runner: JobRunner) -> None:
