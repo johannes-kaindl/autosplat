@@ -1,7 +1,7 @@
 import { createViewer } from './viewer.js';
 import { initDropzone } from './dropzone.js';
 import { HUD } from './hud.js';
-import { KeyboardInput } from './controls.js';
+import { KeyboardInput, TouchInput, CompositeInput } from './controls.js';
 
 const DEMO_URL = 'assets/demo/scene.sog';
 
@@ -72,15 +72,35 @@ initDropzone({
   }
 });
 
-// ---------- Walking-mode wiring (slice 4) ----------
+// ---------- Walking-mode wiring (slices 4–6) ----------
 
-const input = new KeyboardInput();
+const keyboard = new KeyboardInput();
+const touch = new TouchInput();
+const input = new CompositeInput(keyboard, touch);
+
+// Touch is attached/detached separately from keyboard because it binds
+// to DOM elements that only matter inside walking-mode.
+function attachInputs() {
+  keyboard.attach(window);
+  touch.attach({
+    root: document.getElementById('canvas-host'),
+    jumpBtn: document.getElementById('walk-btn-jump'),
+    flyBtn: document.getElementById('walk-btn-fly'),
+    exitBtn: document.getElementById('walk-exit'),
+  });
+}
+function detachInputs() {
+  keyboard.detach();
+  touch.detach();
+}
 
 viewer.onWalkingEnter?.(() => {
+  attachInputs();
   hud.enterWalkingUI({ onExit: () => viewer.exitWalking?.(input) });
 });
 
 viewer.onWalkingExit?.(() => {
+  detachInputs();
   hud.exitWalkingUI();
   syncOrbitButton();
 });
