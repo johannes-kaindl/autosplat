@@ -17,18 +17,65 @@ it. No build step, no server, no upload — everything renders locally.
 
 - Live Gaussian-Splat rendering with auto-orbit
 - Orbit / pan / zoom camera (left-drag, right-drag, mouse wheel)
+- **Walking-mode** — first-person walk-through with WASD + mouse-look,
+  collision via an in-browser heightmap (no server, no extra files)
 - Drag-and-drop or file-picker for your own `.ply` splats
 - Fullscreen mode — distraction-free, intro overlay hidden
 - Installable PWA with an offline-capable app shell
 - Graceful WebGL2 fallback to a still image
 
+## Walking-mode
+
+After a splat loads, a **"▶ Walk through this scene"** prompt appears
+on the stage. Click it to drop into first-person mode. The viewer
+builds a 128×128 heightmap from the splat's own point positions
+(~30 ms for 1 M splats) and uses it as the walkable surface.
+
+### Desktop controls
+
+| Action | Key |
+|---|---|
+| Move | `W` `A` `S` `D` or arrow keys |
+| Look | Mouse (pointer-lock — click the canvas to re-acquire if lost) |
+| Jump | `Space` |
+| Sprint | Hold `Shift` |
+| Toggle fly mode | `F` |
+| Up / down (in fly mode) | `Q` / `E` |
+| Adjust eye height | Mouse wheel — setting is remembered |
+| Exit | `Esc` |
+
+### Mobile controls
+
+| Action | Touch |
+|---|---|
+| Move | Drag in the **left** half of the screen (virtual joystick) |
+| Look | Drag in the **right** half of the screen |
+| Sprint | Push the joystick to the rim |
+| Jump | `↑` button (right edge) |
+| Toggle fly mode | `✈` button (right edge) |
+| Exit | `✕` button (top right) |
+
+Walking-mode is tuned for outdoor scenes captured from drone-style
+flyovers — the kind of capture `autosplat` is built for. Indoor
+multi-room scenes don't work well today (collision is a heightmap, not
+real walls); see [docs/superpowers/specs/2026-05-25-walkable-viewer-design.md](docs/superpowers/specs/2026-05-25-walkable-viewer-design.md)
+for the planned Tier-3 mesh-collision follow-up.
+
 ## Local development
 
 ```bash
-./serve.sh        # → http://localhost:8123/
+./serve.sh                       # → http://localhost:8123/
+./tests/run.sh                   # unit + e2e tests
+./tests/run.sh unit              # unit tests only (no deps)
+./tests/run.sh e2e               # browser smoke (installs puppeteer-core)
 ```
 
 A real http origin is required — Service Workers do not run on `file://`.
+
+Tests live under `tests/` and stay separate from the shipped viewer.
+The shipped site has zero npm dependencies; `tests/node_modules/` is
+gitignored. See [docs/superpowers/specs/2026-05-25-walkable-checklist.md](docs/superpowers/specs/2026-05-25-walkable-checklist.md)
+for the manual walking-mode smoke checklist.
 
 ## Deployment — Codeberg Pages
 
