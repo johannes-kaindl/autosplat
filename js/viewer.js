@@ -156,7 +156,7 @@ export function createViewer(hostElement) {
 
     if (cc) cc.enabled = false;
     try { await canvas.requestPointerLock?.(); } catch { /* desktop without lock — fine */ }
-    input.attach(window);
+    // input device wiring is owned by the caller (app.js) — viewer just consumes.
 
     lockChangeHandler = () => {
       if (document.pointerLockElement !== canvas && walkingMode) exitWalking(input);
@@ -195,7 +195,6 @@ export function createViewer(hostElement) {
     if (document.exitPointerLock && document.pointerLockElement === canvas) {
       document.exitPointerLock();
     }
-    input?.detach();
     if (cc) cc.enabled = true;
     if (pivotRotationOnEnter && splatPivot) {
       splatPivot.setRotation(pivotRotationOnEnter);

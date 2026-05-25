@@ -152,9 +152,39 @@ footer a { color: var(--muted); }
 }
 #walk-eye-overlay.is-visible { opacity: 1; }
 
-/* Mobile tweaks — touch buttons join in slice 6 */
+/* ---------- Walking-mode touch buttons (Jump / Fly) ---------- */
+
+#walk-touch-buttons {
+  position: absolute; right: 1rem; bottom: 4.5rem;
+  display: none;  /* shown on touch-capable devices only — see media-query below */
+  flex-direction: column; gap: 0.6rem;
+  pointer-events: auto;
+}
+#walk-touch-buttons button {
+  width: 3.6rem; height: 3.6rem;
+  border-radius: 999px; border: 1px solid rgba(255,255,255,0.3);
+  background: var(--panel); color: var(--fg);
+  font-size: 1.3rem; line-height: 1; cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#walk-touch-buttons button:active {
+  background: var(--accent); border-color: rgba(255,255,255,0.6);
+}
+
+/* Show touch buttons only on coarse-pointer devices (phones/tablets). */
+@media (hover: none) and (pointer: coarse) {
+  #walk-touch-buttons { display: flex; }
+  /* hide the keyboard controls-hint on touch — it lists keys you don't have */
+  #walk-controls-hint { display: none; }
+}
+
+/* Mobile tweaks */
 @media (max-width: 600px) {
   #cta-walk { font-size: 1rem; padding: 0.85rem 1.3rem; top: 35%; }
   #walk-mode-indicator { font-size: 0.8rem; padding: 0.4rem 0.8rem; }
   #walk-controls-hint { font-size: 0.72rem; bottom: 1rem; max-width: 92vw; }
+  #walk-touch-buttons button { width: 3.2rem; height: 3.2rem; font-size: 1.2rem; }
 }
