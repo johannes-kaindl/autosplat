@@ -27,6 +27,7 @@ export class KeyboardInput {
     this._pending = { jump: false, fly: false, exit: false };
     this._lookX = 0;
     this._lookY = 0;
+    this._wheel = 0;
     this._target = null;
     this._handlers = null;
   }
@@ -38,10 +39,12 @@ export class KeyboardInput {
       keydown: (e) => this._onKeyDown(e),
       keyup: (e) => this._onKeyUp(e),
       mousemove: (e) => this._onMouseMove(e),
+      wheel: (e) => this._onWheel(e),
     };
     target.addEventListener('keydown', this._handlers.keydown);
     target.addEventListener('keyup', this._handlers.keyup);
     target.addEventListener('mousemove', this._handlers.mousemove);
+    target.addEventListener('wheel', this._handlers.wheel, { passive: false });
     this._target = target;
   }
 
@@ -50,6 +53,7 @@ export class KeyboardInput {
     this._target.removeEventListener('keydown', this._handlers.keydown);
     this._target.removeEventListener('keyup', this._handlers.keyup);
     this._target.removeEventListener('mousemove', this._handlers.mousemove);
+    this._target.removeEventListener('wheel', this._handlers.wheel);
     this._target = null;
     this._handlers = null;
     this.reset();
@@ -62,6 +66,7 @@ export class KeyboardInput {
     this._pending.exit = false;
     this._lookX = 0;
     this._lookY = 0;
+    this._wheel = 0;
   }
 
   _onKeyDown(e) {
@@ -89,6 +94,12 @@ export class KeyboardInput {
     this._lookY += e.movementY ?? 0;
   }
 
+  _onWheel(e) {
+    // Used in walking-mode to tweak eye-height; suppress page scroll.
+    this._wheel += e.deltaY ?? 0;
+    e.preventDefault?.();
+  }
+
   read() {
     const out = { forward: 0, right: 0, vertical: 0, sprint: false };
     for (const k of this._keys) {
@@ -101,11 +112,13 @@ export class KeyboardInput {
     out.exit = this._pending.exit;
     out.lookDeltaX = this._lookX;
     out.lookDeltaY = this._lookY;
+    out.wheelDelta = this._wheel;
     this._pending.jump = false;
     this._pending.fly = false;
     this._pending.exit = false;
     this._lookX = 0;
     this._lookY = 0;
+    this._wheel = 0;
     return out;
   }
 }

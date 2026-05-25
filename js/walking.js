@@ -17,6 +17,11 @@ import { buildHeightmap, smoothHeightmap, sampleHeightmap } from './heightmap.js
 const LOOK_SENSITIVITY = 0.0022;  // radians per pixel of mouse movement
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 const RESPAWN_BELOW = 5;          // eye-offsets below ground → respawn
+const SPRINT_MULT = 2;            // shift held doubles speed
+const WHEEL_TO_EYE = 0.0008;      // wheel-delta * yExtent → eye-offset change
+const EYE_MIN_FRAC = 0.01;        // eye-offset ≥ 1% of yExtent
+const EYE_MAX_FRAC = 0.6;         //              ≤ 60% of yExtent
+const EYE_STORE_KEY = 'autosplat-walking-eye-frac';
 
 /** Build a world-space heightmap from a freshly loaded splat entity. */
 export function heightmapFromSplat(splatEntity, splatPivot, resolution = 128) {
@@ -84,13 +89,18 @@ function boundsFromPositions(positions) {
 }
 
 export class WalkingMode {
-  constructor({ app, camera, splatBounds, heightmap, input, onExit }) {
+  constructor({
+    app, camera, splatBounds, heightmap, input,
+    onExit, onModeChange, onEyeChange,
+  }) {
     this.app = app;
     this.camera = camera;
     this.bounds = splatBounds;
     this.hm = heightmap;
     this.input = input;
     this.onExit = onExit;
+    this.onModeChange = onModeChange;
+    this.onEyeChange = onEyeChange;
     this._yaw = 0;
     this._pitch = 0;
     this._vy = 0;
@@ -105,10 +115,13 @@ export class WalkingMode {
       yExtent,
       this.bounds.max.z - this.bounds.min.z,
     );
-    this._eyeOffset  = Math.max(0.05, yExtent / 8);
+    this._yExtent    = Math.max(0.01, yExtent);
+    this._eyeFrac    = restoreEyeFrac() ?? 1 / 8;
+    this._eyeOffset  = this._eyeFrac * this._yExtent;
     this._jumpHeight = Math.max(0.02, yExtent / 40);
     this._gravity    = this._jumpHeight * 8;
     this._walkSpeed  = sceneSize * 0.18;  // ~5.5s to cross the longest axis
+    this._flySpeed   = this._walkSpeed * 1.3;
   }
 
   enter() {
@@ -165,11 +178,33 @@ export class WalkingMode {
     this.camera.setRotation(yawQ);
   }
 
+  setMode(mode) {
+    if (mode !== 'walk' && mode !== 'fly') return;
+    if (mode === this._mode) return;
+    this._mode = mode;
+    if (mode === 'fly') this._vy = 0;
+    this.onModeChange?.(mode);
+  }
+
+  getMode() { return this._mode; }
+
+  setEyeFrac(frac) {
+    const clamped = Math.max(EYE_MIN_FRAC, Math.min(EYE_MAX_FRAC, frac));
+    this._eyeFrac = clamped;
+    this._eyeOffset = clamped * this._yExtent;
+    persistEyeFrac(clamped);
+    this.onEyeChange?.(this._eyeOffset);
+  }
+
   _step(dt) {
     if (!this.input) return;
     const s = this.input.read();
 
     if (s.exit) { this.onExit?.(); return; }
+    if (s.fly) this.setMode(this._mode === 'walk' ? 'fly' : 'walk');
+    if (s.wheelDelta) {
+      this.setEyeFrac(this._eyeFrac - s.wheelDelta * WHEEL_TO_EYE);
+    }
 
     // mouse look
     this._yaw   -= s.lookDeltaX * LOOK_SENSITIVITY;
@@ -177,6 +212,9 @@ export class WalkingMode {
     if (this._pitch >  PITCH_LIMIT) this._pitch =  PITCH_LIMIT;
     if (this._pitch < -PITCH_LIMIT) this._pitch = -PITCH_LIMIT;
     this._applyRotation();
+
+    const sprint = s.sprint ? SPRINT_MULT : 1;
+    const speed = (this._mode === 'fly' ? this._flySpeed : this._walkSpeed) * sprint;
 
     // horizontal motion in world XZ, projected from yaw only
     let fx = 0, fz = 0;
@@ -186,7 +224,7 @@ export class WalkingMode {
       let dz = -cy * s.forward - sy * s.right;
       const len = Math.hypot(dx, dz);
       if (len > 0) { dx /= len; dz /= len; }
-      const step = this._walkSpeed * dt;
+      const step = speed * dt;
       fx = dx * step;
       fz = dz * step;
     }
@@ -195,41 +233,63 @@ export class WalkingMode {
     let nx = pos.x + fx;
     let nz = pos.z + fz;
 
-    // soft clamp to scene bounds (Tier-2 "walls")
+    // soft clamp to scene bounds (Tier-2 "walls"). Fly mode keeps walls too —
+    // they keep the user from drifting infinitely off-scene.
     if (nx < this.bounds.min.x) nx = this.bounds.min.x;
     if (nx > this.bounds.max.x) nx = this.bounds.max.x;
     if (nz < this.bounds.min.z) nz = this.bounds.min.z;
     if (nz > this.bounds.max.z) nz = this.bounds.max.z;
 
-    // jump impulse only when on ground
-    const groundY = this._sampleGround(nx, nz);
-    const eyeY    = groundY === -Infinity ? -Infinity : groundY + this._eyeOffset;
-    const onGround = groundY !== -Infinity && pos.y <= eyeY + 0.01;
-    if (s.jump && onGround) {
-      this._vy = Math.sqrt(2 * this._gravity * this._jumpHeight);
-    }
-
-    // gravity integration
-    this._vy -= this._gravity * dt;
-    let ny = pos.y + this._vy * dt;
-
-    if (eyeY !== -Infinity && ny < eyeY) {
-      ny = eyeY;
+    let ny;
+    if (this._mode === 'fly') {
+      // Vertical from Q/E (s.vertical) or jump-impulse-as-up.
+      const flyV = s.vertical + (s.jump ? 1 : 0);
+      ny = pos.y + flyV * speed * dt;
+      // soft Y clamp so you can't drift forever into the sky
+      const yMax = this.bounds.max.y + 5 * this._eyeOffset;
+      const yMin = this.bounds.min.y - 2 * this._eyeOffset;
+      if (ny > yMax) ny = yMax;
+      if (ny < yMin) ny = yMin;
       this._vy = 0;
-    }
-
-    // respawn if we've fallen too far below the scene
-    if (ny < this.bounds.min.y - RESPAWN_BELOW * this._eyeOffset) {
-      const cx = (this.bounds.min.x + this.bounds.max.x) / 2;
-      const cz = (this.bounds.min.z + this.bounds.max.z) / 2;
-      const respawnGround = this._sampleGround(cx, cz);
-      const respawnY = (respawnGround === -Infinity ? this.bounds.min.y : respawnGround)
-                       + this._eyeOffset;
-      this.camera.setPosition(cx, respawnY, cz);
-      this._vy = 0;
-      return;
+    } else {
+      // Walking: gravity + jump + ground snap.
+      const groundY = this._sampleGround(nx, nz);
+      const eyeY    = groundY === -Infinity ? -Infinity : groundY + this._eyeOffset;
+      const onGround = groundY !== -Infinity && pos.y <= eyeY + 0.01;
+      if (s.jump && onGround) {
+        this._vy = Math.sqrt(2 * this._gravity * this._jumpHeight);
+      }
+      this._vy -= this._gravity * dt;
+      ny = pos.y + this._vy * dt;
+      if (eyeY !== -Infinity && ny < eyeY) {
+        ny = eyeY;
+        this._vy = 0;
+      }
+      if (ny < this.bounds.min.y - RESPAWN_BELOW * this._eyeOffset) {
+        const cx = (this.bounds.min.x + this.bounds.max.x) / 2;
+        const cz = (this.bounds.min.z + this.bounds.max.z) / 2;
+        const respawnGround = this._sampleGround(cx, cz);
+        const respawnY = (respawnGround === -Infinity ? this.bounds.min.y : respawnGround)
+                         + this._eyeOffset;
+        this.camera.setPosition(cx, respawnY, cz);
+        this._vy = 0;
+        return;
+      }
     }
 
     this.camera.setPosition(nx, ny, nz);
   }
+}
+
+function restoreEyeFrac() {
+  try {
+    const v = parseFloat(globalThis.localStorage?.getItem(EYE_STORE_KEY) ?? '');
+    if (Number.isFinite(v) && v >= EYE_MIN_FRAC && v <= EYE_MAX_FRAC) return v;
+  } catch { /* localStorage unavailable */ }
+  return null;
+}
+
+function persistEyeFrac(v) {
+  try { globalThis.localStorage?.setItem(EYE_STORE_KEY, String(v)); }
+  catch { /* localStorage unavailable */ }
 }

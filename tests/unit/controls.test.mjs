@@ -182,3 +182,23 @@ test('KeyboardInput: reset() clears all held keys and pending edges', () => {
   assert.equal(s.jump, false);
   assert.equal(s.lookDeltaX, 0);
 });
+
+test('KeyboardInput: wheel events accumulate wheelDelta, read clears', () => {
+  const t = new FakeTarget();
+  const input = new KeyboardInput();
+  input.attach(t);
+  t.dispatch('wheel', { deltaY: 100, preventDefault: () => {} });
+  t.dispatch('wheel', { deltaY: -30, preventDefault: () => {} });
+  const s = input.read();
+  assert.equal(s.wheelDelta, 70);
+  assert.equal(input.read().wheelDelta, 0);
+});
+
+test('KeyboardInput: detach also removes wheel listener', () => {
+  const t = new FakeTarget();
+  const input = new KeyboardInput();
+  input.attach(t);
+  assert.ok(t.listenerCount('wheel') > 0);
+  input.detach();
+  assert.equal(t.listenerCount('wheel'), 0);
+});

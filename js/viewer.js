@@ -37,6 +37,7 @@ export function createViewer(hostElement) {
       enterWalking: async () => false, exitWalking: () => {},
       isWalking: () => false,
       onWalkingEnter: () => {}, onWalkingExit: () => {},
+      onWalkingModeChange: () => {}, onWalkingEyeChange: () => {},
       unsupported: true
     };
   }
@@ -135,6 +136,8 @@ export function createViewer(hostElement) {
   let lockChangeHandler = null;
   const walkEnterListeners = [];
   const walkExitListeners = [];
+  const walkModeListeners = [];
+  const walkEyeListeners = [];
 
   async function enterWalking(input) {
     if (walkingMode) return false;
@@ -163,6 +166,16 @@ export function createViewer(hostElement) {
     walkingMode = new WalkingMode({
       app, camera, splatBounds: hm.bounds, heightmap: hm.heightmap,
       input, onExit: () => exitWalking(input),
+      onModeChange: (m) => {
+        for (const fn of walkModeListeners) {
+          try { fn(m); } catch (e) { console.error(e); }
+        }
+      },
+      onEyeChange: (v) => {
+        for (const fn of walkEyeListeners) {
+          try { fn(v); } catch (e) { console.error(e); }
+        }
+      },
     });
     walkingMode.enter();
     for (const fn of walkEnterListeners) {
@@ -203,6 +216,8 @@ export function createViewer(hostElement) {
     isWalking() { return walkingMode != null; },
     onWalkingEnter(fn) { walkEnterListeners.push(fn); },
     onWalkingExit(fn) { walkExitListeners.push(fn); },
+    onWalkingModeChange(fn) { walkModeListeners.push(fn); },
+    onWalkingEyeChange(fn) { walkEyeListeners.push(fn); },
     unsupported: false
   };
 }

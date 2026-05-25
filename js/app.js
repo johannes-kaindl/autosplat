@@ -85,6 +85,15 @@ viewer.onWalkingExit?.(() => {
   syncOrbitButton();
 });
 
+viewer.onWalkingModeChange?.((mode) => {
+  hud.setMode(mode);
+  hud.showHint();
+});
+
+viewer.onWalkingEyeChange?.((value) => {
+  hud.setEyeHeight(value);
+});
+
 viewer.onLoad?.(() => {
   hud.showCTA(async () => {
     try {
