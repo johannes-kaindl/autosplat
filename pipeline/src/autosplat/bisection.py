@@ -254,7 +254,22 @@ def bisect_recursively(
             # Shouldn't happen given the guard above, but be defensive.
             continue
         clip_path = _clip_path_for(capture_dir, source_video.stem, child_id)
-        cut_video(source_video, child_start, half, clip_path)
+
+        # An ffmpeg failure on a sub-range (corrupt segment, keyframe issue)
+        # makes this child unprobeable. Treat it like a failed probe — log,
+        # then continue with the sibling. Never crash the whole rescue.
+        try:
+            cut_video(source_video, child_start, half, clip_path)
+        except subprocess.CalledProcessError as exc:
+            logger.warning(
+                "bisection.cut_aborted_branch",
+                clip_id=child_id,
+                start_s=child_start,
+                duration_s=half,
+                returncode=exc.returncode,
+            )
+            continue
+
         clip = BisectionClip(
             source_video=source_video,
             clip_id=child_id,

@@ -390,6 +390,42 @@ def test_bisect_recursively_skips_below_min_clip(monkeypatch, tmp_path: Path) ->
     assert cut_called == []  # no cuts ever attempted
 
 
+def test_bisect_recursively_treats_ffmpeg_failure_as_failed_branch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """If cut_video raises (e.g. ffmpeg blew up on a sub-range), bisection
+    must treat that branch as a failed probe and continue with the sibling
+    — not crash the whole rescue."""
+    import subprocess as sp
+
+    cfg = load_config(include_xdg=False)
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    def failing_cut(video, start_s, duration_s, output):
+        # First half (start_s=0) blows up, second half (start_s=120) works
+        if start_s == 0.0:
+            raise sp.CalledProcessError(returncode=1, cmd=["ffmpeg"], stderr="broken")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", failing_cut)
+
+    leaves = bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"1": True}),  # only the right half can be probed
+    )
+    assert {leaf.clip_id for leaf in leaves} == {"1"}
+
+
 # ─── Slice 5: rescue_via_bisection (orchestrator) ───────────────────────────
 
 
