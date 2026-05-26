@@ -228,6 +228,24 @@ class RetryConfig(BaseModel):
         le=10,
         description="Maximum total attempts per capture, including the first try.",
     )
+    # v1.4 — Auto-Bisection-Rescue
+    bisect_enabled: bool = Field(
+        default=True,
+        description="After sequential→exhaustive exhausts itself, attempt binary "
+        "subdivision of the source video. Disable for fast-fail in CI.",
+    )
+    bisect_min_clip_s: float = Field(
+        default=60.0,
+        ge=10.0,
+        le=600.0,
+        description="Sub-clips shorter than this are not probed during bisection.",
+    )
+    bisect_max_depth: int = Field(
+        default=3,
+        ge=1,
+        le=6,
+        description="Max recursion depth for bisection — 3 means up to 8 leaves.",
+    )
 
 
 class StatusConfig(BaseModel):

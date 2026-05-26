@@ -69,6 +69,14 @@ min_points = 5000               # COLMAP must produce ≥ this many sparse 3D po
 #     `colmap.matcher` from sequential to exhaustive
 enabled = true
 max_retries = 3                 # max total attempts per capture (incl. first try)
+# v1.4 — Auto-Bisection-Rescue. When the sequential→exhaustive swap still
+# can't rescue a capture (retry_hint=None), the pipeline binary-subdivides
+# the source video, probes each leaf clip with a cheap preprocess+SfM-only
+# run, and combines the surviving leaves through the existing multi-video
+# pipeline path. See docs/CAPTURE-GUIDE.md and rescue/ in the capture dir.
+bisect_enabled = true           # disable for fast-fail in CI
+bisect_min_clip_s = 60.0        # sub-clips shorter than this are not probed
+bisect_max_depth = 3            # max recursion depth (3 → ≤ 8 leaves per video)
 
 [status]
 # Status-file pruning. `completed` and `failed` lists are trimmed FIFO once they
