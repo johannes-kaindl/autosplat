@@ -32,6 +32,32 @@ def test_list_captures_with_fixture(tmp_path: Path) -> None:
     assert captures[0].ply_size_bytes == 4
 
 
+def test_list_captures_propagates_in_progress_detail(tmp_path: Path) -> None:
+    """v1.4.1: when WatcherState.in_progress carries a detail string (set by
+    bisect_recursively per-clip), list_captures surfaces it on CaptureInfo
+    so the dashboard's active-job line can show 'bisect · probing clip 0_1'."""
+    from autosplat.watcher import InProgress, WatcherState
+
+    capture_dir = tmp_path / "2026-05-26_bisecting"
+    capture_dir.mkdir()
+
+    state = WatcherState()
+    state.in_progress = InProgress(
+        path=str(capture_dir),
+        started_at="t",
+        stage="bisect",
+        detail="probing clip 0_1 (depth 2/3)",
+    )
+
+    with patch("autosplat.webui.state._load_watcher_state", return_value=state):
+        captures = list_captures(tmp_path)
+
+    assert len(captures) == 1
+    assert captures[0].status == "running"
+    assert captures[0].stage == "bisect"
+    assert captures[0].detail == "probing clip 0_1 (depth 2/3)"
+
+
 def test_capture_ply_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
     capture_dir = tmp_path / "2026-05-16_ply_smoke"
     capture_dir.mkdir()

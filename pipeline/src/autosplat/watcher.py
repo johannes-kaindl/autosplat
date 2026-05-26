@@ -63,12 +63,18 @@ class InProgress:
     `path` is the capture *directory* once run_pipeline has called begin() —
     that is what the WebUI matches against. `source_video` keeps the original
     input path so the retry/recovery machinery can re-enqueue it.
+
+    `detail` (v1.4.1) carries optional stage-specific sub-info — e.g. during
+    bisection: "probing clip 0_1 (3 of 8)". The WebUI surfaces it in the
+    active-job line so users see *where* a long-running rescue is, not just
+    that it's stuck on "sfm".
     """
 
     path: str
     started_at: str
     stage: str = "starting"
     source_video: str | None = None
+    detail: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -80,6 +86,7 @@ class InProgress:
             started_at=d.get("started_at") or d.get("started") or _now_iso(),
             stage=d.get("stage", "starting"),
             source_video=d.get("source_video"),
+            detail=d.get("detail"),
         )
 
 
@@ -284,11 +291,19 @@ class WatcherState:
             )
             self.save()
 
-    def update_stage(self, stage: str) -> None:
+    def update_stage(self, stage: str, detail: str | None = None) -> None:
+        """Set the current stage and (optionally) a sub-detail string.
+
+        `detail` is stage-specific free text — e.g. "probing clip 0_1 (3 of 8)"
+        during bisection. Always passed explicitly: omitting it (or passing
+        None) clears any previous detail rather than carrying it forward, so
+        stage transitions naturally reset the detail line.
+        """
         with self.lock:
             if self.in_progress is None:
                 return
             self.in_progress.stage = stage
+            self.in_progress.detail = detail
             self.save()
 
     def mark_done(

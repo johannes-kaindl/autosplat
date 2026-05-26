@@ -36,6 +36,7 @@ class CaptureInfo:
     finished_at: str | None
     duration_s: float | None
     reason: str | None
+    detail: str | None = None  # v1.4.1: stage-specific sub-info (e.g. bisect clip)
 
 
 def _find_ply(capture_dir: Path) -> Path | None:
@@ -90,6 +91,7 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
         # Determine status + metadata. JobRunner (in-memory, WebUI jobs) wins
         # over WatcherState — see SF-G2-9 in the docstring.
         job = job_runner.get_job(entry.name) if job_runner is not None else None
+        detail: str | None = None  # only the WatcherState.in_progress branch sets this
         if job is not None and job.status == "running":
             status: CaptureStatus = "running"
             stage = None
@@ -128,6 +130,7 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
             finished_at = None
             duration_s = None
             reason = None
+            detail = state.in_progress.detail if state.in_progress else None
         elif path_str in queued_paths:
             status = "queued"
             stage = None
@@ -180,6 +183,7 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
                 finished_at=finished_at,
                 duration_s=duration_s,
                 reason=reason,
+                detail=detail,
             )
         )
 

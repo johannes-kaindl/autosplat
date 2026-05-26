@@ -579,3 +579,52 @@ def test_load_pre_phase2_state(tmp_path: Path) -> None:
     assert state.in_progress is not None and state.in_progress.path == "ip.mp4"
     assert state.completed[0].path == "old.mp4"
     assert state.failed == []
+
+
+# ─── v1.4.1: update_stage(detail) — bisection per-clip progress ─────────────
+
+
+def test_update_stage_with_detail_sets_both(tmp_path: Path) -> None:
+    state = WatcherState(state_file=tmp_path / "state.json")
+    state.in_progress = InProgress(path="/cap", started_at="t")
+
+    state.update_stage("bisect", detail="probing clip 0_1 (depth 2/3)")
+
+    assert state.in_progress.stage == "bisect"
+    assert state.in_progress.detail == "probing clip 0_1 (depth 2/3)"
+
+    # Round-trip through JSON
+    state.save()
+    reloaded = WatcherState.load(state.state_file)
+    assert reloaded.in_progress is not None
+    assert reloaded.in_progress.stage == "bisect"
+    assert reloaded.in_progress.detail == "probing clip 0_1 (depth 2/3)"
+
+
+def test_update_stage_without_detail_clears_previous(tmp_path: Path) -> None:
+    state = WatcherState(state_file=tmp_path / "state.json")
+    state.in_progress = InProgress(
+        path="/cap", started_at="t", stage="bisect", detail="probing clip 0"
+    )
+    state.update_stage("train")
+    assert state.in_progress.stage == "train"
+    assert state.in_progress.detail is None
+
+
+def test_in_progress_load_tolerates_missing_detail_field(tmp_path: Path) -> None:
+    """Legacy state.json (pre-v1.4.1) has no `detail` field — must still load."""
+    target = tmp_path / "state.json"
+    target.write_text(
+        json.dumps(
+            {
+                "queue": [],
+                "in_progress": {"path": "/x", "started_at": "t", "stage": "sfm"},
+                "completed": [],
+                "failed": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    state = WatcherState.load(target)
+    assert state.in_progress is not None
+    assert state.in_progress.detail is None

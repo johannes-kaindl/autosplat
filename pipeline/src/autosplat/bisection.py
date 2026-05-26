@@ -230,6 +230,7 @@ def bisect_recursively(
     start_s: float = 0.0,
     clip_id_prefix: str = "",
     _probe_fn: ProbeFn | None = None,
+    state: WatcherState | None = None,
 ) -> list[BisectionClip]:
     """DFS halt-on-success-per-branch tree walk.
 
@@ -249,6 +250,11 @@ def bisect_recursively(
     threshold and waste an ffmpeg cut.
 
     `_probe_fn` is injected purely for testing; production callers omit it.
+
+    When `state` is given, `WatcherState.update_stage("bisect", detail=…)` is
+    invoked before each per-clip cut/probe so the WebUI can show *which* clip
+    is currently being probed rather than just "stage: bisect". The detail
+    string carries the clip_id and the depth/branch position.
     """
     probe_fn = _probe_fn if _probe_fn is not None else probe_clip
     min_s = cfg.retry.bisect_min_clip_s
@@ -265,6 +271,12 @@ def bisect_recursively(
             # Shouldn't happen given the guard above, but be defensive.
             continue
         clip_path = _clip_path_for(capture_dir, source_video.stem, child_id)
+
+        if state is not None:
+            state.update_stage(
+                "bisect",
+                detail=f"probing clip {child_id} (depth {depth + 1}/{max_depth})",
+            )
 
         # An ffmpeg failure on a sub-range (corrupt segment, keyframe issue)
         # makes this child unprobeable. Treat it like a failed probe — log,
@@ -304,6 +316,7 @@ def bisect_recursively(
                     start_s=child_start,
                     clip_id_prefix=child_id,
                     _probe_fn=probe_fn,
+                    state=state,
                 )
             )
 
@@ -362,6 +375,11 @@ def rescue_via_bisection(
     t0 = time.monotonic()
     logger.info("bisection.start", video=str(video), capture_dir=str(capture_dir))
 
+    # v1.4.1: surface the rescue in the WebUI / state.json as its own stage.
+    # bisect_recursively will then update detail per-probe.
+    if state is not None:
+        state.update_stage("bisect", detail="probing duration")
+
     duration_s = _probe_duration_s(video)
     min_s = cfg.retry.bisect_min_clip_s
     if duration_s < 2 * min_s:
@@ -387,6 +405,7 @@ def rescue_via_bisection(
         duration_s=duration_s,
         capture_dir=capture_dir,
         cfg=cfg,
+        state=state,
     )
 
     if not leaves:

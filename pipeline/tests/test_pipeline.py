@@ -205,11 +205,7 @@ def test_read_source_video_from_log_picks_latest_pipeline_start(
         '{"event": "pipeline.start", "video": "' + str(original) + '"}\n'
         '{"event": "quality_gate.failed", "reason": "structural"}\n'
         '{"event": "bisection.start", "video": "' + str(original) + '"}\n'
-        '{"event": "pipeline.start", "videos": ["'
-        + str(leaf_0)
-        + '", "'
-        + str(leaf_1)
-        + '"]}\n',
+        '{"event": "pipeline.start", "videos": ["' + str(leaf_0) + '", "' + str(leaf_1) + '"]}\n',
         encoding="utf-8",
     )
     result = read_source_video_from_log(capture_dir)
@@ -708,9 +704,7 @@ def test_adaptive_retry_reraises_when_hint_is_none(tmp_path: Path) -> None:
     cfg = load_config(include_xdg=False)
     # Disable v1.4 bisection so this test still expresses the pre-v1.4
     # semantics — "no hint, no rescue path → re-raise immediately".
-    cfg = cfg.model_copy(
-        update={"retry": cfg.retry.model_copy(update={"bisect_enabled": False})}
-    )
+    cfg = cfg.model_copy(update={"retry": cfg.retry.model_copy(update={"bisect_enabled": False})})
 
     with (
         patch(
@@ -900,13 +894,9 @@ def test_adaptive_retry_calls_bisection_on_exhausted_hint(tmp_path: Path) -> Non
             "autosplat.pipeline.run_pipeline",
             side_effect=QualityGateFailure(reason="structural", retry_hint=None),
         ),
-        patch(
-            "autosplat.bisection.rescue_via_bisection", return_value=success
-        ) as rescue,
+        patch("autosplat.bisection.rescue_via_bisection", return_value=success) as rescue,
     ):
-        result = run_pipeline_with_adaptive_retry(
-            video, cfg, capture_dir_override=capture_dir
-        )
+        result = run_pipeline_with_adaptive_retry(video, cfg, capture_dir_override=capture_dir)
 
     assert result is success
     rescue.assert_called_once()
@@ -950,9 +940,7 @@ def test_adaptive_retry_skips_bisection_on_multi_video(tmp_path: Path) -> None:
         patch("autosplat.bisection.rescue_via_bisection") as rescue,
         pytest.raises(QualityGateFailure),
     ):
-        run_pipeline_with_adaptive_retry(
-            [v1, v2], cfg, capture_dir_override=capture_dir
-        )
+        run_pipeline_with_adaptive_retry([v1, v2], cfg, capture_dir_override=capture_dir)
     rescue.assert_not_called()
 
 

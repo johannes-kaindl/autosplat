@@ -36,7 +36,7 @@
   <div class="as-job-hero" style="margin-bottom:var(--space-5)">
     <div>
       <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--stage-brush);margin-bottom:10px">
-        {{ icon('flame', 11) }}&nbsp;&nbsp;Active job · {{ active_capture.stage or 'starting' }}
+        {{ icon('flame', 11) }}&nbsp;&nbsp;Active job · {{ active_capture.stage or 'starting' }}{% if active_capture.detail %} · {{ active_capture.detail }}{% endif %}
       </div>
       <div class="id">
         <span>{{ active_capture.id }}</span>

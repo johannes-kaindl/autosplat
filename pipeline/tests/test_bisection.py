@@ -423,6 +423,47 @@ def test_bisect_recursively_skips_below_min_clip(monkeypatch, tmp_path: Path) ->
     assert cut_called == []  # no cuts ever attempted
 
 
+def test_bisect_recursively_reports_per_clip_progress_to_state(monkeypatch, tmp_path: Path) -> None:
+    """v1.4.1: when a WatcherState is passed in, each per-clip cut/probe
+    updates state.in_progress.stage='bisect' and .detail with the clip_id."""
+    from autosplat.watcher import InProgress, WatcherState
+
+    cfg = load_config(include_xdg=False)
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    state = WatcherState(state_file=tmp_path / "state.json")
+    state.in_progress = InProgress(path=str(capture_dir), started_at="t")
+
+    seen_details: list[tuple[str, str | None]] = []
+    orig_update = state.update_stage
+
+    def tracking_update(stage, detail=None):
+        seen_details.append((stage, detail))
+        orig_update(stage, detail)
+
+    state.update_stage = tracking_update  # type: ignore[method-assign]
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", _stub_cut(tmp_path))
+
+    bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": True, "1": True}),
+        state=state,
+    )
+
+    # Both top-level halves are reported before cut+probe
+    assert ("bisect", "probing clip 0 (depth 1/3)") in seen_details
+    assert ("bisect", "probing clip 1 (depth 1/3)") in seen_details
+
+
 def test_bisect_recursively_treats_ffmpeg_failure_as_failed_branch(
     monkeypatch, tmp_path: Path
 ) -> None:

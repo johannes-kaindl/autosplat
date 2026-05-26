@@ -533,7 +533,10 @@ def run_pipeline_with_adaptive_retry(
                         capture_dir=str(capture_dir),
                     )
                     return _bisection_mod.rescue_via_bisection(
-                        src, capture_dir, config, state=state,
+                        src,
+                        capture_dir,
+                        config,
+                        state=state,
                     )
                 raise
             if attempts >= max_attempts:
