@@ -10,6 +10,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- **v1.4 Auto-Bisection-Rescue** — when the standard `sequential → exhaustive` adaptive-retry path can't rescue a capture (`retry_hint=None`), the pipeline now binary-subdivides the source video, probes each leaf clip with a cheap preprocess+SfM-only run, and combines the surviving leaves through the existing multi-video pipeline path. Automates the manual 4-clip workflow that rescued `max_strasse` in v1.3.0.
+  - New module `src/autosplat/bisection.py` with `BisectionClip` dataclass, `build_ffmpeg_cut_command` + `cut_video`, `probe_clip` (forces `colmap.matcher=exhaustive`), `bisect_recursively` (DFS halt-on-success), and `rescue_via_bisection` orchestrator.
+  - `pipeline.run_pipeline_with_adaptive_retry` gains a third escalation branch that calls into bisection when `retry_hint=None`, the source is a single video, and bisection has not yet been attempted on this run. A private `_bisection_already_attempted` kwarg prevents re-entry on the final combined-multi-video run while keeping the `sequential → exhaustive` swap available for that run too.
+  - Three new `[retry]` config fields with conservative defaults: `bisect_enabled=true`, `bisect_min_clip_s=60.0`, `bisect_max_depth=3` (≤ 8 leaves). Disable `bisect_enabled` for fast-fail in CI.
+  - Bisection artefacts persist under `<capture_dir>/rescue/clips/*.mp4` and `<capture_dir>/rescue/probes/<clip_id>/{frames,colmap}` so a partial run is debuggable.
+  - 18 new unit tests (+2 opt-in `needs_ffmpeg` / `needs_colmap` integration tests behind `AUTOSPLAT_BISECTION_E2E=1`). Total 291 unit tests passing (`uv run pytest -q`).
+  - `docs/CAPTURE-GUIDE.md` extended with a "Auto-bisection internals" section explaining the on-disk layout, `clip_id` semantics, and the three config knobs.
 - Repository documentation refresh: README brought up to v1.3.0 (badges, release table, CLI/WebUI sections, mermaid, test counts), CONTRIBUTING expanded with pre-commit/ruff/mypy setup, `SECURITY.md`, `CITATION.cff`, `.editorconfig`.
 
 ### Fixed
@@ -17,6 +24,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 - Legacy non-prefixed tags `1.1.0` and `1.1.2` deleted from the Codeberg remote (duplicates of `v1.1.0` and `v1.1.2`); all release tags now follow the `vX.Y.Z` convention.
+
+### Design Notes (v1.4)
+
+- **Why a separate module?** `pipeline.py` was already 600 LOC; bisection's ~300 LOC of recursion + ffmpeg-cut + probe logic gets isolated in `bisection.py` and exposes only the orchestrator to `pipeline.py`. Each unit is testable without the others (the recursion is monkeypatch-friendly via the `_probe_fn` injection point).
+- **Why no WebUI per-clip progress in v1.4?** Bisection runs inside the existing `sfm` stage from the state-machine's perspective; events surface via structured logs only. A WebUI `bisect_probe` stage with per-clip progress is a v1.4.1 candidate.
+- **Why no standalone `autosplat rescue` command?** The user-chosen trigger is the auto-eskalation path — a normal `autosplat process …` just keeps running. A standalone command can be added in v1.4.1 if the auto-path proves clumsy.
+- **Why no smart-split?** Midpoint binary cuts are the v1.4 strategy. Smart-split at motion-change (OpenCV optical flow) is a v1.4.1 candidate and would only help when the rotation event is concentrated rather than smeared across the clip.
 
 ---
 

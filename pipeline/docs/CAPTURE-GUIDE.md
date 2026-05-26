@@ -82,16 +82,23 @@ The pipeline already does what it can on your behalf:
 1. **Sequential matcher first** (fast — assumes temporal neighbors share features).
 2. **Quality-gate** catches a low camera ratio (default: <50% of frames registered).
 3. **Adaptive retry** swaps in the `exhaustive` matcher (every frame against every frame — much slower, much more robust to loops).
-4. **Quality-gate again** — if exhaustive still produces <50% registered, the run aborts before Brush.
+4. **Quality-gate again** — if exhaustive still produces <50% registered, the run escalates to auto-bisection (v1.4+).
+5. **Auto-bisection (v1.4+)** binary-subdivides the source video and probes each half with a cheap SfM-only run. Surviving halves get recombined through the multi-video pipeline path that proved out on `max_strasse` (4 hand-cut clips → 100 % registered).
+6. **Quality-gate one last time** on the combined leaf set — if even that fails, the run aborts before Brush.
 
 What the user sees:
 
 ```
 WARNING  quality_gate.failed reason="low_camera_ratio: 0.02 < 0.5" matcher=exhaustive retry_hint=null
-Pipeline failure: low_camera_ratio: 0.02 < 0.5
+WARNING  pipeline.bisection_escalation reason="low_camera_ratio: 0.02 < 0.5"
+INFO     bisection.start video=… duration_s=335.0
+INFO     bisection.probe clip_id=0 cameras_registered=4 ratio=0.03 passed=false
+INFO     bisection.probe clip_id=0_1 cameras_registered=78 ratio=0.62 passed=true
+…
+INFO     bisection.combine_start leaf_count=2
 ```
 
-`retry_hint=null` means **no further automatic recovery is possible** — the matcher swap has already been tried. At that point:
+If the combined re-run still fails with `retry_hint=null`, **no further automatic recovery is possible** — both the matcher swap and bisection have been tried. At that point:
 
 ### Read the camera count
 
@@ -117,9 +124,40 @@ Don't resume after re-shooting — the frames on disk are from the old video. Ju
 
 ---
 
+## Auto-bisection internals (v1.4+)
+
+When bisection fires, it materialises three things on disk under the failing capture's directory:
+
+```
+<capture_dir>/rescue/
+├─ clips/                  ← physical .mp4 sub-clips (stream-copied, no re-encode)
+│   ├─ <stem>_part_0.mp4
+│   ├─ <stem>_part_1_0.mp4
+│   └─ …
+└─ probes/                 ← per-clip preprocess+SfM artefacts (kept for forensics)
+    ├─ 0/{frames,colmap}
+    ├─ 1/{frames,colmap}
+    └─ …
+```
+
+The `clip_id` (`0`, `0_1`, `0_1_0`) is a depth-encoded path through the bisection tree: a leading `0` is the first half of its parent, a `_1` step is a deeper-level second half, and so on. Probe artefacts stay on disk after a successful rescue so you can inspect *which* sub-clip carried the reconstruction — useful when you want to re-shoot just the broken segment.
+
+Three knobs in `[retry]` of your config control the behaviour:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `bisect_enabled` | `true` | Master switch. Set to `false` in CI to fast-fail without bisection. |
+| `bisect_min_clip_s` | `60.0` | Sub-clips shorter than this are not probed (60 s is roughly the lower bound where SfM can find enough overlap on its own). |
+| `bisect_max_depth` | `3` | Recursion cap. Depth 3 means at most 2³ = 8 leaf clips per video — keeps worst-case probe-cost bounded. |
+
+Worst case for a 5-minute video with depth=3 and 60 s min-clip is 8 probes × ~5 min ≈ 30–60 min before the final combined Brush run. Disable bisection if your CI budget can't absorb that.
+
+---
+
 ## Reference cases that worked
 
 - **`herkules_brunnen`** (2026-05-22, 1h23m end-to-end, 100% COLMAP): wide arc around a fountain, slow translation, textured stone background. Canonical "shoot like this."
+- **`max_strasse`** (2026-05-25, manual 4-clip combine before v1.4): 5:35 street drive with a 180° turn. The standalone capture registered 5 / 244 frames (exhaustive); hand-cut into 4 segments and recombined via `autosplat process v1.mp4 v2.mp4 v3.mp4 v4.mp4`, it produced a 1.8 GB scene.ply with 100 % of frames registered. v1.4's auto-bisection is the automation of that workflow.
 
 ---
 
