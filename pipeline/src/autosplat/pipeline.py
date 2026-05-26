@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from . import compress as compress_mod
 from . import export as export_mod
@@ -140,7 +140,7 @@ def run_pipeline(
     capture_dir_override: Path | None = None,
     skip_stages: set[str] | None = None,
     dry_run: bool = False,
-    config_override: dict | None = None,
+    config_override: dict[str, Any] | None = None,
     state: WatcherState | None = None,
 ) -> PipelineResult:
     """Run the full pipeline on one or more source videos.
@@ -490,7 +490,7 @@ def run_pipeline_with_adaptive_retry(
     if the combined set also fails the quality gate.
     """
     max_attempts = config.retry.max_retries if config.retry.enabled else 1
-    override: dict | None = None
+    override: dict[str, Any] | None = None
     skip = set(skip_stages) if skip_stages else None
     bisection_attempted = _bisection_already_attempted
 
