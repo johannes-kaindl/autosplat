@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-05-26
+
+### Added
+- Honour the OS-level `prefers-reduced-motion` setting — auto-orbit
+  no longer starts spinning by default for users who have opted out
+  of spontaneous motion. The orbit toggle still works manually.
+- `og:image:width` / `og:image:height` meta-tags (1200×630) so
+  social-card crawlers (Mastodon, Discord, etc.) render the preview
+  reliably.
+
+### Changed
+- Dropped a redundant ID selector in the button background CSS rule
+  — pure hygiene, no behavioural change.
+
 ## [1.1.0] — 2026-05-26
 
 ### Added — Walking-mode
@@ -67,5 +81,6 @@ Initial public release on Codeberg Pages.
 - AGPL-3.0-or-later license with source link in the footer
   (network-served compliance per AGPL §13).
 
+[1.1.1]: https://codeberg.org/jkaindl/autosplat-viewer/compare/v1.1.0...v1.1.1
 [1.1.0]: https://codeberg.org/jkaindl/autosplat-viewer/compare/v1.0.0...v1.1.0
 [1.0.0]: https://codeberg.org/jkaindl/autosplat-viewer/releases/tag/v1.0.0
