@@ -246,6 +246,14 @@ class RetryConfig(BaseModel):
         le=6,
         description="Max recursion depth for bisection — 3 means up to 8 leaves.",
     )
+    bisect_probe_target_frames: int = Field(
+        default=120,
+        ge=30,
+        le=1000,
+        description="preprocess.target_frames override for bisection probes. "
+        "Lower than the pipeline default (250) because exhaustive matcher cost "
+        "scales as n²/2 — 120 frames keeps a single probe under ~7000 matches.",
+    )
 
 
 class StatusConfig(BaseModel):

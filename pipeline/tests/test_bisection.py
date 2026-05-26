@@ -244,6 +244,39 @@ def test_probe_clip_uses_exhaustive_matcher(monkeypatch, tmp_path: Path) -> None
     assert seen_matchers == ["exhaustive"]
 
 
+def test_probe_clip_caps_preprocess_target_frames(monkeypatch, tmp_path: Path) -> None:
+    """v1.4.1: probes apply cfg.retry.bisect_probe_target_frames as the
+    preprocess.target_frames override (cuts exhaustive matcher cost ~4× vs
+    the pipeline default of 250)."""
+    cfg = load_config(include_xdg=False)
+    assert cfg.preprocess.target_frames == 250
+    assert cfg.retry.bisect_probe_target_frames == 120
+
+    clip = _clip_at(tmp_path, "pf")
+    workspace = tmp_path / "rescue" / "probes" / clip.clip_id
+
+    seen_target_frames: list[int] = []
+
+    def capture_preprocess(video, frames_dir, pp_cfg):
+        seen_target_frames.append(pp_cfg.target_frames)
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        return PreprocessResult(
+            frames_dir=frames_dir,
+            extracted_count=100,
+            kept_count=100,
+            rejected_blur=0,
+            duration_s=0.0,
+        )
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_run_preprocess", capture_preprocess)
+    monkeypatch.setattr(bm, "_run_sfm", _stub_sfm(cams=80, points=10000))
+
+    probe_clip(clip, workspace, cfg)
+    assert seen_target_frames == [120]
+
+
 def test_probe_clip_returns_false_on_preprocess_error(monkeypatch, tmp_path: Path) -> None:
     """A subprocess error during probe is logged + treated as a failed probe."""
     cfg = load_config(include_xdg=False)

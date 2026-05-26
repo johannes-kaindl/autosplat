@@ -141,6 +141,20 @@ def test_default_includes_v14_bisect_fields() -> None:
     assert cfg.retry.bisect_enabled is True
     assert cfg.retry.bisect_min_clip_s == 60.0
     assert cfg.retry.bisect_max_depth == 3
+    assert cfg.retry.bisect_probe_target_frames == 120
+
+
+def test_bisect_probe_target_frames_rejects_too_small(tmp_path: Path) -> None:
+    user = tmp_path / "u.toml"
+    user.write_text(
+        """
+[retry]
+bisect_probe_target_frames = 10
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception):
+        load_config(user_config_path=user, include_xdg=False)
 
 
 def test_bisect_max_depth_rejects_zero(tmp_path: Path) -> None:

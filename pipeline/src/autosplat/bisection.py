@@ -152,7 +152,18 @@ def probe_clip(
     frames_dir = probe_workspace / "frames"
     colmap_dir = probe_workspace / "colmap"
 
-    probe_cfg = apply_override(cfg, {"colmap": {"matcher": "exhaustive"}})
+    # v1.4.1: also cap preprocess.target_frames for probes — exhaustive
+    # matcher's pair-match count scales as n²/2, so going from the
+    # pipeline default of 250 to 120 cuts a single probe's matcher cost
+    # by ~4×. The threshold is high enough that legitimate sub-clips
+    # still register past the 50 %-ratio quality-gate.
+    probe_cfg = apply_override(
+        cfg,
+        {
+            "colmap": {"matcher": "exhaustive"},
+            "preprocess": {"target_frames": cfg.retry.bisect_probe_target_frames},
+        },
+    )
 
     try:
         pp: PreprocessResult = _run_preprocess(clip.path, frames_dir, probe_cfg.preprocess)

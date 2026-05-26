@@ -74,9 +74,12 @@ max_retries = 3                 # max total attempts per capture (incl. first tr
 # the source video, probes each leaf clip with a cheap preprocess+SfM-only
 # run, and combines the surviving leaves through the existing multi-video
 # pipeline path. See docs/CAPTURE-GUIDE.md and rescue/ in the capture dir.
-bisect_enabled = true           # disable for fast-fail in CI
-bisect_min_clip_s = 60.0        # sub-clips shorter than this are not probed
-bisect_max_depth = 3            # max recursion depth (3 → ≤ 8 leaves per video)
+bisect_enabled = true                # disable for fast-fail in CI
+bisect_min_clip_s = 60.0             # sub-clips shorter than this are not probed
+bisect_max_depth = 3                 # max recursion depth (3 → ≤ 8 leaves per video)
+bisect_probe_target_frames = 120     # preprocess.target_frames override for probes
+                                      # (exhaustive scales as n²/2 — 250 → 31k matches,
+                                      # 120 → 7k matches; ~4× faster per probe)
 
 [status]
 # Status-file pruning. `completed` and `failed` lists are trimmed FIFO once they
