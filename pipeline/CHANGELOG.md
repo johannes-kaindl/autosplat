@@ -9,14 +9,45 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+(no unreleased work)
+
+---
+
+## [v1.4.0] — 2026-05-26 — Auto-Bisection-Rescue
+
+When `sequential → exhaustive` adaptive-retry exhausts itself (`retry_hint=None`), the pipeline now automatically binary-subdivides the source video, probes each leaf clip with a cheap preprocess+SfM-only run, and combines the surviving leaves through the existing multi-video path. Automates the manual 4-clip workflow that rescued `max_strasse` in v1.3.0 — no new command, no new flag, just a longer run when the matcher swap isn't enough.
+
 ### Added
-- **v1.4 Auto-Bisection-Rescue** — when the standard `sequential → exhaustive` adaptive-retry path can't rescue a capture (`retry_hint=None`), the pipeline now binary-subdivides the source video, probes each leaf clip with a cheap preprocess+SfM-only run, and combines the surviving leaves through the existing multi-video pipeline path. Automates the manual 4-clip workflow that rescued `max_strasse` in v1.3.0.
-  - New module `src/autosplat/bisection.py` with `BisectionClip` dataclass, `build_ffmpeg_cut_command` + `cut_video`, `probe_clip` (forces `colmap.matcher=exhaustive`), `bisect_recursively` (DFS halt-on-success), and `rescue_via_bisection` orchestrator.
-  - `pipeline.run_pipeline_with_adaptive_retry` gains a third escalation branch that calls into bisection when `retry_hint=None`, the source is a single video, and bisection has not yet been attempted on this run. A private `_bisection_already_attempted` kwarg prevents re-entry on the final combined-multi-video run while keeping the `sequential → exhaustive` swap available for that run too.
-  - Three new `[retry]` config fields with conservative defaults: `bisect_enabled=true`, `bisect_min_clip_s=60.0`, `bisect_max_depth=3` (≤ 8 leaves). Disable `bisect_enabled` for fast-fail in CI.
-  - Bisection artefacts persist under `<capture_dir>/rescue/clips/*.mp4` and `<capture_dir>/rescue/probes/<clip_id>/{frames,colmap}` so a partial run is debuggable.
-  - 18 new unit tests (+2 opt-in `needs_ffmpeg` / `needs_colmap` integration tests behind `AUTOSPLAT_BISECTION_E2E=1`). Total 291 unit tests passing (`uv run pytest -q`).
-  - `docs/CAPTURE-GUIDE.md` extended with a "Auto-bisection internals" section explaining the on-disk layout, `clip_id` semantics, and the three config knobs.
+
+- **Auto-bisection-rescue** — third escalation in `run_pipeline_with_adaptive_retry`, gated on `retry_hint=None`, single-video input, and `cfg.retry.bisect_enabled` (default `true`).
+- **New module `src/autosplat/bisection.py`** — `BisectionClip` frozen dataclass, `build_ffmpeg_cut_command` + `cut_video` (stream-copy, no re-encode), `probe_clip` (forces `colmap.matcher=exhaustive` because sequential is unreliable on shorts), `bisect_recursively` (DFS halt-on-success-per-branch), and `rescue_via_bisection` orchestrator.
+- **Three new `[retry]` config fields** with conservative defaults: `bisect_enabled=true`, `bisect_min_clip_s=60.0` (range 10–600), `bisect_max_depth=3` (range 1–6 — depth 3 = ≤ 8 leaves). Disable `bisect_enabled` for fast-fail in CI.
+- **Bisection artefacts persist** under `<capture_dir>/rescue/clips/<stem>_part_<clip_id>.mp4` (physical sub-clips) and `<capture_dir>/rescue/probes/<clip_id>/{frames,colmap}` (per-clip SfM workspace) so a partial run is debuggable. `clip_id` is depth-encoded (`0`, `0_1`, `0_1_0`) — leading digit is the first/second half, deeper underscores trace each recursion step.
+- **20 new tests** in `tests/test_bisection.py` + 4 in `tests/test_pipeline.py`. Two opt-in real-binary integration tests sit behind `AUTOSPLAT_BISECTION_E2E=1` plus the existing `needs_ffmpeg` / `needs_colmap` markers. Total 293 unit tests passing (`uv run pytest -q`, up from 265 in v1.3.0).
+- **Docs:** `CAPTURE-GUIDE.md` gains an "Auto-bisection internals (v1.4+)" section with the rescue/ layout and `clip_id` semantics; `CONFIGURATION.md` `[retry]` table grows three rows; `TROUBLESHOOTING.md` replaces the old "if exhaustive also fails, you're stuck" branch with the actual escalation path and structured log events to watch for.
+
+### Fixed
+
+- **`bisect_recursively` per-branch ffmpeg resilience** — `cut_video` raising `subprocess.CalledProcessError` on a corrupt sub-range (broken keyframe, container quirk) is now caught, logged as `bisection.cut_aborted_branch`, and treated as a failed probe; the sibling branch still runs. Previously the whole rescue would abort with a raw `CalledProcessError`.
+- **`read_source_video_from_log` now returns the most recent `pipeline.start`** — after bisection appends a fresh `pipeline.start` with the leaf-clip list, `autosplat resume` and `autosplat add-video` on a bisected capture see the current state (the leaves) instead of silently re-feeding the original failed input. Pre-v1.4 captures with only one start event behave identically.
+
+### Design Notes
+
+- **Why a separate module?** `pipeline.py` was already 600 LOC; bisection's ~330 LOC of recursion + ffmpeg-cut + probe logic gets isolated in `bisection.py` and exposes only the orchestrator to `pipeline.py`. Each unit is testable without the others (the recursion is monkeypatch-friendly via the `_probe_fn` injection point).
+- **Why no WebUI per-clip progress in v1.4?** Bisection runs inside the existing `sfm` stage from the state-machine's perspective; events surface via structured logs only. A WebUI `bisect_probe` stage with per-clip progress is a v1.4.1 candidate.
+- **Why no standalone `autosplat rescue` command?** The user-chosen trigger is the auto-escalation path — a normal `autosplat process …` just keeps running. A standalone command can be added in v1.4.1 if the auto-path proves clumsy.
+- **Why no smart-split?** Midpoint binary cuts are the v1.4 strategy. Smart-split at motion-change (OpenCV optical flow) is a v1.4.1 candidate and would only help when the rotation event is concentrated rather than smeared across the clip.
+
+### Known Issues
+
+- **Probe-stage compute cost.** Each probe runs with `cfg.preprocess.target_frames` (default 250) and exhaustive matcher — roughly `n²/2 ≈ 31k` pair-matches per probe. At depth 3 with 8 leaves, worst-case probe cost is ~30 min to a few hours before the final combined Brush run. A `probe_target_frames` cap is a v1.4.1 candidate. Set `bisect_enabled=false` in CI budgets that can't absorb this.
+- **No real-world smoke against a non-trivial structurally-failing capture has shipped with this release.** The integration tests use the tiny `tests/fixtures/tiny_video.mp4` fixture (passes a quality-gate sanity check but isn't a real failing case). v1.4.1 is expected to absorb the first real-world run feedback.
+
+---
+
+## [Earlier — pre-v1.4.0 work, previously under [Unreleased]]
+
+### Added
 - Repository documentation refresh: README brought up to v1.3.0 (badges, release table, CLI/WebUI sections, mermaid, test counts), CONTRIBUTING expanded with pre-commit/ruff/mypy setup, `SECURITY.md`, `CITATION.cff`, `.editorconfig`.
 
 ### Fixed
@@ -24,13 +55,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 - Legacy non-prefixed tags `1.1.0` and `1.1.2` deleted from the Codeberg remote (duplicates of `v1.1.0` and `v1.1.2`); all release tags now follow the `vX.Y.Z` convention.
-
-### Design Notes (v1.4)
-
-- **Why a separate module?** `pipeline.py` was already 600 LOC; bisection's ~300 LOC of recursion + ffmpeg-cut + probe logic gets isolated in `bisection.py` and exposes only the orchestrator to `pipeline.py`. Each unit is testable without the others (the recursion is monkeypatch-friendly via the `_probe_fn` injection point).
-- **Why no WebUI per-clip progress in v1.4?** Bisection runs inside the existing `sfm` stage from the state-machine's perspective; events surface via structured logs only. A WebUI `bisect_probe` stage with per-clip progress is a v1.4.1 candidate.
-- **Why no standalone `autosplat rescue` command?** The user-chosen trigger is the auto-eskalation path — a normal `autosplat process …` just keeps running. A standalone command can be added in v1.4.1 if the auto-path proves clumsy.
-- **Why no smart-split?** Midpoint binary cuts are the v1.4 strategy. Smart-split at motion-change (OpenCV optical flow) is a v1.4.1 candidate and would only help when the rotation event is concentrated rather than smeared across the clip.
 
 ---
 
