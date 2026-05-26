@@ -25,9 +25,21 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import preprocess as _preprocess_mod
+from . import quality as _quality_mod
+from . import sfm as _sfm_mod
+from .config import Config, apply_override
 from .logging import get_logger
+from .preprocess import PreprocessResult
+from .quality import QualityGateFailure
+from .sfm import SfmResult
 
 logger = get_logger(__name__)
+
+# Module-private aliases so tests can monkey-patch the unit under test without
+# also clobbering the real preprocess/sfm entries used elsewhere.
+_run_preprocess = _preprocess_mod.extract_frames
+_run_sfm = _sfm_mod.run_colmap
 
 
 @dataclass(frozen=True)
@@ -108,3 +120,69 @@ def cut_video(
         )
         raise
     return output
+
+
+def probe_clip(
+    clip: BisectionClip,
+    probe_workspace: Path,
+    cfg: Config,
+) -> bool:
+    """Run preprocess + SfM-only against one sub-clip; return True if QG passes.
+
+    Probes always use `cfg.colmap.matcher='exhaustive'` — sequential is
+    unreliable on short segments and we've already spent two attempts on it
+    in the parent capture's adaptive-retry path.
+
+    Artifacts (frames/, colmap/) stay on disk under `probe_workspace` for
+    forensic debugging (which clips passed, which didn't, why). The final
+    combined run still re-extracts everything cleanly via run_pipeline.
+
+    Failures are caught (subprocess errors, ffprobe parsing) and treated as
+    "probe failed" → returns False. Only programming bugs propagate.
+    """
+    probe_workspace.mkdir(parents=True, exist_ok=True)
+    frames_dir = probe_workspace / "frames"
+    colmap_dir = probe_workspace / "colmap"
+
+    probe_cfg = apply_override(cfg, {"colmap": {"matcher": "exhaustive"}})
+
+    try:
+        pp: PreprocessResult = _run_preprocess(clip.path, frames_dir, probe_cfg.preprocess)
+    except Exception as exc:
+        logger.warning("bisection.probe_preprocess_failed", clip_id=clip.clip_id, error=str(exc))
+        return False
+
+    try:
+        sfm_res: SfmResult = _run_sfm(frames_dir, colmap_dir, probe_cfg.colmap)
+    except Exception as exc:
+        logger.warning("bisection.probe_sfm_failed", clip_id=clip.clip_id, error=str(exc))
+        return False
+
+    try:
+        _quality_mod.check_sfm_quality(
+            sfm_res,
+            frames_kept=pp.kept_count,
+            cfg=probe_cfg.quality_gate,
+            colmap_cfg=probe_cfg.colmap,
+        )
+    except QualityGateFailure as exc:
+        logger.info(
+            "bisection.probe",
+            clip_id=clip.clip_id,
+            cameras_registered=sfm_res.cameras_registered,
+            ratio=exc.metrics.get("ratio"),
+            points=sfm_res.points,
+            passed=False,
+            reason=exc.reason,
+        )
+        return False
+
+    logger.info(
+        "bisection.probe",
+        clip_id=clip.clip_id,
+        cameras_registered=sfm_res.cameras_registered,
+        frames_kept=pp.kept_count,
+        points=sfm_res.points,
+        passed=True,
+    )
+    return True

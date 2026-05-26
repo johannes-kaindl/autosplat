@@ -14,7 +14,11 @@ from autosplat.bisection import (
     BisectionClip,
     build_ffmpeg_cut_command,
     cut_video,
+    probe_clip,
 )
+from autosplat.config import load_config
+from autosplat.preprocess import PreprocessResult
+from autosplat.sfm import SfmResult
 
 # ─── Slice 1: build_ffmpeg_cut_command (pure string assertion) ──────────────
 
@@ -121,3 +125,129 @@ def test_cut_video_propagates_subprocess_error(monkeypatch, tmp_path: Path) -> N
 
 def cmd_index(cmd: list[str], flag: str) -> int:
     return cmd.index(flag)
+
+
+# ─── Slice 3: probe_clip (monkeypatched preprocess + SfM) ───────────────────
+
+
+def _clip_at(tmp_path: Path, clip_id: str = "0") -> BisectionClip:
+    p = tmp_path / "rescue" / "clips" / f"v_part_{clip_id}.mp4"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"\x00")
+    return BisectionClip(
+        source_video=tmp_path / "v.mp4",
+        clip_id=clip_id,
+        start_s=0.0,
+        duration_s=120.0,
+        path=p,
+    )
+
+
+def _stub_preprocess(frames_kept: int):
+    """Returns a stub for preprocess.extract_frames that fakes N kept frames."""
+
+    def _stub(video, frames_dir, cfg):
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        return PreprocessResult(
+            frames_dir=frames_dir,
+            extracted_count=frames_kept,
+            kept_count=frames_kept,
+            rejected_blur=0,
+            duration_s=0.1,
+        )
+
+    return _stub
+
+
+def _stub_sfm(cams: int, points: int):
+    def _stub(frames_dir, workspace, cfg):
+        workspace.mkdir(parents=True, exist_ok=True)
+        sparse = workspace / "sparse"
+        sparse.mkdir(parents=True, exist_ok=True)
+        return SfmResult(
+            workspace=workspace,
+            database_path=workspace / "database.db",
+            sparse_dir=sparse,
+            cameras_registered=cams,
+            points=points,
+            duration_s=0.1,
+        )
+
+    return _stub
+
+
+def test_probe_clip_passes_on_good_sfm(monkeypatch, tmp_path: Path) -> None:
+    cfg = load_config(include_xdg=False)
+    clip = _clip_at(tmp_path)
+    workspace = tmp_path / "rescue" / "probes" / clip.clip_id
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_run_preprocess", _stub_preprocess(frames_kept=100))
+    monkeypatch.setattr(bm, "_run_sfm", _stub_sfm(cams=80, points=10000))
+
+    assert probe_clip(clip, workspace, cfg) is True
+    assert (workspace / "frames").exists()
+    assert (workspace / "colmap" / "sparse").exists()
+
+
+def test_probe_clip_fails_below_ratio(monkeypatch, tmp_path: Path) -> None:
+    cfg = load_config(include_xdg=False)
+    clip = _clip_at(tmp_path, "1")
+    workspace = tmp_path / "rescue" / "probes" / clip.clip_id
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_run_preprocess", _stub_preprocess(frames_kept=100))
+    # ratio 0.1 < default 0.5 → fail
+    monkeypatch.setattr(bm, "_run_sfm", _stub_sfm(cams=10, points=20000))
+
+    assert probe_clip(clip, workspace, cfg) is False
+
+
+def test_probe_clip_uses_exhaustive_matcher(monkeypatch, tmp_path: Path) -> None:
+    """Probes always run with exhaustive — sequential is unreliable on shorts."""
+    cfg = load_config(include_xdg=False)
+    assert cfg.colmap.matcher == "sequential"
+
+    clip = _clip_at(tmp_path, "2")
+    workspace = tmp_path / "rescue" / "probes" / clip.clip_id
+
+    seen_matchers: list[str] = []
+
+    def capture_sfm(frames_dir, ws, colmap_cfg):
+        seen_matchers.append(colmap_cfg.matcher)
+        ws.mkdir(parents=True, exist_ok=True)
+        (ws / "sparse").mkdir(parents=True, exist_ok=True)
+        return SfmResult(
+            workspace=ws,
+            database_path=ws / "db.db",
+            sparse_dir=ws / "sparse",
+            cameras_registered=80,
+            points=10000,
+            duration_s=0.0,
+        )
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_run_preprocess", _stub_preprocess(frames_kept=100))
+    monkeypatch.setattr(bm, "_run_sfm", capture_sfm)
+
+    probe_clip(clip, workspace, cfg)
+    assert seen_matchers == ["exhaustive"]
+
+
+def test_probe_clip_returns_false_on_preprocess_error(monkeypatch, tmp_path: Path) -> None:
+    """A subprocess error during probe is logged + treated as a failed probe."""
+    cfg = load_config(include_xdg=False)
+    clip = _clip_at(tmp_path, "3")
+    workspace = tmp_path / "rescue" / "probes" / clip.clip_id
+
+    def raise_preprocess(video, frames_dir, cfg):
+        raise RuntimeError("ffmpeg blew up")
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_run_preprocess", raise_preprocess)
+
+    assert probe_clip(clip, workspace, cfg) is False
