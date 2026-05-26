@@ -125,7 +125,7 @@ def test_detect_completed_stages_through_export(tmp_path: Path) -> None:
 
 
 def test_read_source_video_from_log_returns_video_path(tmp_path: Path) -> None:
-    """The first pipeline.start event in pipeline.log carries the source video.
+    """The most-recent pipeline.start event in pipeline.log carries the source.
 
     Always-list contract (v1.3.0+): even a single-video capture comes back
     as a one-element list so callers don't have to branch on shape.
@@ -184,6 +184,36 @@ def test_read_source_video_from_log_legacy_single_video_wraps_in_list(
         encoding="utf-8",
     )
     assert read_source_video_from_log(capture_dir) == [video]
+
+
+def test_read_source_video_from_log_picks_latest_pipeline_start(
+    tmp_path: Path,
+) -> None:
+    """When pipeline.log contains multiple pipeline.start events (e.g. after a
+    v1.4 bisection rescue appended a fresh start with the leaf-clip list), the
+    reader returns the *most recent* one — the current state of the capture,
+    not the original failed attempt's source."""
+    capture_dir = tmp_path / "cap"
+    capture_dir.mkdir()
+    original = tmp_path / "original.mp4"
+    leaf_0 = tmp_path / "rescue" / "clips" / "v_part_0.mp4"
+    leaf_1 = tmp_path / "rescue" / "clips" / "v_part_1.mp4"
+    for p in (original, leaf_0, leaf_1):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"\0")
+    (capture_dir / "pipeline.log").write_text(
+        '{"event": "pipeline.start", "video": "' + str(original) + '"}\n'
+        '{"event": "quality_gate.failed", "reason": "structural"}\n'
+        '{"event": "bisection.start", "video": "' + str(original) + '"}\n'
+        '{"event": "pipeline.start", "videos": ["'
+        + str(leaf_0)
+        + '", "'
+        + str(leaf_1)
+        + '"]}\n',
+        encoding="utf-8",
+    )
+    result = read_source_video_from_log(capture_dir)
+    assert result == [leaf_0, leaf_1]
 
 
 # ─── run_pipeline multi-video support ──────────────────────────────────────

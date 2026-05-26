@@ -88,10 +88,10 @@ def detect_completed_stages(capture_dir: Path) -> set[str]:
 
 
 def read_source_video_from_log(capture_dir: Path) -> list[Path] | None:
-    """Recover the source video paths from the capture's `pipeline.log`.
+    """Recover the *current* source video paths from the capture's `pipeline.log`.
 
-    Scans for the first `pipeline.start` JSON event and returns the recorded
-    sources as a list of Paths. Handles both schemas:
+    Scans for the *most recent* `pipeline.start` JSON event and returns the
+    recorded sources as a list of Paths. Handles both schemas:
 
       - v1.3.0+: `videos: [str, ...]` — multi-video captures
       - legacy : `video: str` — single-video captures (pre-v1.3.0)
@@ -100,11 +100,18 @@ def read_source_video_from_log(capture_dir: Path) -> list[Path] | None:
     need to branch. Returns None when the log is absent, no `pipeline.start`
     event is present, or neither field is set — callers must then fall back
     to a user-supplied `--video` override.
+
+    Why "most recent" and not "first": v1.4 auto-bisection appends a fresh
+    `pipeline.start` with the leaf-clip list when the combined re-run kicks
+    off. Resume / add-video on a bisected capture must see the leaves (the
+    current state), not the original failed input. For pre-v1.4 captures
+    pipeline.log only ever carries one start event, so the semantics agree.
     """
     log_path = capture_dir / "pipeline.log"
     if not log_path.is_file():
         return None
 
+    latest: list[Path] | None = None
     for raw in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = raw.strip()
         if not line:
@@ -117,11 +124,12 @@ def read_source_video_from_log(capture_dir: Path) -> list[Path] | None:
             continue
         multi = event.get("videos")
         if isinstance(multi, list) and multi:
-            return [Path(v) for v in multi]
+            latest = [Path(v) for v in multi]
+            continue
         single = event.get("video")
         if single:
-            return [Path(single)]
-    return None
+            latest = [Path(single)]
+    return latest
 
 
 def run_pipeline(
