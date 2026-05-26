@@ -23,13 +23,17 @@ from rich.table import Table
 
 from . import __version__
 from . import viewer as viewer_mod
+from .bisection import rescue_via_bisection
 from .compress import CompressorNotAvailable, compress_ply, install_hint_for
 from .config import XDG_CONFIG_PATH, apply_override, dump_default_config, load_config
 from .doctor import all_required_passed, run_doctor
 from .logging import configure_logging, get_logger
 from .pipeline import (
+    PipelineResult,
+    _make_capture_name,
     add_video_to_capture,
     detect_completed_stages,
+    read_source_video_from_log,
     resume_capture,
     run_pipeline,
     run_pipeline_with_adaptive_retry,
@@ -240,6 +244,93 @@ def add_video(
         if state.in_progress is not None:
             state.mark_failed(reason=str(e), stage=state.in_progress.stage)
         err_console.print(f"[red]Pipeline failure:[/red] {e}")
+        raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
+
+    console.print(f"[green]Done:[/green] {result.output_ply}")
+    console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
+    console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+
+
+@app.command()
+def rescue(
+    target: Path = typer.Argument(
+        ...,
+        exists=True,
+        help="Either a source video (.mp4 / .mov) or an existing capture directory "
+        "whose original source failed structurally.",
+    ),
+    video: Path | None = typer.Option(
+        None,
+        "--video",
+        "-v",
+        help="When TARGET is a capture-dir, the original source video to bisect. "
+        "Defaults to scraping pipeline.log if not provided.",
+    ),
+    output_dir: Path | None = typer.Option(
+        None, "--output-dir", "-o", help="Override captures_dir (when TARGET is a video)."
+    ),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
+) -> None:
+    """Manually trigger the v1.4 auto-bisection-rescue path.
+
+    Two modes:
+      • TARGET is a video file: a fresh capture_dir is created, frames/colmap
+        are wiped if they exist, and bisection runs immediately — bypassing
+        the sequential and exhaustive matcher attempts.
+      • TARGET is a capture directory: the original source is recovered from
+        pipeline.log (or --video override), and bisection runs against the
+        existing capture_dir, preserving any rescue/ artefacts already present.
+
+    Useful when you already know a single-pass video is structurally hostile
+    (rotation-heavy footage, 180° turn) and you'd rather pay the bisection
+    cost up-front than wait ~30 min for sequential + exhaustive to fail.
+    Bisection respects all `[retry] bisect_*` config knobs.
+    """
+    cfg = _load_or_die(config)
+    configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+
+    if target.is_file():
+        # Mode A: fresh video.
+        source_video = target
+        captures_root = output_dir or cfg.paths.captures_dir
+        capture_dir = captures_root / _make_capture_name(source_video)
+        capture_dir.mkdir(parents=True, exist_ok=True)
+        console.print(f"[blue]Rescue mode:[/blue] fresh capture for {source_video.name}")
+    else:
+        # Mode B: existing capture-dir.
+        capture_dir = target
+        if video is not None:
+            source_video = video
+        else:
+            sources = read_source_video_from_log(capture_dir)
+            if not sources:
+                err_console.print(
+                    f"[red]Cannot rescue:[/red] no source video recorded in "
+                    f"{capture_dir}/pipeline.log — pass --video to point at it."
+                )
+                raise typer.Exit(EXIT_USER_ERROR)
+            # Bisection only handles single-video; if a multi-video capture
+            # ended up here, the user has to nominate one explicitly.
+            if len(sources) > 1:
+                err_console.print(
+                    f"[red]Cannot rescue:[/red] {capture_dir} has {len(sources)} "
+                    "source videos recorded; bisection is single-video only. "
+                    "Pass --video <one-of-them> to choose."
+                )
+                raise typer.Exit(EXIT_USER_ERROR)
+            source_video = sources[0]
+        console.print(f"[blue]Rescue mode:[/blue] existing capture {capture_dir.name}")
+
+    state = WatcherState.load()
+    try:
+        result: PipelineResult = rescue_via_bisection(source_video, capture_dir, cfg, state=state)
+    except FileNotFoundError as e:
+        err_console.print(f"[red]Missing input:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except Exception as e:
+        if state.in_progress is not None:
+            state.mark_failed(reason=str(e), stage=state.in_progress.stage)
+        err_console.print(f"[red]Rescue failure:[/red] {e}")
         raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
 
     console.print(f"[green]Done:[/green] {result.output_ply}")
