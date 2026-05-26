@@ -21,8 +21,13 @@ This module is built up across multiple slices:
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -69,3 +74,37 @@ def build_ffmpeg_cut_command(
         "copy",
         str(output),
     ]
+
+
+def cut_video(
+    video: Path,
+    start_s: float,
+    duration_s: float,
+    output: Path,
+) -> Path:
+    """Run the ffmpeg cut. Raises subprocess.CalledProcessError on failure.
+
+    Output's parent is created if missing. On non-zero exit the stderr tail
+    is logged at error level before re-raising so the failure is observable
+    in the structured log even when stderr would otherwise be swallowed.
+    """
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cmd = build_ffmpeg_cut_command(video, start_s, duration_s, output)
+    logger.info(
+        "bisection.cut",
+        video=str(video),
+        start_s=start_s,
+        duration_s=duration_s,
+        output=str(output),
+    )
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as exc:
+        logger.error(
+            "bisection.cut_failed",
+            cmd=cmd,
+            returncode=exc.returncode,
+            stderr=(exc.stderr or "")[-2000:],
+        )
+        raise
+    return output
