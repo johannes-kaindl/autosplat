@@ -16,13 +16,17 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 ---
 
 <p align="center">
-  <img src="docs/assets/max_strasse_hero.gif" alt="5-second flythrough of a trained Gaussian Splat — Augsburg's St. Ulrich und Afra basilica, reconstructed from drone footage that v1.2.0 could not solve" width="720" />
+  <a href="https://www.youtube.com/watch?v=vIXaQPNe_Yk" title="Watch the full 24-second fly-through on YouTube">
+    <img src="docs/assets/max_strasse_hero.gif" alt="5-second flythrough of a trained Gaussian Splat — Augsburg's St. Ulrich und Afra basilica, reconstructed from drone footage that v1.2.0 could not solve" width="720" />
+  </a>
 </p>
+
+<p align="center"><strong><a href="https://www.youtube.com/watch?v=vIXaQPNe_Yk">▶ Watch the full 24-second fly-through on YouTube</a></strong></p>
 
 <p align="center"><sub><em>Trained splat fly-through — Augsburg's St. Ulrich und Afra basilica.<br />
 Reconstructed from 4 sub-clips of a 5:35 drone pass with 4 turns that v1.2.0 could not solve (<code>max_strasse.MP4</code>).<br />
 <code>autosplat process A.mp4 B.mp4 C.mp4 D.mp4</code> → 865/865 cameras → 597k SfM points → 1.8 GB scene.ply.<br />
-See <a href="#expected-behavior">Expected Behavior</a> for the full rescue story · <a href="docs/assets/max_strasse_hero.mp4">MP4 version</a> · <a href="docs/assets/max_strasse_hero.webm">WebM</a></em></sub></p>
+See <a href="#expected-behavior">Expected Behavior</a> for the full rescue story · <a href="docs/assets/max_strasse_hero.mp4">MP4</a> · <a href="docs/assets/max_strasse_hero.webm">WebM</a></em></sub></p>
 
 ---
 
