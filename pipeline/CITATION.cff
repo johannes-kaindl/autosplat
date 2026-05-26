@@ -17,7 +17,7 @@ authors:
 repository-code: "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
 url: "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
 license: AGPL-3.0-or-later
-version: "1.4.0"
+version: "1.4.1"
 date-released: "2026-05-26"
 keywords:
   - gaussian-splatting

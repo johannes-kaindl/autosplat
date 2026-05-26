@@ -13,6 +13,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.4.1] — 2026-05-26 — Bisection Polish
+
+Follow-up to v1.4.0 — a probe-performance cap, a manual `rescue` CLI command, per-clip progress visibility in the WebUI, and an optional smart-split at the motion peak. Plus the pre-existing `dict | None` mypy noise in `pipeline.py` is finally cleared.
+
+### Added
+
+- **`autosplat rescue <video | capture_dir>`** — manual trigger for the bisection path. Bypasses sequential/exhaustive matching when you already know a video is structurally hostile. Two modes (fresh-video / existing-capture); multi-video captures need an explicit `--video` because bisection is single-video only. 5 CliRunner tests cover both modes plus the rejection branches.
+- **Probe-stage `target_frames` cap** — new `[retry] bisect_probe_target_frames` config (default 120, range 30-1000). Exhaustive matcher cost scales as n²/2, so the override cuts probe-stage compute by ~4× compared to the pipeline-wide default of 250. Applied automatically inside `probe_clip` alongside the existing matcher=exhaustive override.
+- **WebUI per-clip bisection progress** — `WatcherState.InProgress.detail` (optional, backwards-compat), `update_stage(stage, detail)` API, end-to-end propagation through `webui.state.list_captures` and the dashboard's active-job line: *"Active job · bisect · probing clip 0_1 (depth 2/3)"*. Stage transitions reset the detail; legacy state.json without the field still loads cleanly.
+- **Smart-split at motion peak** — opt-in `[retry] bisect_smart_split` (default `false`). When enabled, `find_motion_peak` samples 30 frames per cut range, runs dense Farneback optical flow (downsampled to 320 px wide for speed), and places the cut at the strongest motion event instead of at the midpoint. Output is clamped to `[min_clip_s, duration - min_clip_s]` so a peak near an edge can't produce a sub-min sub-clip. Falls back to midpoint cleanly when OpenCV can't open the file or the motion signal is too flat (<10 % peak-to-trough ratio).
+
+### Fixed
+
+- **`bisect_recursively` per-branch ffmpeg resilience** *(from the late-v1.4 fix sweep)* — `cut_video` raising `subprocess.CalledProcessError` on a corrupt sub-range is now caught, logged as `bisection.cut_aborted_branch`, and treated as a failed probe; the sibling branch still runs.
+- **`read_source_video_from_log` now returns the most recent `pipeline.start`** *(from the late-v1.4 fix sweep)* — after bisection appends a fresh `pipeline.start` with the leaf-clip list, `autosplat resume` and `autosplat add-video` on a bisected capture see the current state instead of silently re-feeding the original failed input.
+- **`run_pipeline` / `run_pipeline_with_adaptive_retry` dict type-args** — pre-existing mypy strict findings (lines 143 and 493, both `dict | None`) finally typed as `dict[str, Any] | None`. `mypy src/autosplat/{pipeline,bisection}.py` is now clean.
+
+### Tests
+
+- 22 new tests across `test_bisection.py` (smart-split + probe-perf + per-clip-state), `test_pipeline.py` (multi-`pipeline.start` reader), `test_watcher.py` (InProgress.detail), `test_cli_rescue.py` (the new command), and `tests/webui/test_captures.py` (detail propagation). Total **310 unit tests passing** (`uv run pytest -q`), up from 291 in v1.4.0.
+
+### Docs
+
+- README status line, mermaid, and release table updated to reflect v1.4.1.
+- CAPTURE-GUIDE, CONFIGURATION, TROUBLESHOOTING already covered the bisection path; nothing new needed there for this point release.
+
+---
+
 ## [v1.4.0] — 2026-05-26 — Auto-Bisection-Rescue
 
 When `sequential → exhaustive` adaptive-retry exhausts itself (`retry_hint=None`), the pipeline now automatically binary-subdivides the source video, probes each leaf clip with a cheap preprocess+SfM-only run, and combines the surviving leaves through the existing multi-video path. Automates the manual 4-clip workflow that rescued `max_strasse` in v1.3.0 — no new command, no new flag, just a longer run when the matcher swap isn't enough.
