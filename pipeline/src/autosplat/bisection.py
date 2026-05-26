@@ -22,6 +22,7 @@ This module is built up across multiple slices:
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -186,3 +187,91 @@ def probe_clip(
         passed=True,
     )
     return True
+
+
+ProbeFn = Callable[[BisectionClip, Path, Config], bool]
+
+
+def _clip_path_for(capture_dir: Path, video_stem: str, clip_id: str) -> Path:
+    """`<capture_dir>/rescue/clips/<stem>_part_<clip_id>.mp4`."""
+    return capture_dir / "rescue" / "clips" / f"{video_stem}_part_{clip_id}.mp4"
+
+
+def _probe_workspace_for(capture_dir: Path, clip_id: str) -> Path:
+    """`<capture_dir>/rescue/probes/<clip_id>/`."""
+    return capture_dir / "rescue" / "probes" / clip_id
+
+
+def bisect_recursively(
+    source_video: Path,
+    duration_s: float,
+    capture_dir: Path,
+    cfg: Config,
+    *,
+    depth: int = 0,
+    start_s: float = 0.0,
+    clip_id_prefix: str = "",
+    _probe_fn: ProbeFn | None = None,
+) -> list[BisectionClip]:
+    """DFS halt-on-success-per-branch tree walk.
+
+    Splits the (sub-)range `[start_s, start_s + duration_s]` of `source_video`
+    at midpoint into two children, then for each child whose duration meets
+    `cfg.retry.bisect_min_clip_s`:
+      • cut + probe via `_probe_fn` (defaults to the real probe_clip);
+      • if probe passes → keep as leaf, do NOT recurse;
+      • else if depth + 1 < cfg.retry.bisect_max_depth → recurse into that
+        child;
+      • else → drop (this branch is terminally failed).
+
+    Returns the flat list of surviving leaves in left-to-right (temporal) order.
+
+    Halts early if the *current* sub-range is shorter than `2 *
+    bisect_min_clip_s` — splitting would produce children below the probe
+    threshold and waste an ffmpeg cut.
+
+    `_probe_fn` is injected purely for testing; production callers omit it.
+    """
+    probe_fn = _probe_fn if _probe_fn is not None else probe_clip
+    min_s = cfg.retry.bisect_min_clip_s
+    max_depth = cfg.retry.bisect_max_depth
+
+    if duration_s < 2 * min_s or depth >= max_depth:
+        return []
+
+    half = duration_s / 2.0
+    leaves: list[BisectionClip] = []
+    for child_idx, child_start in enumerate((start_s, start_s + half)):
+        child_id = f"{clip_id_prefix}_{child_idx}" if clip_id_prefix else str(child_idx)
+        if half < min_s:
+            # Shouldn't happen given the guard above, but be defensive.
+            continue
+        clip_path = _clip_path_for(capture_dir, source_video.stem, child_id)
+        cut_video(source_video, child_start, half, clip_path)
+        clip = BisectionClip(
+            source_video=source_video,
+            clip_id=child_id,
+            start_s=child_start,
+            duration_s=half,
+            path=clip_path,
+        )
+        probe_ws = _probe_workspace_for(capture_dir, child_id)
+        if probe_fn(clip, probe_ws, cfg):
+            leaves.append(clip)
+            continue
+        # Probe failed — recurse only if we still have depth budget.
+        if depth + 1 < max_depth:
+            leaves.extend(
+                bisect_recursively(
+                    source_video,
+                    duration_s=half,
+                    capture_dir=capture_dir,
+                    cfg=cfg,
+                    depth=depth + 1,
+                    start_s=child_start,
+                    clip_id_prefix=child_id,
+                    _probe_fn=probe_fn,
+                )
+            )
+
+    return leaves

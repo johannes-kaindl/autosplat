@@ -12,6 +12,7 @@ from pathlib import Path
 
 from autosplat.bisection import (
     BisectionClip,
+    bisect_recursively,
     build_ffmpeg_cut_command,
     cut_video,
     probe_clip,
@@ -251,3 +252,133 @@ def test_probe_clip_returns_false_on_preprocess_error(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(bm, "_run_preprocess", raise_preprocess)
 
     assert probe_clip(clip, workspace, cfg) is False
+
+
+# ─── Slice 4: bisect_recursively (pure tree walk, monkeypatched cut + probe) ──
+
+
+def _stub_cut(tmp_path: Path):
+    """Returns a stub for cut_video that touches the output file."""
+
+    def _stub(video, start_s, duration_s, output):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    return _stub
+
+
+def _scripted_probe(decisions: dict[str, bool]):
+    """Return a fake probe_fn that consults a clip_id → bool decision table."""
+
+    def _fake(clip: BisectionClip, workspace: Path, cfg) -> bool:
+        return decisions.get(clip.clip_id, False)
+
+    return _fake
+
+
+def test_bisect_recursively_keeps_passing_first_level(monkeypatch, tmp_path: Path) -> None:
+    """Both halves pass at depth 1 — return both, no recursion."""
+    cfg = load_config(include_xdg=False)
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", _stub_cut(tmp_path))
+
+    leaves = bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": True, "1": True}),
+    )
+    assert {leaf.clip_id for leaf in leaves} == {"0", "1"}
+    assert all(leaf.path.exists() for leaf in leaves)
+
+
+def test_bisect_recursively_recurses_on_failed_branch(monkeypatch, tmp_path: Path) -> None:
+    """Half '0' fails → split into '0_0' (passes) + '0_1' (passes). Half '1' passes."""
+    cfg = load_config(include_xdg=False)
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", _stub_cut(tmp_path))
+
+    leaves = bisect_recursively(
+        video,
+        duration_s=480.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": False, "0_0": True, "0_1": True, "1": True}),
+    )
+    assert {leaf.clip_id for leaf in leaves} == {"0_0", "0_1", "1"}
+
+
+def test_bisect_recursively_halts_at_max_depth(monkeypatch, tmp_path: Path) -> None:
+    """All probes fail; max_depth=2 caps recursion, returns empty list."""
+    cfg_obj = load_config(include_xdg=False)
+    from autosplat.config import apply_override
+
+    cfg = apply_override(cfg_obj, {"retry": {"bisect_max_depth": 2}})
+
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", _stub_cut(tmp_path))
+
+    leaves = bisect_recursively(
+        video,
+        duration_s=480.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({}),  # everything False
+    )
+    assert leaves == []
+
+
+def test_bisect_recursively_skips_below_min_clip(monkeypatch, tmp_path: Path) -> None:
+    """Source is 90s, min_clip_s=60 → after first split each half is 45s,
+    too short to probe — recursion bails before any cut."""
+    cfg_obj = load_config(include_xdg=False)
+    from autosplat.config import apply_override
+
+    cfg = apply_override(cfg_obj, {"retry": {"bisect_min_clip_s": 60.0}})
+
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    cut_called: list[tuple[float, float]] = []
+
+    def tracking_cut(video, start_s, duration_s, output):
+        cut_called.append((start_s, duration_s))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", tracking_cut)
+
+    leaves = bisect_recursively(
+        video,
+        duration_s=90.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({}),
+    )
+    assert leaves == []
+    assert cut_called == []  # no cuts ever attempted
