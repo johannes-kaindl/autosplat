@@ -140,17 +140,26 @@ Defaults derived from Phase-0 calibration (`bench_chill`: ratio 1.0 / 53 222 poi
 
 On fail, raises `QualityGateFailure(reason, stage, retry_hint, metrics)`. The watcher consults the hint and decides retry vs final-fail.
 
-## `[retry]` (Phase 3 watcher policy)
+## `[retry]` (Phase 3 + v1.4 retry / rescue policy)
 
-| Key            | Default | Notes                                                                  |
-| -------------- | ------- | ---------------------------------------------------------------------- |
-| `enabled`      | `true`  | Master switch for adaptive retry.                                      |
-| `max_retries`  | `3`     | Maximum total attempts per capture, including the first try.           |
+| Key                  | Default | Notes                                                                                       |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| `enabled`            | `true`  | Master switch for adaptive retry (the matcher-swap loop).                                   |
+| `max_retries`        | `3`     | Maximum total attempts per capture, including the first try.                                |
+| `bisect_enabled`     | `true`  | v1.4 — when the matcher swap exhausts itself (`retry_hint=None`), binary-subdivide the source video and probe leaf clips. Set `false` for fast-fail in CI. |
+| `bisect_min_clip_s`  | `60.0`  | v1.4 — sub-clips shorter than this are not probed. Range 10–600 s. 60 s is roughly the lower bound where SfM finds enough overlap on its own. |
+| `bisect_max_depth`   | `3`     | v1.4 — recursion cap. 3 means up to 2³ = 8 leaf clips per video. Range 1–6. Bounds worst-case probe cost. |
 
 Applies to:
 - Crashes (`recover_state` finds an orphan `in_progress`)
-- Quality-gate failures with a non-None `retry_hint`
+- Quality-gate failures with a non-None `retry_hint` (matcher swap)
+- v1.4 — quality-gate failures with `retry_hint=None` on a single-video input, when `bisect_enabled=true` and bisection has not already been attempted on this run
 - Generic exceptions during processing
+
+Bisection persists artefacts under `<capture_dir>/rescue/clips/*.mp4`
+(stream-copy cuts) and `<capture_dir>/rescue/probes/<clip_id>/` (per-clip
+SfM workspace) so a partial run is debuggable; see `docs/CAPTURE-GUIDE.md`
+for the on-disk layout and `clip_id` semantics.
 
 ## `[status]` (Phase 3 history bound)
 

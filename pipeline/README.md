@@ -11,7 +11,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.3.0 — Multi-Video Rescue.** Resume failed runs, combine multiple passes of a scene into one capture, and adaptive matcher retry — when a single drone pass can't be reconstructed, you can split it and let COLMAP solve the combined set. Mac Silicon, AGPL-3.0.
+> **Status: v1.3.0 released · v1.4 Auto-Bisection-Rescue code-complete on `main`.** Resume failed runs, combine multiple passes of a scene into one capture, adaptive matcher retry, and — when even `exhaustive` matching can't rescue a capture — the pipeline now automatically binary-subdivides the source video and recombines the surviving segments without user intervention. Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -49,15 +49,17 @@ flowchart TD
     C --> D[COLMAP SfM]
     D --> E{quality gate}
     E -->|pass| F[Brush training]
-    E -->|fail| R[adaptive retry<br/>exhaustive matcher]
+    E -->|fail<br/>hint=exhaustive| R[adaptive retry<br/>exhaustive matcher]
     R --> D
+    E -->|fail<br/>hint=None<br/>v1.4| BS[auto-bisection<br/>cut + probe leaves]
+    BS --> D
     F --> G[PLY export + compress]
     G --> H[Obsidian capture-note]
     G --> I[SuperSplat: cleanup + publish]
     G --> V[autosplat-viewer<br/>browser PWA]
 ```
 
-The pipeline is **resumable** (sleep / crash / Ctrl-C → `autosplat resume <capture>`) and accepts **multiple video passes** for one scene (`autosplat process v1.mp4 v2.mp4 …` or `autosplat add-video <capture> <video>`).
+The pipeline is **resumable** (sleep / crash / Ctrl-C → `autosplat resume <capture>`), accepts **multiple video passes** for one scene (`autosplat process v1.mp4 v2.mp4 …` or `autosplat add-video <capture> <video>`), and — in v1.4 — escalates a structurally-failing single-video capture to **auto-bisection-rescue**: the source is binary-subdivided, each leaf clip probed with a cheap SfM-only run, and the surviving leaves recombined through the same multi-video path that proved out on `max_strasse`. See [`CAPTURE-GUIDE.md`](docs/CAPTURE-GUIDE.md#auto-bisection-internals-v14) for the on-disk layout and config knobs.
 
 ---
 
@@ -77,6 +79,7 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 | Version  | Date       | Headline                                                                                  |
 | -------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v1.4.0   | _unreleased_ — code-complete on `main` | **Auto-Bisection-Rescue** — when `sequential→exhaustive` exhausts itself, binary-subdivide the source video, probe each leaf clip, and recombine the survivors automatically. `[retry] bisect_*` config knobs. |
 | v1.3.0   | 2026-05-24 | **Multi-Video Rescue** — combine N video passes into one capture, `add-video`, `--target-frames`, CAPTURE-GUIDE |
 | v1.2.0   | 2026-05-24 | **Resume & Recovery** — `autosplat resume`, adaptive matcher retry, WebUI Resume button, persistent job history |
 | v1.1.2   | 2026-05-20 | Hotfix — wall-clock job timestamps + within-day sort, job-status badges, zero ruff findings |

@@ -75,13 +75,17 @@ You'll see a structured log:
 This is *desired* behaviour — the gate spared you ~30 min of Brush compute on garbage SfM. What to do next:
 
 - **`autosplat watch` mode:** nothing — the daemon already re-enqueued with `matcher=exhaustive`. Wait for the retry.
-- **`autosplat process` mode:** the run exits with code 2. Manually retry with a config override:
-  ```bash
-  autosplat config init -t /tmp/exhaustive.toml
-  # edit: [colmap] matcher = "exhaustive"
-  autosplat process video.mp4 --config /tmp/exhaustive.toml --skip-stage preprocess
+- **`autosplat process` mode:** the in-process adaptive-retry wrapper does the same matcher swap automatically — you usually don't need to do anything. The run only exits with code 2 if the swap also fails.
+- **If `exhaustive` also fails (`retry_hint=null` in the log):** v1.4 escalates automatically to *auto-bisection-rescue* — the source video is binary-subdivided and each leaf clip probed independently. Watch `pipeline.log` for `bisection.*` events:
   ```
-- **If `exhaustive` also fails (<50 cams):** the footage is structurally SfM-unfit (low parallax / texture-poor). See `PHASE-0-CALIBRATION.md` for the `ice_bird` case study — only fix is recapture at ≤30 fps with more ground detail / texture.
+  pipeline.bisection_escalation reason="low_camera_ratio: 0.02 < 0.5"
+  bisection.start            video=… duration_s=335.0
+  bisection.probe            clip_id=0 cameras_registered=4 ratio=0.03 passed=false
+  bisection.probe            clip_id=0_1 cameras_registered=78 ratio=0.62 passed=true
+  bisection.combine_start    leaf_count=2
+  ```
+  Surviving leaves persist as `<capture_dir>/rescue/clips/*.mp4` and are then fed through the multi-video pipeline path. See [`CAPTURE-GUIDE.md`](CAPTURE-GUIDE.md#auto-bisection-internals-v14) for the on-disk layout and config knobs.
+- **If even bisection produces no leaves (`bisection_exhausted`):** the footage is structurally SfM-unfit (low parallax / texture-poor). See `PHASE-0-CALIBRATION.md` for the `ice_bird` case study — only fix is recapture at ≤30 fps with more ground detail / texture. Set `[retry] bisect_enabled = false` in CI to short-circuit this branch.
 
 To bypass the gate entirely (not recommended, you'll waste Brush time):
 
