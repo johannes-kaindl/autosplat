@@ -21,10 +21,13 @@ This module is built up across multiple slices:
 
 from __future__ import annotations
 
+import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import preprocess as _preprocess_mod
 from . import quality as _quality_mod
@@ -34,6 +37,10 @@ from .logging import get_logger
 from .preprocess import PreprocessResult
 from .quality import QualityGateFailure
 from .sfm import SfmResult
+
+if TYPE_CHECKING:
+    from .pipeline import PipelineResult
+    from .watcher import WatcherState
 
 logger = get_logger(__name__)
 
@@ -275,3 +282,106 @@ def bisect_recursively(
             )
 
     return leaves
+
+
+def _probe_duration_s(video: Path) -> float:
+    """Thin wrapper around ffprobe so tests can monkey-patch the duration lookup."""
+    return _preprocess_mod.probe_video(video).duration_s
+
+
+def _run_pipeline_with_adaptive_retry(
+    videos: list[Path],
+    cfg: Config,
+    *,
+    capture_dir_override: Path,
+    state: WatcherState | None,
+    _bisection_already_attempted: bool,
+) -> PipelineResult:
+    """Lazy-import wrapper to break the pipeline ↔ bisection circular import."""
+    from . import pipeline as _pipeline_mod
+
+    return _pipeline_mod.run_pipeline_with_adaptive_retry(
+        videos,
+        cfg,
+        capture_dir_override=capture_dir_override,
+        state=state,
+        _bisection_already_attempted=_bisection_already_attempted,
+    )
+
+
+def rescue_via_bisection(
+    video: Path,
+    capture_dir: Path,
+    cfg: Config,
+    *,
+    state: WatcherState | None = None,
+) -> PipelineResult:
+    """Bisect a failed single-video capture and re-run as multi-video.
+
+    Sequence:
+      1. ffprobe the source for total duration.
+      2. If duration < 2 * min_clip_s → raise QualityGateFailure (no bisection
+         worth attempting; surfaces the structural failure to the user).
+      3. Wipe stale frames/, colmap/, training/ from the prior failed attempts
+         so the combined re-run starts from a clean slate.
+      4. bisect_recursively → flat leaf list (each leaf is a physical .mp4
+         already on disk under <capture_dir>/rescue/clips/).
+      5. If no leaves survive → raise QualityGateFailure(reason="bisection_exhausted").
+      6. Otherwise call run_pipeline_with_adaptive_retry with the leaves as
+         the multi-video input, the existing capture_dir, and
+         _bisection_already_attempted=True so the wrapper does not re-enter
+         bisection on a further failure (preserves the sequential→exhaustive
+         swap for the combined run).
+    """
+    t0 = time.monotonic()
+    logger.info("bisection.start", video=str(video), capture_dir=str(capture_dir))
+
+    duration_s = _probe_duration_s(video)
+    min_s = cfg.retry.bisect_min_clip_s
+    if duration_s < 2 * min_s:
+        logger.warning(
+            "bisection.too_short",
+            duration_s=duration_s,
+            min_clip_s=min_s,
+        )
+        raise QualityGateFailure(
+            reason=f"bisection_skipped_too_short: {duration_s:.1f}s < {2 * min_s:.1f}s",
+            stage="bisection",
+            retry_hint=None,
+            metrics={"duration_s": duration_s, "min_clip_s": min_s},
+        )
+
+    for sub in ("frames", "colmap", "training"):
+        stale = capture_dir / sub
+        if stale.exists():
+            shutil.rmtree(stale)
+
+    leaves = bisect_recursively(
+        video,
+        duration_s=duration_s,
+        capture_dir=capture_dir,
+        cfg=cfg,
+    )
+
+    if not leaves:
+        logger.warning("bisection.exhausted", duration_s=duration_s)
+        raise QualityGateFailure(
+            reason="bisection_exhausted",
+            stage="bisection",
+            retry_hint=None,
+            metrics={"duration_s": duration_s, "probed_count": 0},
+        )
+
+    logger.info(
+        "bisection.combine_start",
+        leaf_count=len(leaves),
+        leaves=[leaf.clip_id for leaf in leaves],
+        duration_s=time.monotonic() - t0,
+    )
+    return _run_pipeline_with_adaptive_retry(
+        [leaf.path for leaf in leaves],
+        cfg,
+        capture_dir_override=capture_dir,
+        state=state,
+        _bisection_already_attempted=True,
+    )

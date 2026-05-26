@@ -448,6 +448,7 @@ def run_pipeline_with_adaptive_retry(
     skip_stages: set[str] | None = None,
     dry_run: bool = False,
     state: WatcherState | None = None,
+    _bisection_already_attempted: bool = False,
 ) -> PipelineResult:
     """run_pipeline + in-process Phase-3 adaptive retry on QualityGateFailure.
 
@@ -462,12 +463,28 @@ def run_pipeline_with_adaptive_retry(
       2. adds `preprocess` to skip_stages (frames are still valid — cheap win)
       3. re-runs `run_pipeline` with `config_override=hint`
 
-    Stops when (a) the hint is None, (b) `cfg.retry.enabled=False`, or
-    (c) `cfg.retry.max_retries` is reached — then re-raises the last failure.
+    When `retry_hint is None` (i.e. the sequential→exhaustive swap is
+    exhausted), v1.4 escalates to auto-bisection: the source video is
+    binary-subdivided, each leaf clip probed independently, and the
+    surviving leaves recombined via the multi-video pipeline. Requires:
+      • `config.retry.bisect_enabled` is True (default)
+      • this attempt was on a single source video (multi-video captures
+        bypass bisection — the user already provided the cuts)
+      • bisection wasn't already attempted on this run (recursion guard)
+
+    Stops when (a) the hint is None *and* bisection cannot or did not
+    rescue, (b) `cfg.retry.enabled=False`, or (c) `cfg.retry.max_retries`
+    is reached — then re-raises the last failure.
+
+    `_bisection_already_attempted` is a private flag set by
+    `bisection.rescue_via_bisection` when it recursively calls this wrapper
+    for the final combined-multi-video run — prevents infinite bisection
+    if the combined set also fails the quality gate.
     """
     max_attempts = config.retry.max_retries if config.retry.enabled else 1
     override: dict | None = None
     skip = set(skip_stages) if skip_stages else None
+    bisection_attempted = _bisection_already_attempted
 
     if capture_dir_override is not None:
         capture_dir = capture_dir_override
@@ -491,7 +508,27 @@ def run_pipeline_with_adaptive_retry(
                 state=state,
             )
         except QualityGateFailure as e:
-            if e.retry_hint is None or attempts >= max_attempts:
+            if e.retry_hint is None:
+                # Matcher-swap path exhausted. v1.4: try bisection if eligible.
+                if (
+                    config.retry.bisect_enabled
+                    and not bisection_attempted
+                    and (isinstance(video, Path) or len(video) == 1)
+                ):
+                    bisection_attempted = True
+                    src = video if isinstance(video, Path) else video[0]
+                    from . import bisection as _bisection_mod
+
+                    logger.warning(
+                        "pipeline.bisection_escalation",
+                        reason=e.reason,
+                        capture_dir=str(capture_dir),
+                    )
+                    return _bisection_mod.rescue_via_bisection(
+                        src, capture_dir, config, state=state,
+                    )
+                raise
+            if attempts >= max_attempts:
                 raise
             colmap_dir = capture_dir / "colmap"
             if colmap_dir.exists():

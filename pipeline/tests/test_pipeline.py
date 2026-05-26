@@ -672,10 +672,15 @@ def test_adaptive_retry_applies_hint_and_succeeds_on_second_attempt(
 
 
 def test_adaptive_retry_reraises_when_hint_is_none(tmp_path: Path) -> None:
-    """QualityGateFailure without retry_hint → no retry; bubble up unchanged."""
+    """QualityGateFailure without retry_hint and bisection disabled → no retry."""
     video = tmp_path / "scene.mp4"
     video.write_bytes(b"\0")
     cfg = load_config(include_xdg=False)
+    # Disable v1.4 bisection so this test still expresses the pre-v1.4
+    # semantics — "no hint, no rescue path → re-raise immediately".
+    cfg = cfg.model_copy(
+        update={"retry": cfg.retry.model_copy(update={"bisect_enabled": False})}
+    )
 
     with (
         patch(
@@ -829,3 +834,118 @@ def test_run_pipeline_runs_quality_gate_when_sfm_skipped(tmp_path: Path) -> None
     # quality_gate ran exactly once with the parsed sparse-model counts
     assert len(quality_calls) == 1
     assert quality_calls[0][0] == 3  # 3 cameras parsed from sparse/0
+
+
+# ─── v1.4 — Auto-Bisection-Rescue integration into adaptive-retry ───────────
+
+
+def _touch(p: Path) -> Path:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"")
+    return p
+
+
+def _success_result(capture_dir: Path) -> MagicMock:
+    success = MagicMock(
+        spec_set=["capture_dir", "output_ply", "duration_s", "capture_name", "metadata_path"]
+    )
+    success.capture_dir = capture_dir
+    success.output_ply = capture_dir / "output" / "scene.ply"
+    success.duration_s = 1.0
+    success.capture_name = capture_dir.name
+    success.metadata_path = capture_dir / "output" / "metadata.json"
+    return success
+
+
+def test_adaptive_retry_calls_bisection_on_exhausted_hint(tmp_path: Path) -> None:
+    """After retry_hint=None the wrapper escalates to rescue_via_bisection."""
+    cfg = load_config(include_xdg=False)
+    video = _touch(tmp_path / "v.mp4")
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    success = _success_result(capture_dir)
+
+    with (
+        patch(
+            "autosplat.pipeline.run_pipeline",
+            side_effect=QualityGateFailure(reason="structural", retry_hint=None),
+        ),
+        patch(
+            "autosplat.bisection.rescue_via_bisection", return_value=success
+        ) as rescue,
+    ):
+        result = run_pipeline_with_adaptive_retry(
+            video, cfg, capture_dir_override=capture_dir
+        )
+
+    assert result is success
+    rescue.assert_called_once()
+    assert rescue.call_args.args[0] == video
+
+
+def test_adaptive_retry_skips_bisection_when_disabled(tmp_path: Path) -> None:
+    cfg_obj = load_config(include_xdg=False)
+    from autosplat.config import apply_override
+
+    cfg = apply_override(cfg_obj, {"retry": {"bisect_enabled": False}})
+
+    video = _touch(tmp_path / "v.mp4")
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+
+    with (
+        patch(
+            "autosplat.pipeline.run_pipeline",
+            side_effect=QualityGateFailure(reason="structural", retry_hint=None),
+        ),
+        patch("autosplat.bisection.rescue_via_bisection") as rescue,
+        pytest.raises(QualityGateFailure),
+    ):
+        run_pipeline_with_adaptive_retry(video, cfg, capture_dir_override=capture_dir)
+    rescue.assert_not_called()
+
+
+def test_adaptive_retry_skips_bisection_on_multi_video(tmp_path: Path) -> None:
+    cfg = load_config(include_xdg=False)
+    v1 = _touch(tmp_path / "a.mp4")
+    v2 = _touch(tmp_path / "b.mp4")
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+
+    with (
+        patch(
+            "autosplat.pipeline.run_pipeline",
+            side_effect=QualityGateFailure(reason="structural", retry_hint=None),
+        ),
+        patch("autosplat.bisection.rescue_via_bisection") as rescue,
+        pytest.raises(QualityGateFailure),
+    ):
+        run_pipeline_with_adaptive_retry(
+            [v1, v2], cfg, capture_dir_override=capture_dir
+        )
+    rescue.assert_not_called()
+
+
+def test_adaptive_retry_does_not_re_enter_bisection(tmp_path: Path) -> None:
+    """When _bisection_already_attempted=True (combined-set run), an exhausted
+    retry_hint re-raises instead of bisecting again."""
+    cfg = load_config(include_xdg=False)
+    video = _touch(tmp_path / "v.mp4")
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+
+    with (
+        patch(
+            "autosplat.pipeline.run_pipeline",
+            side_effect=QualityGateFailure(reason="structural", retry_hint=None),
+        ),
+        patch("autosplat.bisection.rescue_via_bisection") as rescue,
+        pytest.raises(QualityGateFailure),
+    ):
+        run_pipeline_with_adaptive_retry(
+            video,
+            cfg,
+            capture_dir_override=capture_dir,
+            _bisection_already_attempted=True,
+        )
+    rescue.assert_not_called()

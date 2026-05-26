@@ -16,9 +16,11 @@ from autosplat.bisection import (
     build_ffmpeg_cut_command,
     cut_video,
     probe_clip,
+    rescue_via_bisection,
 )
 from autosplat.config import load_config
 from autosplat.preprocess import PreprocessResult
+from autosplat.quality import QualityGateFailure
 from autosplat.sfm import SfmResult
 
 # ─── Slice 1: build_ffmpeg_cut_command (pure string assertion) ──────────────
@@ -382,3 +384,159 @@ def test_bisect_recursively_skips_below_min_clip(monkeypatch, tmp_path: Path) ->
     )
     assert leaves == []
     assert cut_called == []  # no cuts ever attempted
+
+
+# ─── Slice 5: rescue_via_bisection (orchestrator) ───────────────────────────
+
+
+def test_rescue_via_bisection_calls_run_pipeline_with_leaves(monkeypatch, tmp_path: Path) -> None:
+    """Successful bisection → run_pipeline_with_adaptive_retry invoked with leaf list."""
+    cfg = load_config(include_xdg=False)
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "2026-05-26_v"
+    capture_dir.mkdir(parents=True)
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+    monkeypatch.setattr(bm, "cut_video", _stub_cut(tmp_path))
+
+    leaves_to_return = [
+        BisectionClip(
+            source_video=video,
+            clip_id="0",
+            start_s=0.0,
+            duration_s=120.0,
+            path=tmp_path / "leaf_0.mp4",
+        ),
+        BisectionClip(
+            source_video=video,
+            clip_id="1",
+            start_s=120.0,
+            duration_s=120.0,
+            path=tmp_path / "leaf_1.mp4",
+        ),
+    ]
+    for leaf in leaves_to_return:
+        leaf.path.write_bytes(b"\x00")
+    monkeypatch.setattr(
+        bm,
+        "bisect_recursively",
+        lambda *a, **kw: leaves_to_return,
+    )
+
+    called_with: dict[str, object] = {}
+
+    def fake_run_pipeline(videos, config, **kwargs):
+        called_with["videos"] = list(videos)
+        called_with["kwargs"] = kwargs
+        from autosplat.pipeline import PipelineResult
+
+        return PipelineResult(
+            capture_name=capture_dir.name,
+            capture_dir=capture_dir,
+            output_ply=capture_dir / "output" / "scene.ply",
+            metadata_path=capture_dir / "output" / "metadata.json",
+            duration_s=1.0,
+        )
+
+    monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", fake_run_pipeline)
+
+    result = rescue_via_bisection(video, capture_dir, cfg)
+
+    assert called_with["videos"] == [leaf.path for leaf in leaves_to_return]
+    assert called_with["kwargs"]["_bisection_already_attempted"] is True
+    assert result.capture_dir == capture_dir
+
+
+def test_rescue_via_bisection_raises_when_no_leaves(monkeypatch, tmp_path: Path) -> None:
+    """Bisection returns no leaves → QualityGateFailure(reason='bisection_exhausted')."""
+    cfg = load_config(include_xdg=False)
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "v"
+    capture_dir.mkdir(parents=True)
+
+    import pytest
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+    monkeypatch.setattr(bm, "bisect_recursively", lambda *a, **kw: [])
+
+    with pytest.raises(QualityGateFailure) as excinfo:
+        rescue_via_bisection(video, capture_dir, cfg)
+    assert "bisection_exhausted" in str(excinfo.value) or "bisection" in excinfo.value.reason
+    assert excinfo.value.retry_hint is None
+
+
+def test_rescue_via_bisection_skips_when_video_too_short(monkeypatch, tmp_path: Path) -> None:
+    """A source video shorter than 2 * min_clip_s is not worth bisecting → raise."""
+    cfg = load_config(include_xdg=False)  # default min_clip_s=60.0
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "v"
+    capture_dir.mkdir(parents=True)
+
+    import pytest
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 90.0)  # < 2 * 60s
+
+    with pytest.raises(QualityGateFailure) as excinfo:
+        rescue_via_bisection(video, capture_dir, cfg)
+    assert excinfo.value.retry_hint is None
+    assert "short" in excinfo.value.reason or "bisection" in excinfo.value.reason
+
+
+def test_rescue_via_bisection_wipes_stale_stage_dirs(monkeypatch, tmp_path: Path) -> None:
+    """frames/, colmap/, training/ from prior failed attempts are wiped before
+    the multi-video re-run (so the combined preprocess starts clean)."""
+    cfg = load_config(include_xdg=False)
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "v"
+    capture_dir.mkdir(parents=True)
+    for sub in ("frames", "colmap", "training"):
+        d = capture_dir / sub
+        d.mkdir()
+        (d / "stale.txt").write_text("from_previous_attempt", encoding="utf-8")
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+
+    leaf = BisectionClip(
+        source_video=video,
+        clip_id="0",
+        start_s=0.0,
+        duration_s=120.0,
+        path=tmp_path / "leaf.mp4",
+    )
+    leaf.path.write_bytes(b"\x00")
+    monkeypatch.setattr(bm, "bisect_recursively", lambda *a, **kw: [leaf])
+
+    def fake_run_pipeline(videos, config, **kwargs):
+        # By the time run_pipeline runs, the stale dirs must already be gone.
+        assert not (capture_dir / "frames").exists()
+        assert not (capture_dir / "colmap").exists()
+        assert not (capture_dir / "training").exists()
+        from autosplat.pipeline import PipelineResult
+
+        return PipelineResult(
+            capture_name=capture_dir.name,
+            capture_dir=capture_dir,
+            output_ply=capture_dir / "output" / "scene.ply",
+            metadata_path=capture_dir / "output" / "metadata.json",
+            duration_s=1.0,
+        )
+
+    monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", fake_run_pipeline)
+
+    rescue_via_bisection(video, capture_dir, cfg)
