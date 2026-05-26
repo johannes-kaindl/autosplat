@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software in academic or research work, please cite it as below."
+title: "autosplat — automated video-to-3D-Gaussian-Splat pipeline for Apple Silicon"
+abstract: >
+  Automated end-to-end pipeline that turns drone or handheld video into a trained
+  3D Gaussian Splat, running locally on Apple Silicon. Combines FFmpeg preprocessing,
+  COLMAP Structure-from-Motion with adaptive matcher retry, the Brush WebGPU trainer,
+  PLY export with SOG/SPZ compression, optional Obsidian capture-note generation, and
+  a local SuperSplat auto-open viewer. Ships a CLI, a watch-folder daemon, and a
+  FastAPI + HTMX WebUI with resume, multi-video-capture, and add-video flows.
+type: software
+authors:
+  - family-names: Kaindl
+    given-names: Johannes
+    email: code.jkaindl@mailbox.org
+    affiliation: Independent
+repository-code: "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+url: "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+license: AGPL-3.0-or-later
+version: "1.3.0"
+date-released: "2026-05-24"
+keywords:
+  - gaussian-splatting
+  - 3d-reconstruction
+  - photogrammetry
+  - structure-from-motion
+  - colmap
+  - brush
+  - apple-silicon
+  - macos
+  - webgpu
+  - pipeline-automation

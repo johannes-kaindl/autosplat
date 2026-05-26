@@ -3,6 +3,20 @@
 Versioning follows the spec's phase model. Releases tag the head commit when a phase's acceptance criteria are met.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Added
+- Repository documentation refresh: README brought up to v1.3.0 (badges, release table, CLI/WebUI sections, mermaid, test counts), CONTRIBUTING expanded with pre-commit/ruff/mypy setup, `SECURITY.md`, `CITATION.cff`, `.editorconfig`.
+
+### Fixed
+- Codeberg release pages: missing release notes published for `v1.1.0` and `v1.2.0`; the previously misfiled `v1.1.1` release (which pointed at tag `1.1.0`) was reattached to the correct `v1.1.1` tag.
+
+### Removed
+- Legacy non-prefixed tags `1.1.0` and `1.1.2` deleted from the Codeberg remote (duplicates of `v1.1.0` and `v1.1.2`); all release tags now follow the `vX.Y.Z` convention.
 
 ---
 
