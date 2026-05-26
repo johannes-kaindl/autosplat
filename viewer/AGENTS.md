@@ -1,0 +1,55 @@
+# AGENTS.md
+
+Conventions for AI assistants working in this repo.
+
+## What this is
+
+Static viewer PWA for 3D Gaussian Splats. Vanilla HTML/CSS/JS, no build
+step, no runtime dependencies. The PlayCanvas Engine is loaded at
+runtime from the jsDelivr CDN.
+
+## Workflow conventions
+
+- **Tests:** `./tests/run.sh` runs unit + e2e. Unit tests use
+  `node:test` with zero deps; e2e uses `puppeteer-core` which is
+  auto-installed into `tests/node_modules/` (gitignored). Tests must
+  pass before any commit.
+- **Pages deploy:** Codeberg Pages serves the `pages` branch. To
+  publish:
+  ```bash
+  git push origin main
+  git push origin main:pages
+  ```
+- **Commit style:** Conventional Commits — `feat(scope): …`, `fix:`,
+  `chore:`, `docs:`, `refactor:`. AI-pair commits get a
+  `Co-Authored-By:` trailer.
+- **No build step.** No bundlers, no transpilation, no npm runtime
+  deps. Stay vanilla HTML/CSS/JS (ES modules).
+- **Releases:** annotated tag (`git tag -a vX.Y.Z`), CHANGELOG entry
+  in Keep-a-Changelog format, Codeberg release via the API. See
+  the `codeberg-release-workflow` memory for the `has_releases`
+  quirk on fresh Codeberg repos.
+
+## Memory + logs
+
+- **Memory** (cross-session, outside the repo):
+  `~/.claude/projects/-Users-Shared-code-autosplat-viewer/memory/`
+- **Session logs** (in repo, gitignored):
+  `.claude/logs/YYYY-MM-DD-<topic>.md` — written at end-of-session
+  by the `clean-shutdown` skill.
+
+## Architecture notes
+
+- **Service worker** (`service-worker.js`): same-origin shell uses
+  `network-first`, so installed clients pick up updates on the next
+  reload. Cache constants (`SHELL`, `RUNTIME`) must be bumped whenever
+  a file is added to or removed from `SHELL_FILES`.
+- **Walking-mode** (`js/walking.js`, `js/heightmap.js`,
+  `js/controls.js`) is loaded lazily via dynamic import in
+  `viewer.js#enterWalking` — not part of the initial shell.
+- **Mobile / iOS:** fullscreen on iPhone Safari uses a CSS pseudo-
+  fullscreen fallback (`body.fs-fallback`), since Mobile Safari has
+  no Fullscreen API for non-`<video>` elements. Safe-area-inset
+  padding on stage controls and walking-mode HUD; `viewport-fit=cover`
+  in the viewport meta. See `CHANGELOG.md` v1.1.0/v1.1.1 for the
+  full mobile-polish surface.
