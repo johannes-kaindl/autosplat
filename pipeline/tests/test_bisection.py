@@ -8,7 +8,11 @@ helpers. Real-binary tests live behind needs_ffmpeg / needs_colmap markers.
 
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
+
+import pytest
 
 from autosplat.bisection import (
     BisectionClip,
@@ -540,3 +544,67 @@ def test_rescue_via_bisection_wipes_stale_stage_dirs(monkeypatch, tmp_path: Path
     monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", fake_run_pipeline)
 
     rescue_via_bisection(video, capture_dir, cfg)
+
+
+# ─── Slice 7: opt-in real-binary tests ──────────────────────────────────────
+
+
+def _bisection_e2e_enabled() -> bool:
+    return os.environ.get("AUTOSPLAT_BISECTION_E2E", "").lower() in ("1", "true", "yes")
+
+
+@pytest.mark.skipif(
+    not _bisection_e2e_enabled(),
+    reason="set AUTOSPLAT_BISECTION_E2E=1 to run",
+)
+@pytest.mark.needs_ffmpeg
+def test_cut_video_actually_runs_ffmpeg(tmp_path: Path) -> None:
+    """Real ffmpeg cut against the bundled tiny_video.mp4 fixture."""
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not in PATH")
+    fixture = Path(__file__).parent / "fixtures" / "tiny_video.mp4"
+    if not fixture.exists():
+        pytest.skip(f"fixture missing: {fixture}")
+
+    output = tmp_path / "cut.mp4"
+    result = cut_video(fixture, start_s=0.0, duration_s=1.0, output=output)
+    assert result == output
+    assert output.exists()
+    assert output.stat().st_size > 0
+
+
+@pytest.mark.skipif(
+    not _bisection_e2e_enabled(),
+    reason="set AUTOSPLAT_BISECTION_E2E=1 to run",
+)
+@pytest.mark.needs_ffmpeg
+@pytest.mark.needs_colmap
+def test_probe_clip_end_to_end(tmp_path: Path) -> None:
+    """Real preprocess + SfM against the tiny_video fixture.
+
+    The fixture is intentionally minimal and may not pass the quality-gate
+    on its own; we only assert that probe_clip runs to completion and
+    returns a bool — not which value.
+    """
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not in PATH")
+    if shutil.which("colmap") is None:
+        pytest.skip("colmap not in PATH")
+    fixture = Path(__file__).parent / "fixtures" / "tiny_video.mp4"
+    if not fixture.exists():
+        pytest.skip(f"fixture missing: {fixture}")
+
+    clip = BisectionClip(
+        source_video=fixture,
+        clip_id="e2e",
+        start_s=0.0,
+        duration_s=2.0,
+        path=fixture,
+    )
+    cfg = load_config(include_xdg=False)
+    workspace = tmp_path / "probe"
+
+    result = probe_clip(clip, workspace, cfg)
+    assert isinstance(result, bool)
+    assert (workspace / "frames").exists()
+    assert (workspace / "colmap").exists()
