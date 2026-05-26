@@ -263,12 +263,34 @@ def bisect_recursively(
     if duration_s < 2 * min_s or depth >= max_depth:
         return []
 
-    half = duration_s / 2.0
+    # v1.4.1: smart-split picks the cut at the motion peak (typically a
+    # rotation event). Falls back to midpoint cleanly when analysis fails
+    # or the signal is too flat. Both children must still be ≥ min_s long
+    # — find_motion_peak's edge_guard handles that for non-extreme videos,
+    # but we re-clamp here to guarantee the invariant.
+    cut_offset = duration_s / 2.0  # default: midpoint
+    if cfg.retry.bisect_smart_split:
+        peak = _smart_split_offset(source_video, start_s, duration_s)
+        if peak is not None:
+            cut_offset = max(min_s, min(duration_s - min_s, peak))
+            logger.info(
+                "bisection.smart_split",
+                clip_id_prefix=clip_id_prefix or "root",
+                cut_offset_s=cut_offset,
+                duration_s=duration_s,
+            )
+
+    child_durations = [cut_offset, duration_s - cut_offset]
+    child_starts = [start_s, start_s + cut_offset]
+
     leaves: list[BisectionClip] = []
-    for child_idx, child_start in enumerate((start_s, start_s + half)):
+    for child_idx, (child_start, child_dur) in enumerate(
+        zip(child_starts, child_durations, strict=True)
+    ):
         child_id = f"{clip_id_prefix}_{child_idx}" if clip_id_prefix else str(child_idx)
-        if half < min_s:
-            # Shouldn't happen given the guard above, but be defensive.
+        if child_dur < min_s:
+            # Defensive — smart-split clamp should prevent this; midpoint
+            # path is guarded by the duration_s < 2 * min_s gate above.
             continue
         clip_path = _clip_path_for(capture_dir, source_video.stem, child_id)
 
@@ -282,13 +304,13 @@ def bisect_recursively(
         # makes this child unprobeable. Treat it like a failed probe — log,
         # then continue with the sibling. Never crash the whole rescue.
         try:
-            cut_video(source_video, child_start, half, clip_path)
+            cut_video(source_video, child_start, child_dur, clip_path)
         except subprocess.CalledProcessError as exc:
             logger.warning(
                 "bisection.cut_aborted_branch",
                 clip_id=child_id,
                 start_s=child_start,
-                duration_s=half,
+                duration_s=child_dur,
                 returncode=exc.returncode,
             )
             continue
@@ -297,7 +319,7 @@ def bisect_recursively(
             source_video=source_video,
             clip_id=child_id,
             start_s=child_start,
-            duration_s=half,
+            duration_s=child_dur,
             path=clip_path,
         )
         probe_ws = _probe_workspace_for(capture_dir, child_id)
@@ -309,7 +331,7 @@ def bisect_recursively(
             leaves.extend(
                 bisect_recursively(
                     source_video,
-                    duration_s=half,
+                    duration_s=child_dur,
                     capture_dir=capture_dir,
                     cfg=cfg,
                     depth=depth + 1,
@@ -326,6 +348,100 @@ def bisect_recursively(
 def _probe_duration_s(video: Path) -> float:
     """Thin wrapper around ffprobe so tests can monkey-patch the duration lookup."""
     return _preprocess_mod.probe_video(video).duration_s
+
+
+def find_motion_peak(
+    video: Path,
+    start_s: float,
+    duration_s: float,
+    *,
+    sample_count: int = 30,
+    edge_guard: float = 0.2,
+) -> float | None:
+    """Return the offset (in seconds from start_s) of the strongest motion event.
+
+    Samples `sample_count` evenly-spaced frames between `start_s` and
+    `start_s + duration_s`, computes the mean optical-flow magnitude between
+    each consecutive pair, and returns the time offset of the peak.
+
+    `edge_guard` (fraction of duration) clamps the result away from both ends
+    so a smart-split never produces a tiny sub-clip below `min_clip_s`. A
+    value of 0.2 keeps the cut in the middle 60 % of the duration.
+
+    Returns None when OpenCV can't open the video, when sample_count frames
+    can't be read, or when the resulting motion signal is essentially flat
+    (all values within 10 % of each other — no clear peak). Callers fall
+    back to midpoint in that case.
+
+    Implementation: dense Farneback optical flow on grayscale frames.
+    """
+    import cv2
+    import numpy as np
+
+    cap = cv2.VideoCapture(str(video))
+    if not cap.isOpened():
+        return None
+
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+        if fps <= 0:
+            return None
+
+        timestamps = [start_s + duration_s * (i + 0.5) / sample_count for i in range(sample_count)]
+        frames: list[np.ndarray] = []
+        for ts in timestamps:
+            cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000.0)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                return None
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Downsample to 320 px wide — Farneback is O(width²); 320 is
+            # plenty to detect drone-scale rotation, 4× faster than 1080p.
+            h, w = gray.shape[:2]
+            target_w = 320
+            if w > target_w:
+                scale = target_w / w
+                gray = cv2.resize(
+                    gray,
+                    (target_w, max(1, int(h * scale))),
+                    interpolation=cv2.INTER_AREA,
+                )
+            frames.append(gray)
+
+        magnitudes: list[float] = []
+        for prev, curr in zip(frames, frames[1:], strict=False):
+            # cv2-stubs reject None for the `flow` arg even though the
+            # runtime accepts it (cv2 allocates the output buffer itself).
+            flow = cv2.calcOpticalFlowFarneback(  # type: ignore[call-overload]
+                prev, curr, None, 0.5, 3, 15, 3, 5, 1.2, 0
+            )
+            mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
+            magnitudes.append(float(mag.mean()))
+
+        if not magnitudes:
+            return None
+        max_mag = max(magnitudes)
+        min_mag = min(magnitudes)
+        # No clear peak (signal is flat within 10 %)
+        if max_mag <= 0 or (max_mag - min_mag) / max_mag < 0.10:
+            return None
+
+        peak_idx = magnitudes.index(max_mag)
+        # The peak is between sample peak_idx and peak_idx+1; place the cut
+        # at the midpoint of that pair, expressed as an offset from start_s.
+        peak_pair_centre_offset = (peak_idx + 1) * duration_s / sample_count
+        # Clamp to the inner [edge_guard, 1 - edge_guard] band.
+        lower = edge_guard * duration_s
+        upper = (1.0 - edge_guard) * duration_s
+        return max(lower, min(upper, peak_pair_centre_offset))
+    finally:
+        cap.release()
+
+
+# Module-level alias so tests can monkey-patch the motion-peak detector
+# without also stubbing out OpenCV in the global namespace. Production
+# callers read this attribute (not `find_motion_peak` directly).
+_smart_split_offset = find_motion_peak
 
 
 def _run_pipeline_with_adaptive_retry(

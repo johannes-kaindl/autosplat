@@ -500,6 +500,165 @@ def test_bisect_recursively_treats_ffmpeg_failure_as_failed_branch(
     assert {leaf.clip_id for leaf in leaves} == {"1"}
 
 
+# ─── v1.4.1: Smart-split ───────────────────────────────────────────────────
+
+
+def test_bisect_recursively_uses_midpoint_by_default(monkeypatch, tmp_path: Path) -> None:
+    """bisect_smart_split=False (default) → children are exactly equal halves."""
+    cfg = load_config(include_xdg=False)
+    assert cfg.retry.bisect_smart_split is False
+
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    cut_calls: list[tuple[float, float]] = []
+
+    def tracking_cut(video, start_s, duration_s, output):
+        cut_calls.append((start_s, duration_s))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", tracking_cut)
+
+    bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": True, "1": True}),
+    )
+    assert cut_calls == [(0.0, 120.0), (120.0, 120.0)]
+
+
+def test_bisect_recursively_smart_split_uses_motion_peak(monkeypatch, tmp_path: Path) -> None:
+    """When bisect_smart_split=True and the peak detector returns 90s in a
+    240s clip, the cut lands at 90s — children are (90s, 150s) not (120s, 120s)."""
+    cfg_obj = load_config(include_xdg=False)
+    from autosplat.config import apply_override
+
+    cfg = apply_override(cfg_obj, {"retry": {"bisect_smart_split": True}})
+
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    cut_calls: list[tuple[float, float]] = []
+
+    def tracking_cut(video, start_s, duration_s, output):
+        cut_calls.append((start_s, duration_s))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", tracking_cut)
+    monkeypatch.setattr(bm, "_smart_split_offset", lambda *a, **kw: 90.0)
+
+    bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": True, "1": True}),
+    )
+    assert cut_calls == [(0.0, 90.0), (90.0, 150.0)]
+
+
+def test_bisect_recursively_smart_split_clamps_to_min_clip(monkeypatch, tmp_path: Path) -> None:
+    """Smart-split peak too close to start → clamp so both children ≥ min_clip_s."""
+    cfg_obj = load_config(include_xdg=False)
+    from autosplat.config import apply_override
+
+    cfg = apply_override(
+        cfg_obj,
+        {"retry": {"bisect_smart_split": True, "bisect_min_clip_s": 60.0}},
+    )
+
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    cut_calls: list[tuple[float, float]] = []
+
+    def tracking_cut(video, start_s, duration_s, output):
+        cut_calls.append((start_s, duration_s))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", tracking_cut)
+    # Peak at 10s in a 240s clip — far below min_clip_s=60. Clamp to 60.
+    monkeypatch.setattr(bm, "_smart_split_offset", lambda *a, **kw: 10.0)
+
+    bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": True, "1": True}),
+    )
+    # First child clamped up to min_clip_s=60; second child gets the rest.
+    assert cut_calls == [(0.0, 60.0), (60.0, 180.0)]
+
+
+def test_bisect_recursively_smart_split_falls_back_when_detector_returns_none(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """When find_motion_peak returns None (flat signal, broken video), bisect
+    falls back to midpoint without complaining."""
+    cfg_obj = load_config(include_xdg=False)
+    from autosplat.config import apply_override
+
+    cfg = apply_override(cfg_obj, {"retry": {"bisect_smart_split": True}})
+
+    capture_dir = tmp_path / "capture"
+    capture_dir.mkdir()
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\x00")
+
+    cut_calls: list[tuple[float, float]] = []
+
+    def tracking_cut(video, start_s, duration_s, output):
+        cut_calls.append((start_s, duration_s))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\x00")
+        return output
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "cut_video", tracking_cut)
+    monkeypatch.setattr(bm, "_smart_split_offset", lambda *a, **kw: None)
+
+    bisect_recursively(
+        video,
+        duration_s=240.0,
+        capture_dir=capture_dir,
+        cfg=cfg,
+        _probe_fn=_scripted_probe({"0": True, "1": True}),
+    )
+    assert cut_calls == [(0.0, 120.0), (120.0, 120.0)]
+
+
+def test_find_motion_peak_returns_none_when_video_unreadable(tmp_path: Path) -> None:
+    """find_motion_peak gracefully returns None instead of raising when cv2
+    can't open the file (e.g. a 1-byte dummy file used in unit tests)."""
+    from autosplat.bisection import find_motion_peak
+
+    bogus = tmp_path / "not_a_video.mp4"
+    bogus.write_bytes(b"\x00")
+    assert find_motion_peak(bogus, 0.0, 60.0) is None
+
+
 # ─── Slice 5: rescue_via_bisection (orchestrator) ───────────────────────────
 
 

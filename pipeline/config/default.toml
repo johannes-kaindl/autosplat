@@ -80,6 +80,9 @@ bisect_max_depth = 3                 # max recursion depth (3 → ≤ 8 leaves p
 bisect_probe_target_frames = 120     # preprocess.target_frames override for probes
                                       # (exhaustive scales as n²/2 — 250 → 31k matches,
                                       # 120 → 7k matches; ~4× faster per probe)
+bisect_smart_split = false           # v1.4.1 — use OpenCV optical-flow to cut at the
+                                      # strongest motion change (typically the rotation
+                                      # event) instead of at midpoint. Opt-in.
 
 [status]
 # Status-file pruning. `completed` and `failed` lists are trimmed FIFO once they

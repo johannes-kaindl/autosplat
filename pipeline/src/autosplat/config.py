@@ -254,6 +254,14 @@ class RetryConfig(BaseModel):
         "Lower than the pipeline default (250) because exhaustive matcher cost "
         "scales as n²/2 — 120 frames keeps a single probe under ~7000 matches.",
     )
+    bisect_smart_split: bool = Field(
+        default=False,
+        description="v1.4.1 — when true, use OpenCV optical-flow analysis to pick "
+        "the cut point at the moment of strongest motion change (typically a "
+        "rotation event), instead of splitting at midpoint. Falls back to "
+        "midpoint cleanly if analysis fails. Opt-in because smart-split adds "
+        "~5-15 s per cut and isn't strictly better than midpoint on all footage.",
+    )
 
 
 class StatusConfig(BaseModel):
