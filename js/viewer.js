@@ -38,6 +38,13 @@ export function createViewer(hostElement) {
       isWalking: () => false,
       onWalkingEnter: () => {}, onWalkingExit: () => {},
       onWalkingModeChange: () => {}, onWalkingEyeChange: () => {},
+      enterCollisionEditor: async () => false,
+      exitCollisionEditor: () => {},
+      isCollisionEditor: () => false,
+      getCollisionMode: () => null,
+      onCollisionEnter: () => {},
+      onCollisionExit: () => {},
+      onCollisionMeshBuilt: () => {},
       unsupported: true
     };
   }
@@ -164,7 +171,12 @@ export function createViewer(hostElement) {
     // input device wiring is owned by the caller (app.js) — viewer just consumes.
 
     lockChangeHandler = () => {
-      if (document.pointerLockElement !== canvas && walkingMode) exitWalking(input);
+      if (document.pointerLockElement !== canvas && walkingMode) {
+        // Don't auto-exit walking if the collision editor deliberately
+        // released the lock for brush work.
+        if (collisionMode && collisionMode._lockReleasedForBrush) return;
+        exitWalking(input);
+      }
     };
     document.addEventListener('pointerlockchange', lockChangeHandler);
 
@@ -210,6 +222,44 @@ export function createViewer(hostElement) {
     }
   }
 
+  // ---------- Collision-editor glue ----------
+
+  let collisionMode = null;
+  const collisionEnterListeners = [];
+  const collisionExitListeners = [];
+  const collisionBuiltListeners = [];
+
+  async function enterCollisionEditor() {
+    if (collisionMode) return false;
+    if (!splatEntity) throw new Error('no-splat-loaded');
+    const [{ CollisionMode }, { splatWorldGeometry }] = await Promise.all([
+      import('./collision/collision-mode.js'),
+      import('./walking.js'),
+    ]);
+    collisionMode = new CollisionMode({
+      app, camera, splatEntity, splatPivot,
+      getSplatPositions: () => splatWorldGeometry(splatEntity, splatPivot),
+    });
+    collisionMode.onBuilt((info) => {
+      for (const fn of collisionBuiltListeners) {
+        try { fn(info); } catch (e) { console.error(e); }
+      }
+    });
+    for (const fn of collisionEnterListeners) {
+      try { fn({ mode: collisionMode }); } catch (e) { console.error(e); }
+    }
+    return true;
+  }
+
+  function exitCollisionEditor() {
+    if (!collisionMode) return;
+    collisionMode.destroy();
+    collisionMode = null;
+    for (const fn of collisionExitListeners) {
+      try { fn(); } catch (e) { console.error(e); }
+    }
+  }
+
   return {
     loadSplat,
     setAutoOrbit(on) { autoOrbit = on; },
@@ -222,6 +272,13 @@ export function createViewer(hostElement) {
     onWalkingExit(fn) { walkExitListeners.push(fn); },
     onWalkingModeChange(fn) { walkModeListeners.push(fn); },
     onWalkingEyeChange(fn) { walkEyeListeners.push(fn); },
+    enterCollisionEditor,
+    exitCollisionEditor,
+    isCollisionEditor() { return collisionMode != null; },
+    getCollisionMode() { return collisionMode; },
+    onCollisionEnter(fn) { collisionEnterListeners.push(fn); },
+    onCollisionExit(fn) { collisionExitListeners.push(fn); },
+    onCollisionMeshBuilt(fn) { collisionBuiltListeners.push(fn); },
     unsupported: false
   };
 }
