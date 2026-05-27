@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kaindl
+# SPDX-License-Identifier: CC-BY-SA-4.0
+name: Feature request
+about: Idea for an improvement or new feature
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you type — autosplat is deliberately scoped to **local-first
+        Mac Silicon** (see [`AGENTS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/AGENTS.md)):
+
+        - **no** cloud GPU dependency, no API keys
+        - **no** Linux/Windows-only paths in the supported flow
+        - **WebUI** is FastAPI + HTMX + Jinja2 — no SPA framework
+        - **Tests** drive the spec — features land with `pytest` coverage
+
+        If your proposal needs a different stack/platform it'll likely be
+        declined — open it honestly anyway, we can talk.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What's awkward or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you implement it? CLI signature, config knob, WebUI sketch, pipeline-stage placement — whatever helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Which other paths did you consider?
+  - type: dropdown
+    id: scope
+    attributes:
+      label: What's affected?
+      multiple: true
+      options:
+        - CLI commands
+        - Pipeline stages (preprocess / SfM / quality gate / training / compress)
+        - Watch-folder daemon
+        - Resume / multi-video / bisection-rescue
+        - WebUI (FastAPI / HTMX)
+        - SuperSplat viewer integration
+        - Obsidian capture-note generation
+        - Documentation
+        - Tests
+        - Other
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I checked [existing issues](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues) for duplicates.
+          required: true
+        - label: I understand the platform + stack guardrails.
+          required: true
