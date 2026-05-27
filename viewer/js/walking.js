@@ -184,12 +184,14 @@ export class WalkingMode {
     this._applyRotation();
 
     // Diagnostic so users can debug "spawned underground / in the air" by
-    // checking the browser console — bounds + spawn tell the whole story.
+    // checking the browser console — bounds + spawn + active collider
+    // tell the whole story.
     console.log('[walking] enter:', {
       bounds: this.bounds,
       yExtent: this._yExtent,
       eyeOffset: this._eyeOffset,
       spawn,
+      collider: this._collider?.kind ?? 'heightmap',
     });
 
     this._updateFn = (dt) => this._step(dt);
@@ -237,6 +239,8 @@ export class WalkingMode {
       this.camera.setRotation(this._savedPose.rot);
       this._savedPose = null;
     }
+    // eslint-disable-next-line no-console
+    console.log('[walking] exit');
   }
 
   isActive() { return this._active; }
