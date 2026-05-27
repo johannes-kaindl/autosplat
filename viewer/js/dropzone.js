@@ -12,7 +12,7 @@ export function initDropzone({ stage, hint, fileInput, openButton, onFile, onSid
     if (SIDECAR.test(file.name)) {
       if (onSidecar) {
         const text = await file.text();
-        onSidecar(text);
+        onSidecar(text, { name: file.name, size: file.size });
       }
       return;
     }

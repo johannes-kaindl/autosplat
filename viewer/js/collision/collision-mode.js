@@ -52,12 +52,16 @@ export class CollisionMode {
   }
 
   /**
-   * Load a sidecar — replaces the editor state entirely.
+   * Load a sidecar — replaces the editor state entirely. Returns a summary
+   * `{ tris, iso, resolution }` of the restored state so the caller can log
+   * a visible confirmation (sidecar restores are otherwise indistinguishable
+   * from a deterministic re-build at the same iso).
    */
   loadSidecar(json) {
     const { resolution, bounds, iso, density } = decodeSidecar(json);
     this.editor = new CollisionEditor({ density, resolution, bounds, iso });
     this.rebuildMesh();
+    return { tris: (this.lastMesh?.indices.length ?? 0) / 3, iso, resolution };
   }
 
   /**

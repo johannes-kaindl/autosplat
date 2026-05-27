@@ -88,13 +88,20 @@ initDropzone({
     if (file) load(file);
     else showError(`Unsupported: ${badName} — only .ply is allowed`);
   },
-  onSidecar: async (text) => {
+  onSidecar: async (text, meta = {}) => {
     if (!viewer.isCollisionEditor?.()) {
       try { await viewer.enterCollisionEditor?.(); }
       catch { showError('Load a splat before dropping a sidecar.'); return; }
     }
     const mode = viewer.getCollisionMode?.();
-    try { mode?.loadSidecar(text); }
+    try {
+      const summary = mode?.loadSidecar(text);
+      // eslint-disable-next-line no-console
+      console.log('[collision] sidecar loaded:',
+        meta.name ?? '<unknown>',
+        meta.size != null ? `(${meta.size} B)` : '',
+        '→', summary ? `${summary.tris} tris, iso ${summary.iso}` : 'no-mesh');
+    }
     catch (err) {
       console.error('[collision] sidecar load failed:', err);
       showError('Sidecar load failed — file format may be wrong.');
