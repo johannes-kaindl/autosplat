@@ -26,6 +26,7 @@ import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -409,7 +410,7 @@ def find_motion_peak(
             frames.append(gray)
 
         magnitudes: list[float] = []
-        for prev, curr in zip(frames, frames[1:], strict=False):
+        for prev, curr in pairwise(frames):
             # cv2-stubs reject None for the `flow` arg even though the
             # runtime accepts it (cv2 allocates the output buffer itself).
             flow = cv2.calcOpticalFlowFarneback(  # type: ignore[call-overload]

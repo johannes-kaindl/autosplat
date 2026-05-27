@@ -13,6 +13,37 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.4.5] — 2026-05-27 — Quality Sweep
+
+Follow-up to the v1.4.0–v1.4.4 burst — non-feature improvements that accumulated during the v1.4 work: code hygiene, observability, disk reclaim, and a docs refresh that catches up with the local-viewer default.
+
+### Added
+
+- **`autosplat cleanup-rescue <capture_dir>`** — reclaim the per-probe `rescue/probes/<clip_id>/` workspaces (typically ~1-3 GB per successful rescue). `--keep-clips/--remove-clips` (default keep, so resume/add-video keep working), `--dry-run` to preview. 4 CliRunner tests.
+- **`train.heartbeat` events** in `pipeline.log` every 5 min during Brush training. The ~1-2 h Brush stage previously emitted nothing between `train.brush.start` and `train.done`; non-TTY runs (watch daemon, WebUI, ssh) now have a visible pulse. Pure helper `_make_train_heartbeat_emitter()` so the throttling is unit-tested without a real Brush run (3 tests).
+- **Deprecation warning** when `[viewer] target = "supersplat"` (remote). The remote editor is blocked by browsers' Mixed-Content policy (HTTPS page can't fetch HTTP localhost PLY) — the warning points users at the v1.4.4 `supersplat-local` default.
+
+### Changed
+
+- **`cli.serve --with-supersplat` shares `_serve_local_and_block`** with the auto-open path. The helper grew an `open_browser=False` kwarg so `--no-open-browser` still works.
+
+### Fixed
+
+- **All remaining mypy strict noise in `watcher.py` and `viewer.py`** — 18 errors in watcher (untyped `dict`, `bytes|str` event paths, `Observer` not-a-type) + 2 in viewer (`_Handler.__init__/log_message` annotations). The `Observer` issue fixed by typing as `watchdog.observers.api.BaseObserver`; the bytes/str by a tiny `_as_str()` helper. `mypy src/autosplat/viewer.py src/autosplat/watcher.py` is now clean.
+
+### Docs
+
+- **`GETTING-STARTED.md`** Section "Look at the result" rewritten to reflect the v1.4.4 local-viewer default (auto-open at `127.0.0.1:3000`, blocking server with Ctrl-C, `setup_supersplat.sh` as required first-time step).
+- **`CONFIGURATION.md` `[viewer]` section** expanded — all five keys listed, the auto-open lifecycle described step-by-step, daemon/WebUI exception noted.
+- **`CAPTURE-GUIDE.md`** gains a "Reclaiming disk after a successful rescue" subsection pointing at the new `cleanup-rescue` command.
+- **`ARCHITECTURE.md`** gains a "Documentation convention" subsection: v1.4+ uses `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` instead of post-hoc `PHASE-N-*.md` reports. Reasons recorded.
+
+### Tests
+
+- 322 tests passing (up from 315 at v1.4.4), ruff clean, mypy clean on the two modules touched.
+
+---
+
 ## [v1.4.4] — 2026-05-27 — Local-Viewer Default
 
 After the v1.4.2/v1.4.3 viewer hotfixes, the default `target="supersplat"` (remote editor at playcanvas.com) still produced an empty editor for users on modern browsers: HTTPS pages cannot fetch HTTP localhost resources (Mixed-Content blocking). The user could work around it with `--with-supersplat`; v1.4.4 just makes that the default.

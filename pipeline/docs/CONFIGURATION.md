@@ -76,11 +76,23 @@ Quality presets:
 
 ## `[viewer]`
 
-| Key               | Default        | Values                                | Notes                                                         |
-| ----------------- | -------------- | ------------------------------------- | ------------------------------------------------------------- |
-| `auto_open`       | `true`         | bool                                  | If false, the run finishes without opening a browser.         |
-| `local_http_port` | `8765`         | int                                   | Local server port for serving the .ply to the viewer.         |
-| `target`          | `"supersplat"` | `supersplat` · `playcanvas` · `none`  | Which viewer URL to open. `none` disables viewer entirely.    |
+| Key                     | Default              | Values                                                      | Notes                                                         |
+| ----------------------- | -------------------- | ----------------------------------------------------------- | ------------------------------------------------------------- |
+| `auto_open`             | `true`               | bool                                                        | If false, the run finishes without opening a browser.         |
+| `local_http_port`       | `8765`               | int                                                         | Local server port for serving the .ply to the viewer.         |
+| `target`                | `"supersplat-local"` | `supersplat-local` · `supersplat` · `playcanvas` · `none`   | **v1.4.4 default flipped to local.** `supersplat-local` runs the bundled dist on `127.0.0.1:3000` and the PLY server on `127.0.0.1:8765` — both HTTP-on-localhost, no Mixed-Content blocking. Requires `bash scripts/setup_supersplat.sh` to have been run once (creates `target/supersplat/dist/`). `supersplat` (remote, HTTPS) is kept for backwards-compat but prints a deprecation warning. `none` disables the viewer entirely. |
+| `supersplat_local_port` | `3000`               | int                                                         | Port for the local SuperSplat dist server.                    |
+| `supersplat_dist_path`  | `target/supersplat/dist` | path                                                    | Where the built SuperSplat dist lives. Relative paths resolve from cwd.                                              |
+| `notify_on_complete`    | `false`              | bool                                                        | macOS Notification Center alert after training. Opt-in.       |
+
+The CLI sequence at the end of `autosplat process` / `rescue` is:
+
+1. **Done** summary printed (capture-dir, output PLY, duration).
+2. Local SuperSplat server + local PLY server started (both `127.0.0.1`).
+3. Browser opens at `http://127.0.0.1:3000?load=http://127.0.0.1:8765/scene.ply`.
+4. Pipeline **blocks** until SIGINT (Ctrl-C) shuts both servers down.
+
+`autosplat watch` and the WebUI's `JobRunner` do **not** invoke the viewer — daemon-mode auto-open would stall the queue between captures.
 
 ## `[obsidian]` (Phase 4 + 8 — opt-in)
 

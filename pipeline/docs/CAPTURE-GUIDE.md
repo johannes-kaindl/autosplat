@@ -152,6 +152,20 @@ Three knobs in `[retry]` of your config control the behaviour:
 
 Worst case for a 5-minute video with depth=3 and 60 s min-clip is 8 probes × ~5 min ≈ 30–60 min before the final combined Brush run. Disable bisection if your CI budget can't absorb that.
 
+### Reclaiming disk after a successful rescue
+
+The per-probe `rescue/probes/<clip_id>/` workspaces (frames + COLMAP) stay on disk for forensic debugging — typically **~1-3 GB per capture**. After you've verified the rescue worked, drop them with:
+
+```bash
+uv run autosplat cleanup-rescue ~/AutoSplat/captures/<capture-name>
+# or, if you also want to drop the leaf .mp4 cuts (resume/add-video won't work anymore):
+uv run autosplat cleanup-rescue <capture-dir> --remove-clips
+# preview without touching disk:
+uv run autosplat cleanup-rescue <capture-dir> --dry-run
+```
+
+The `rescue/clips/*.mp4` sub-clips are kept by default because `pipeline.log` references them — `autosplat resume` and `autosplat add-video` re-extract from them.
+
 ---
 
 ## Reference cases that worked

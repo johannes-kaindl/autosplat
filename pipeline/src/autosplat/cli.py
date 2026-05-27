@@ -372,6 +372,81 @@ def rescue(
     _open_viewer_if_configured(result.output_ply, cfg)
 
 
+@app.command("cleanup-rescue")
+def cleanup_rescue(
+    capture_dir: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=False,
+        help="Capture directory whose rescue/ artefacts you want to reclaim.",
+    ),
+    keep_clips: bool = typer.Option(
+        True,
+        "--keep-clips/--remove-clips",
+        help="Keep the rescue/clips/*.mp4 sub-clips (default true — they're "
+        "the source-of-truth in pipeline.log and resume/add-video need them). "
+        "--remove-clips drops them too; only safe after the capture is fully "
+        "done and you don't intend to resume.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print what would be removed without touching disk.",
+    ),
+) -> None:
+    """Delete bisection probe artefacts to reclaim disk space.
+
+    Each bisection probe leaves a `<capture_dir>/rescue/probes/<clip_id>/`
+    folder with frames + a colmap workspace — useful for forensic
+    debugging when a probe failed, but typically ~1-3 GB per capture
+    after a successful rescue. This command removes them.
+
+    `rescue/clips/*.mp4` (the leaf-clip sources) are kept by default
+    because pipeline.log references them and `autosplat resume` /
+    `autosplat add-video` re-extract from them. Pass `--remove-clips` to
+    drop those too once you're sure you won't touch the capture again.
+    """
+    rescue_dir = capture_dir / "rescue"
+    if not rescue_dir.is_dir():
+        console.print(f"[dim]No rescue/ directory in {capture_dir} — nothing to clean.[/dim]")
+        return
+
+    import shutil
+
+    targets: list[Path] = []
+    probes_dir = rescue_dir / "probes"
+    if probes_dir.is_dir():
+        targets.append(probes_dir)
+    if not keep_clips:
+        clips_dir = rescue_dir / "clips"
+        if clips_dir.is_dir():
+            targets.append(clips_dir)
+
+    if not targets:
+        console.print(f"[dim]Nothing to remove in {rescue_dir}.[/dim]")
+        return
+
+    total_bytes = 0
+    for target in targets:
+        for p in target.rglob("*"):
+            if p.is_file():
+                total_bytes += p.stat().st_size
+
+    mb = total_bytes / (1024 * 1024)
+    action = "Would remove" if dry_run else "Removing"
+    console.print(f"[yellow]{action}:[/yellow] {len(targets)} dir(s), ~{mb:.1f} MB")
+    for target in targets:
+        console.print(f"  • {target}")
+
+    if dry_run:
+        console.print("[dim]Dry-run — no changes made.[/dim]")
+        return
+
+    for target in targets:
+        shutil.rmtree(target)
+    console.print(f"[green]Done.[/green] Reclaimed ~{mb:.1f} MB.")
+
+
 @app.command()
 def watch(
     folder: Path = typer.Argument(..., help="Folder to watch for new videos."),
@@ -590,22 +665,23 @@ def serve(
             )
             raise typer.Exit(EXIT_USER_ERROR)
 
+        # v1.4.5 — share the local-serve-and-block helper with the auto-open
+        # path that runs at the end of `process` / `rescue`. The CLI passes
+        # its own stop_event so SIGINT is handled by the existing signal-
+        # handler installed above (no duplicate handlers).
         try:
-            with viewer_mod.serve_supersplat_local(
-                supersplat_dist=dist_path,
-                supersplat_port=effective_ss_port,
-                ply_dir=ply.parent,
-                ply_port=effective_ply_port,
-            ) as urls:
-                browser_url = f"{urls['supersplat']}?load={urls['ply']}/{ply.name}"
-                if not no_open_browser:
-                    webbrowser.open(browser_url)
-                console.print(f"[green]SuperSplat:[/green] {urls['supersplat']}")
-                console.print(f"[green]PLY server:[/green] {urls['ply']}/{ply.name}")
-                console.print(f"[green]Viewer URL:[/green] {browser_url}")
-                console.print("Press Ctrl+C to stop.")
-                while not stop_event.wait(timeout=1.0):
-                    pass
+            viewer_mod._serve_local_and_block(
+                ply,
+                cfg.viewer.model_copy(
+                    update={
+                        "local_http_port": effective_ply_port,
+                        "supersplat_local_port": effective_ss_port,
+                    }
+                ),
+                dist_path,
+                stop_event,
+                open_browser=not no_open_browser,
+            )
         except RuntimeError as exc:
             err_console.print(f"[red]{exc}[/red]")
             raise typer.Exit(EXIT_USER_ERROR) from None

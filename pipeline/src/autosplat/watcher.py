@@ -31,10 +31,11 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 
 from .config import RetryConfig, StatusConfig
 from .logging import get_logger
@@ -42,6 +43,11 @@ from .quality import QualityGateFailure, retry_hint_for_brush_oom
 from .train import BrushOOMError
 
 logger = get_logger(__name__)
+
+
+def _as_str(path: bytes | str) -> str:
+    """Normalise watchdog's bytes|str path to str — Mac always sends str."""
+    return path.decode("utf-8") if isinstance(path, bytes) else path
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v"}
 DEFAULT_STATE_FILE = Path("~/.autosplat/state.json").expanduser()
@@ -76,11 +82,11 @@ class InProgress:
     source_video: str | None = None
     detail: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> InProgress:
+    def from_dict(cls, d: dict[str, Any]) -> InProgress:
         return cls(
             path=d["path"],
             started_at=d.get("started_at") or d.get("started") or _now_iso(),
@@ -97,11 +103,11 @@ class CompletedEntry:
     duration_s: float
     finished_at: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> CompletedEntry:
+    def from_dict(cls, d: dict[str, Any]) -> CompletedEntry:
         return cls(
             path=d["path"],
             output_ply=d.get("output_ply", ""),
@@ -118,11 +124,11 @@ class FailedEntry:
     stage: str | None = None
     retry_count: int = 0  # Phase 3: how many attempts before giving up
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> FailedEntry:
+    def from_dict(cls, d: dict[str, Any]) -> FailedEntry:
         return cls(
             path=d["path"],
             failed_at=d.get("failed_at") or _now_iso(),
@@ -138,13 +144,13 @@ class RetryRecord:
 
     attempts: int = 0  # number of attempts already made (0 before first run)
     last_reason: str | None = None
-    next_override: dict | None = None  # cfg override to apply on the next try
+    next_override: dict[str, Any] | None = None  # cfg override to apply on the next try
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> RetryRecord:
+    def from_dict(cls, d: dict[str, Any]) -> RetryRecord:
         return cls(
             attempts=int(d.get("attempts", 0)),
             last_reason=d.get("last_reason"),
@@ -169,7 +175,7 @@ class WatcherState:
     state_file: Path = field(default=DEFAULT_STATE_FILE)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "queue": list(self.queue),
             "in_progress": self.in_progress.to_dict() if self.in_progress else None,
@@ -245,7 +251,7 @@ class WatcherState:
         logger.info("watcher.enqueued", path=path_str, queue_size=len(self.queue))
         return True
 
-    def pop_next(self) -> tuple[str, dict | None] | None:
+    def pop_next(self) -> tuple[str, dict[str, Any] | None] | None:
         """Pop head of queue, set in_progress, return (path, pending_override).
 
         `pending_override` is the cfg-override dict the worker should apply for
@@ -353,7 +359,7 @@ class WatcherState:
                 self.failed = self.failed[-max_history:]
             self.save()
 
-    def schedule_retry(self, override: dict | None) -> None:
+    def schedule_retry(self, override: dict[str, Any] | None) -> None:
         """Re-enqueue the in_progress path for another attempt.
 
         Stores `override` (if any) in retry_state so the next pop_next picks
@@ -457,7 +463,7 @@ def reconcile_failure(
     *,
     reason: str,
     stage: str | None,
-    retry_hint: dict | None,
+    retry_hint: dict[str, Any] | None,
     retry_cfg: RetryConfig,
     max_history: int | None = None,
 ) -> str:
@@ -519,13 +525,15 @@ class _VideoEventHandler(FileSystemEventHandler):
     def on_created(self, event: FileSystemEvent) -> None:
         if event.is_directory:
             return
-        self._maybe_handle(event.src_path)
+        # watchdog types event paths as `bytes | str` to cover OSes that use
+        # bytes for non-utf8 paths; on Mac all our paths are str — be explicit.
+        self._maybe_handle(_as_str(event.src_path))
 
     def on_moved(self, event: FileSystemEvent) -> None:
         if event.is_directory:
             return
         target = getattr(event, "dest_path", event.src_path)
-        self._maybe_handle(target)
+        self._maybe_handle(_as_str(target))
 
 
 class WatchDaemon:
@@ -549,7 +557,7 @@ class WatchDaemon:
         self,
         folder: Path,
         state: WatcherState,
-        process_fn: Callable[..., dict],
+        process_fn: Callable[..., dict[str, Any]],
         *,
         retry_cfg: RetryConfig | None = None,
         status_cfg: StatusConfig | None = None,
@@ -560,7 +568,7 @@ class WatchDaemon:
         self._retry_cfg = retry_cfg or RetryConfig()
         self._status_cfg = status_cfg or StatusConfig()
         self._work_queue: queue.Queue[str] = queue.Queue()
-        self._observer: Observer | None = None
+        self._observer: BaseObserver | None = None
         self._worker: threading.Thread | None = None
         self._stop = threading.Event()
         self._idle = threading.Event()
@@ -705,7 +713,7 @@ def watch_folder(
     on_ready: Callable[[Path], None],
     *,
     process_existing: bool = True,
-) -> Observer:
+) -> BaseObserver:
     """Lightweight watcher used pre-Phase-2 — keeps existing CLI import working."""
     if not folder.exists():
         raise FileNotFoundError(f"Watch folder does not exist: {folder}")

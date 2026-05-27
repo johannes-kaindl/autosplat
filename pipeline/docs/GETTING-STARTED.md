@@ -78,8 +78,9 @@ For a 30-second 4K orbit video at default settings: expect **~35-45 min** end-to
 After a successful run:
 
 - The PLY is at `~/AutoSplat/outputs/<capture-name>/scene.ply`
-- SuperSplat should have opened automatically in your default browser
-- Or you can drag-and-drop the PLY onto <https://playcanvas.com/supersplat/editor>
+- A local SuperSplat editor opens automatically at `http://127.0.0.1:3000`, served from `target/supersplat/dist/` and pointed at the local PLY server (`http://127.0.0.1:8765/scene.ply`). Press **Ctrl-C** in the terminal when you're done viewing — both servers shut down cleanly.
+- **First-time setup:** if the editor doesn't open, run `bash scripts/setup_supersplat.sh` once to build the local SuperSplat dist (v1.4.4+ defaults to `target = "supersplat-local"` for this reason — fully-local rendering, no Mixed-Content blocking from the HTTPS-remote editor).
+- Manual fallback: drag-and-drop the PLY onto <https://playcanvas.com/supersplat/editor>.
 
 In SuperSplat: orbit with the left mouse, zoom with scroll. Welcome to your first Gaussian Splat!
 

@@ -38,15 +38,15 @@ class _ReuseAddrTCPServer(socketserver.ThreadingTCPServer):
 
 def _make_handler(serve_root: Path) -> type[http.server.SimpleHTTPRequestHandler]:
     class _Handler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(serve_root), **kwargs)
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            super().__init__(*args, directory=str(serve_root), **kwargs)  # type: ignore[arg-type]
 
         def end_headers(self) -> None:
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             super().end_headers()
 
-        def log_message(self, format: str, *args) -> None:
+        def log_message(self, format: str, *args: object) -> None:
             logger.debug("viewer.http", line=format % args)
 
     return _Handler
@@ -95,6 +95,8 @@ def _serve_local_and_block(
     cfg: ViewerConfig,
     dist_path: Path,
     stop_event: threading.Event | None,
+    *,
+    open_browser: bool = True,
 ) -> None:
     """v1.4.4 — start local SuperSplat dist + PLY server, open browser, block.
 
@@ -107,6 +109,9 @@ def _serve_local_and_block(
     Blocks until SIGINT/SIGTERM (or pre-set `stop_event` for tests). The
     two ThreadingTCPServers are torn down cleanly via the nested
     context managers.
+
+    v1.4.5 — `open_browser=False` allows `cli.serve --no-open-browser`
+    to share this helper (DRY) without firing a browser tab.
     """
     with serve_supersplat_local(
         supersplat_dist=dist_path,
@@ -121,7 +126,8 @@ def _serve_local_and_block(
             supersplat=urls["supersplat"],
             ply=urls["ply"],
         )
-        webbrowser.open(viewer_url)
+        if open_browser:
+            webbrowser.open(viewer_url)
         _user_console.print(
             f"[green]Viewer:[/green] {viewer_url}\n"
             f"[dim]SuperSplat: {urls['supersplat']}\n"
@@ -213,6 +219,23 @@ def open_in_viewer(
             f"[bold]{SUPERSPLAT_URL}[/bold] manually.[/dim]"
         )
         return
+
+    # v1.4.5 — modern browsers block HTTPS pages from fetching HTTP
+    # localhost resources (Mixed-Content). The remote SuperSplat target
+    # therefore opens an empty editor in practice; we keep the path for
+    # backwards-compat but nudge the user toward the local default.
+    if cfg.target == "supersplat":
+        logger.warning(
+            "viewer.remote_supersplat_deprecated",
+            recommendation="target='supersplat-local'",
+        )
+        _user_console.print(
+            "[yellow]Warning:[/yellow] target='supersplat' may leave the "
+            "editor empty because modern browsers block HTTPS→HTTP fetches. "
+            "Run [bold]bash scripts/setup_supersplat.sh[/bold] once, then "
+            "set [bold][viewer] target = \"supersplat-local\"[/bold] for a "
+            "fully-local, blocking-server-free experience."
+        )
 
     # Remote targets — serve the .ply locally so SuperSplat's ?load= URL
     # actually resolves, instead of silently failing to fetch.

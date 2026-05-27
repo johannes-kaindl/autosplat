@@ -11,7 +11,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.4.4 — Local-Viewer Default.** Auto-bisection-rescue + `autosplat rescue` CLI + smart-split + per-clip WebUI progress, viewer defaults to the local SuperSplat dist (no more Mixed-Content blocking, no more drag-and-drop). Mac Silicon, AGPL-3.0.
+> **Status: v1.4.5 — Quality Sweep.** Auto-bisection-rescue + manual `autosplat rescue` CLI + smart-split + per-clip WebUI progress + local-viewer default; v1.4.5 adds `autosplat cleanup-rescue`, `train.heartbeat` events in `pipeline.log`, a DRY share of the local-serve helper, and a docs refresh. Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -79,6 +79,7 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 | Version  | Date       | Headline                                                                                  |
 | -------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v1.4.5   | 2026-05-27 | **Quality Sweep** — `autosplat cleanup-rescue` reclaims ~1-3 GB per capture after a successful rescue; `train.heartbeat` events make non-TTY Brush runs observable; `cli.serve --with-supersplat` shares `_serve_local_and_block` (DRY); remote-target deprecation warning; remaining mypy noise in `watcher.py` + `viewer.py` cleared; docs refreshed for the v1.4.4 local-viewer default. |
 | v1.4.4   | 2026-05-27 | **Local-Viewer Default** — `[viewer] target` defaults to `supersplat-local`. Auto-open at end of `process`/`rescue` now starts both local servers + opens the local SuperSplat editor, dodging the HTTPS→HTTP Mixed-Content blocking that left the remote editor empty. First end-to-end success: `max_strasse` 5:35 drone pass → 99.4 % camera registration via `autosplat rescue`. |
 | v1.4.3   | 2026-05-27 | **`autosplat serve` Browser-Download Hotfix** — serve (no --with-supersplat) now opens remote SuperSplat with `?load=<our-server-url>` instead of the raw PLY URL (which triggered a download prompt). |
 | v1.4.2   | 2026-05-27 | **Viewer Auto-Open Hotfix** — `viewer.open_in_viewer` now actually starts the local PLY server (was silent no-op since the very first viewer flow); CLI blocks on Ctrl-C while you look at the splat. |

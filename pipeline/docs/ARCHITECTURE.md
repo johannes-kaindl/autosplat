@@ -221,3 +221,13 @@ SuperSplat `dist/` is served via a `/supersplat/` StaticFiles mount (only mounte
 
 1. **Compress backend choice** — Phase 5 implemented SOG + SPZ via `splat-transform`. KSPLAT output is not supported by `splat-transform`; use `mkkellogg/GaussianSplats3D` directly for KSPLAT.
 2. **Brush versioning** — currently `latest` with override via `BRUSH_VERSION=v0.x.y`. Pin once we hit a regression.
+
+## Documentation convention
+
+Phases 0-10 each had a `docs/PHASE-N-*.md` report — the build was sequential and each phase had a discrete acceptance criterion. **Starting with v1.4, the project moved to spec-driven release notes** under `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`: a spec is brainstormed, agreed, and committed before code lands. The CHANGELOG entry for the release links the spec for reference. Reasons for the switch:
+
+- v1.4+ work is feature-shaped, not phase-shaped — fixes, features, and refactors interleave across releases rather than building toward a single phase deliverable.
+- Specs capture design *intent* before implementation, which the post-hoc PHASE reports tended to lose.
+- Releases (v1.4.0 through v1.4.5 in 24 h) need lightweight per-release documentation, not a full PHASE write-up each.
+
+`docs/PHASE-*.md` remain as historical record. New design docs go under `docs/superpowers/specs/`.

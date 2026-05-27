@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import shutil
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -44,6 +45,33 @@ class PipelineResult:
 
 
 SKIPPABLE_STAGES = {"preprocess", "sfm", "train", "export"}
+
+# v1.4.5 — Brush training takes ~1-2 h with no pipeline.log activity between
+# train.brush.start and train.done. Emit a structured heartbeat every 5 min
+# so non-interactive runs (daemon, WebUI, ssh) are observable.
+TRAIN_HEARTBEAT_INTERVAL_S = 300.0
+
+
+def _make_train_heartbeat_emitter(
+    interval_s: float = TRAIN_HEARTBEAT_INTERVAL_S,
+) -> tuple[Callable[[float, float], None], list[float]]:
+    """Return (emit_fn, last_emit_box) — closure over a single-element list
+    so the emitted timestamp is mutable from inside the inner function.
+
+    The list is returned for tests to inspect; production callers ignore it.
+    """
+    last_emit: list[float] = [-interval_s]  # sentinel < 0 so the first call fires
+
+    def _emit(elapsed_s: float, est_pct: float) -> None:
+        if elapsed_s - last_emit[0] >= interval_s:
+            last_emit[0] = elapsed_s
+            logger.info(
+                "train.heartbeat",
+                elapsed_s=round(elapsed_s, 1),
+                est_pct=round(est_pct, 4),
+            )
+
+    return _emit, last_emit
 
 
 def _make_capture_name(video: Path) -> str:
@@ -309,6 +337,12 @@ def run_pipeline(
             TimeRemainingColumn,
         )
 
+        # v1.4.5 — emit a train.heartbeat event into pipeline.log every
+        # ~5 min regardless of TTY, so non-interactive runs (watch daemon,
+        # WebUI JobRunner, ssh-into-Mac sessions) stop looking dead during
+        # the ~1-2 h Brush stage. Shared across both branches below.
+        _emit_heartbeat, _ = _make_train_heartbeat_emitter()
+
         progress_console = Console(stderr=True)
         if progress_console.is_terminal:
             with Progress(
@@ -325,6 +359,7 @@ def run_pipeline(
 
                 def _cb(elapsed_s: float, est_pct: float) -> None:
                     progress.update(task_id, completed=est_pct * 100)
+                    _emit_heartbeat(elapsed_s, est_pct)
 
                 tr = train_mod.run_brush(
                     config.paths.brush_binary,
@@ -341,6 +376,7 @@ def run_pipeline(
                 colmap_dir / "sparse",
                 training_dir,
                 config.brush,
+                progress_callback=_emit_heartbeat,
             )
         if tr.final_ply is None:
             raise RuntimeError("Brush completed but produced no .ply")

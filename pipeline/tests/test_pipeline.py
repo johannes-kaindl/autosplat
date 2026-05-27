@@ -13,6 +13,7 @@ import pytest
 from autosplat.config import load_config
 from autosplat.pipeline import (
     _make_capture_name,
+    _make_train_heartbeat_emitter,
     add_video_to_capture,
     detect_completed_stages,
     read_source_video_from_log,
@@ -964,3 +965,46 @@ def test_adaptive_retry_does_not_re_enter_bisection(tmp_path: Path) -> None:
             _bisection_already_attempted=True,
         )
     rescue.assert_not_called()
+
+
+# ─── v1.4.5: train.heartbeat emitter ───────────────────────────────────────
+
+
+def test_train_heartbeat_fires_on_first_call() -> None:
+    """First progress callback (elapsed_s > 0) always logs — sentinel < 0."""
+    emit, _ = _make_train_heartbeat_emitter(interval_s=300.0)
+
+    with patch("autosplat.pipeline.logger.info") as mock_log:
+        emit(0.0, 0.0)
+
+    mock_log.assert_called_once()
+    assert mock_log.call_args.args[0] == "train.heartbeat"
+    assert mock_log.call_args.kwargs["elapsed_s"] == 0.0
+
+
+def test_train_heartbeat_suppresses_inside_interval() -> None:
+    """Subsequent calls within the interval do NOT log."""
+    emit, _ = _make_train_heartbeat_emitter(interval_s=300.0)
+
+    with patch("autosplat.pipeline.logger.info") as mock_log:
+        emit(0.0, 0.0)  # fires
+        emit(60.0, 0.1)  # inside interval — suppressed
+        emit(200.0, 0.2)  # still inside — suppressed
+        emit(299.0, 0.3)  # 299s < 300s — suppressed
+
+    assert mock_log.call_count == 1
+
+
+def test_train_heartbeat_fires_again_after_interval() -> None:
+    """Second event after the interval elapsed since the last emit."""
+    emit, _ = _make_train_heartbeat_emitter(interval_s=300.0)
+
+    with patch("autosplat.pipeline.logger.info") as mock_log:
+        emit(0.0, 0.0)  # fires
+        emit(300.0, 0.5)  # exactly at interval — fires
+        emit(305.0, 0.51)  # just after — suppressed (last emit was 300.0)
+        emit(600.0, 0.99)  # next interval — fires
+
+    assert mock_log.call_count == 3
+    timestamps = [call.kwargs["elapsed_s"] for call in mock_log.call_args_list]
+    assert timestamps == [0.0, 300.0, 600.0]
