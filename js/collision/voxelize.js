@@ -30,3 +30,36 @@ export function voxelize(positions, bounds, resolution = 64) {
   }
   return { density, resolution };
 }
+
+/**
+ * One pass of a 3×3×3 box-blur over a flat density grid. Edge cells average
+ * only the in-bounds neighbours (no wrap). Returns a new Float32Array; the
+ * input is not mutated. Always divides by 27 so edge cells fade softly
+ * instead of getting an artificial bright rim.
+ */
+export function smoothDensity(density, resolution) {
+  const out = new Float32Array(density.length);
+  const r = resolution;
+  for (let k = 0; k < r; k++) {
+    for (let j = 0; j < r; j++) {
+      for (let i = 0; i < r; i++) {
+        let sum = 0;
+        for (let dk = -1; dk <= 1; dk++) {
+          const nk = k + dk;
+          if (nk < 0 || nk >= r) continue;
+          for (let dj = -1; dj <= 1; dj++) {
+            const nj = j + dj;
+            if (nj < 0 || nj >= r) continue;
+            for (let di = -1; di <= 1; di++) {
+              const ni = i + di;
+              if (ni < 0 || ni >= r) continue;
+              sum += density[nk * r * r + nj * r + ni];
+            }
+          }
+        }
+        out[k * r * r + j * r + i] = sum / 27;
+      }
+    }
+  }
+  return out;
+}
