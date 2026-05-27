@@ -314,3 +314,168 @@ def test_compute_eval_psnr_averages_multiple_pairs(tmp_path: Path) -> None:
     psnr = compute_eval_psnr(eval_dir, frames_dir)
     assert psnr is not None
     assert psnr >= 35.0
+
+
+# ─── v1.5.0: PlateauMonitor ────────────────────────────────────────────────
+
+
+def _scripted_psnr(by_step: dict[int, float]):
+    """Returns a psnr_fn that maps a step number (parsed from eval_dir name)
+    to a fixed PSNR. Steps not in the dict get None ('eval incomplete')."""
+
+    def _fn(eval_dir, frames_dir):  # noqa: ARG001
+        from autosplat.train import _parse_eval_step
+
+        step = _parse_eval_step(eval_dir)
+        return by_step.get(step) if step is not None else None
+
+    return _fn
+
+
+def _make_eval_dirs(output_dir: Path, steps: list[int]) -> None:
+    """Create empty eval_<step>/ dirs with a fake PNG so glob('*.png') works."""
+    for step in steps:
+        d = output_dir / f"eval_{step}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "any.png").write_bytes(b"\x00")
+
+
+def test_plateau_monitor_no_stop_below_min_steps(tmp_path: Path) -> None:
+    """Flat PSNR but last step still below min_steps → no stop."""
+    from autosplat.train import PlateauMonitor
+
+    out = tmp_path / "training"
+    _make_eval_dirs(out, [1000, 2000, 3000, 4000])
+    psnrs = {1000: 30.0, 2000: 30.01, 3000: 30.02, 4000: 30.03}
+
+    m = PlateauMonitor(
+        output_dir=out,
+        frames_dir=tmp_path / "frames",
+        min_steps=5000,  # 4000 < 5000
+        patience=3,
+        min_delta_psnr=0.05,
+        psnr_fn=_scripted_psnr(psnrs),
+    )
+    m.poll_once()
+    assert m.should_stop is False
+    assert len(m.history) == 4
+
+
+def test_plateau_monitor_no_stop_with_improving_psnr(tmp_path: Path) -> None:
+    """Steady > epsilon improvement → no stop ever."""
+    from autosplat.train import PlateauMonitor
+
+    out = tmp_path / "training"
+    steps = [1000, 2000, 3000, 4000, 5000, 6000]
+    _make_eval_dirs(out, steps)
+    # Each step gains 1.0 dB — far above min_delta 0.05
+    psnrs = {s: 20.0 + (i * 1.0) for i, s in enumerate(steps)}
+
+    m = PlateauMonitor(
+        output_dir=out,
+        frames_dir=tmp_path / "frames",
+        min_steps=1000,
+        patience=3,
+        min_delta_psnr=0.05,
+        psnr_fn=_scripted_psnr(psnrs),
+    )
+    m.poll_once()
+    assert m.should_stop is False
+
+
+def test_plateau_monitor_stops_on_flat_history(tmp_path: Path) -> None:
+    """Three consecutive Δ < 0.05 dB past min_steps → stop."""
+    from autosplat.train import PlateauMonitor
+
+    out = tmp_path / "training"
+    steps = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]
+    _make_eval_dirs(out, steps)
+    # Steps 1000-4000 climb fast; then flat from 5000 on.
+    psnrs = {
+        1000: 20.0,
+        2000: 23.0,
+        3000: 25.0,
+        4000: 26.5,
+        5000: 27.0,
+        6000: 27.02,  # Δ = 0.02
+        7000: 27.04,  # Δ = 0.02
+        8000: 27.05,  # Δ = 0.01
+    }
+
+    m = PlateauMonitor(
+        output_dir=out,
+        frames_dir=tmp_path / "frames",
+        min_steps=5000,
+        patience=3,
+        min_delta_psnr=0.05,
+        psnr_fn=_scripted_psnr(psnrs),
+    )
+    m.poll_once()
+    assert m.should_stop is True
+    # All 8 steps were recorded
+    assert len(m.history) == 8
+
+
+def test_plateau_monitor_poll_once_handles_missing_dir(tmp_path: Path) -> None:
+    """output_dir doesn't exist yet (Brush still starting) → no-op, no exception."""
+    from autosplat.train import PlateauMonitor
+
+    m = PlateauMonitor(
+        output_dir=tmp_path / "not_here",
+        frames_dir=tmp_path / "frames",
+        min_steps=1000,
+        patience=3,
+        min_delta_psnr=0.05,
+        psnr_fn=_scripted_psnr({}),
+    )
+    m.poll_once()  # should not raise
+    assert m.history == []
+    assert m.should_stop is False
+
+
+def test_plateau_monitor_idempotent_polls(tmp_path: Path) -> None:
+    """Polling twice on the same eval_dirs records each step exactly once."""
+    from autosplat.train import PlateauMonitor
+
+    out = tmp_path / "training"
+    _make_eval_dirs(out, [1000, 2000])
+    m = PlateauMonitor(
+        output_dir=out,
+        frames_dir=tmp_path / "frames",
+        min_steps=100,
+        patience=1,
+        min_delta_psnr=10.0,  # absurdly high — won't trigger
+        psnr_fn=_scripted_psnr({1000: 25.0, 2000: 26.0}),
+    )
+    m.poll_once()
+    m.poll_once()
+    assert len(m.history) == 2
+
+
+def test_plateau_monitor_incomplete_step_retried_later(tmp_path: Path) -> None:
+    """If psnr_fn returns None (step incomplete), it gets a second chance
+    on the next poll once the data is ready."""
+    from autosplat.train import PlateauMonitor
+
+    out = tmp_path / "training"
+    _make_eval_dirs(out, [1000])
+
+    # First poll: psnr_fn returns None (e.g. eval dir still being written)
+    psnrs: dict[int, float] = {}
+
+    m = PlateauMonitor(
+        output_dir=out,
+        frames_dir=tmp_path / "frames",
+        min_steps=100,
+        patience=1,
+        min_delta_psnr=10.0,
+        psnr_fn=_scripted_psnr(psnrs),
+    )
+    m.poll_once()
+    assert m.history == []
+
+    # Now the data becomes available; next poll picks it up.
+    psnrs[1000] = 30.0
+    m.poll_once()
+    assert len(m.history) == 1
+    assert m.history[0] == (1000, 30.0)

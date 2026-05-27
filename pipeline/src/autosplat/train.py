@@ -202,6 +202,92 @@ def compute_eval_psnr(eval_dir: Path, frames_dir: Path) -> float | None:
     return float(np.mean(psnrs))
 
 
+PsnrFn = Callable[[Path, Path], "float | None"]
+
+
+@dataclass
+class PlateauMonitor:
+    """v1.5.0 — watches `<output_dir>/eval_<step>/` directories and decides
+    when Brush training should stop.
+
+    Construction is pure config; `poll_once()` does the work — call it
+    periodically from a thread. `should_stop` is True once the last
+    `patience` consecutive Δ-PSNR values are all below `min_delta_psnr`
+    *and* the last evaluated step is ≥ `min_steps`.
+
+    `psnr_fn` is injectable for tests; production uses `compute_eval_psnr`.
+    """
+
+    output_dir: Path
+    frames_dir: Path
+    min_steps: int
+    patience: int
+    min_delta_psnr: float
+    psnr_fn: PsnrFn = field(default=compute_eval_psnr)
+
+    history: list[tuple[int, float]] = field(default_factory=list)
+    _seen_steps: set[int] = field(default_factory=set)
+    _stop: bool = False
+
+    @property
+    def should_stop(self) -> bool:
+        return self._stop
+
+    def poll_once(self) -> None:
+        """Scan for new eval_<N>/ dirs, compute PSNR for each new one,
+        update history + plateau decision. Idempotent — running on the
+        same state is a no-op."""
+        if not self.output_dir.is_dir():
+            return
+
+        new_steps = sorted(
+            step
+            for d in self.output_dir.glob("eval_*")
+            if d.is_dir() and (step := _parse_eval_step(d)) is not None
+            and step not in self._seen_steps
+        )
+        for step in new_steps:
+            psnr = self.psnr_fn(self.output_dir / f"eval_{step}", self.frames_dir)
+            self._seen_steps.add(step)
+            if psnr is None:
+                # Step incomplete; try again on the next poll.
+                self._seen_steps.discard(step)
+                continue
+            self.history.append((step, psnr))
+            logger.info(
+                "train.eval",
+                step=step,
+                psnr=round(psnr, 3),
+                n_pairs=len(list((self.output_dir / f"eval_{step}").glob("*.png"))),
+            )
+            self._update_stop_decision()
+
+    def _update_stop_decision(self) -> None:
+        """Set _stop=True iff (a) last step ≥ min_steps, AND (b) the last
+        `patience` Δ-PSNR values are all below `min_delta_psnr`."""
+        if self._stop:
+            return
+        if len(self.history) < self.patience + 1:
+            return  # need patience+1 evals to compute patience deltas
+        last_step, _ = self.history[-1]
+        if last_step < self.min_steps:
+            return
+        # Last `patience` deltas
+        tail = self.history[-(self.patience + 1) :]
+        deltas = [tail[i + 1][1] - tail[i][1] for i in range(self.patience)]
+        if all(d < self.min_delta_psnr for d in deltas):
+            self._stop = True
+
+
+def _parse_eval_step(eval_dir: Path) -> int | None:
+    """`eval_1000` → 1000. Returns None on malformed names."""
+    name = eval_dir.name
+    if not name.startswith("eval_"):
+        return None
+    suffix = name[len("eval_") :]
+    return int(suffix) if suffix.isdigit() else None
+
+
 def estimate_wall_time_s(cfg: BrushConfig) -> float:
     """Phase-7 heuristic: estimated Brush training wall-time (seconds).
 
