@@ -209,3 +209,108 @@ def test_stage_dataset_replaces_existing(tmp_path: Path) -> None:
 
     assert (staging / "images").is_symlink()
     assert not (staging / "images" / "stale.jpg").exists()
+
+
+# ─── v1.5.0: compute_eval_psnr ──────────────────────────────────────────────
+
+
+def _write_png(path: Path, fill: int, shape: tuple[int, int] = (64, 64)) -> None:
+    import cv2
+    import numpy as np
+
+    img = np.full((*shape, 3), fill, dtype=np.uint8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), img)
+
+
+def _write_jpg(path: Path, fill: int, shape: tuple[int, int] = (64, 64)) -> None:
+    import cv2
+    import numpy as np
+
+    img = np.full((*shape, 3), fill, dtype=np.uint8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), img, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+
+
+def test_compute_eval_psnr_identical_returns_high(tmp_path: Path) -> None:
+    """Two identical solid-colour images → very high PSNR (≥ 40 dB typical
+    threshold; identical-uint8 hits the sentinel cap)."""
+    from autosplat.train import compute_eval_psnr
+
+    eval_dir = tmp_path / "eval_1000"
+    frames_dir = tmp_path / "frames"
+
+    _write_png(eval_dir / "frame_00010.png", fill=128)
+    _write_jpg(frames_dir / "frame_00010.jpg", fill=128)
+
+    psnr = compute_eval_psnr(eval_dir, frames_dir)
+    assert psnr is not None
+    # JPG re-encode introduces minimal noise; should still be ≥ 35 dB
+    assert psnr >= 35.0
+
+
+def test_compute_eval_psnr_differs_returns_finite(tmp_path: Path) -> None:
+    """Render at fill=100, original at fill=200 — large MSE, low PSNR."""
+    from autosplat.train import compute_eval_psnr
+
+    eval_dir = tmp_path / "eval_1000"
+    frames_dir = tmp_path / "frames"
+
+    _write_png(eval_dir / "frame_00010.png", fill=100)
+    _write_jpg(frames_dir / "frame_00010.jpg", fill=200)
+
+    psnr = compute_eval_psnr(eval_dir, frames_dir)
+    assert psnr is not None
+    # Solid 100 vs 200 → MSE ≈ 10000 → PSNR ≈ 8 dB
+    assert 5.0 < psnr < 15.0
+
+
+def test_compute_eval_psnr_downscales_original_to_render(tmp_path: Path) -> None:
+    """Render at 32×32, original at 128×128 — original gets downscaled to
+    match before MSE. Both fill=200 → very high PSNR."""
+    from autosplat.train import compute_eval_psnr
+
+    eval_dir = tmp_path / "eval_1000"
+    frames_dir = tmp_path / "frames"
+
+    _write_png(eval_dir / "frame_00010.png", fill=200, shape=(32, 32))
+    _write_jpg(frames_dir / "frame_00010.jpg", fill=200, shape=(128, 128))
+
+    psnr = compute_eval_psnr(eval_dir, frames_dir)
+    assert psnr is not None
+    assert psnr >= 35.0
+
+
+def test_compute_eval_psnr_no_eval_dir_returns_none(tmp_path: Path) -> None:
+    from autosplat.train import compute_eval_psnr
+
+    assert compute_eval_psnr(tmp_path / "missing", tmp_path / "frames") is None
+
+
+def test_compute_eval_psnr_no_matching_originals_returns_none(tmp_path: Path) -> None:
+    from autosplat.train import compute_eval_psnr
+
+    eval_dir = tmp_path / "eval_1000"
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+
+    _write_png(eval_dir / "rogue.png", fill=128)
+    # frames_dir is empty → no matching original
+    assert compute_eval_psnr(eval_dir, frames_dir) is None
+
+
+def test_compute_eval_psnr_averages_multiple_pairs(tmp_path: Path) -> None:
+    """Three pairs with different PSNR contributions → mean is averaged."""
+    from autosplat.train import compute_eval_psnr
+
+    eval_dir = tmp_path / "eval_1000"
+    frames_dir = tmp_path / "frames"
+
+    # Three identical pairs → all near-sentinel-high PSNR; mean stays high
+    for i in (10, 20, 30):
+        _write_png(eval_dir / f"frame_{i:05d}.png", fill=128)
+        _write_jpg(frames_dir / f"frame_{i:05d}.jpg", fill=128)
+
+    psnr = compute_eval_psnr(eval_dir, frames_dir)
+    assert psnr is not None
+    assert psnr >= 35.0

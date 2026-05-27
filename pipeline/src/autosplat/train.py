@@ -15,13 +15,17 @@ layout (`frames/`, `colmap/sparse/`) so we don't have to copy frame data.
 
 from __future__ import annotations
 
+import math
 import shutil
 import subprocess
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import cv2
+import numpy as np
 
 from .config import BrushConfig
 from .logging import get_logger
@@ -120,6 +124,82 @@ def stage_dataset(frames_dir: Path, sparse_dir: Path, staging_dir: Path) -> Path
         link.symlink_to(target.resolve(), target_is_directory=True)
 
     return staging_dir
+
+
+def _psnr_for_pair(render: np.ndarray, original: np.ndarray) -> float:
+    """PSNR (dB) between two same-shape uint8 BGR images.
+
+    PSNR = 10 · log10(255² / MSE). When the two images are identical
+    (MSE == 0) the formula diverges; we return a very high but finite
+    number so the plateau-monitor's arithmetic doesn't blow up.
+    """
+    if render.shape != original.shape:
+        raise ValueError(
+            f"PSNR shape mismatch: render={render.shape} original={original.shape}"
+        )
+    diff = render.astype(np.float64) - original.astype(np.float64)
+    mse = float(np.mean(diff * diff))
+    if mse <= 1e-12:
+        return 100.0  # sentinel "as good as it gets"
+    return 10.0 * math.log10((255.0 * 255.0) / mse)
+
+
+def compute_eval_psnr(eval_dir: Path, frames_dir: Path) -> float | None:
+    """Mean PSNR across all rendered eval images vs their originals.
+
+    Brush writes `eval_<step>/<original_filename>.png` for every held-out
+    frame. We pair by **filename stem** so renders (.png) match frames
+    (.jpg) of the same name. Originals are downscaled (cv2.INTER_AREA) to
+    the render resolution before MSE — Brush trains at `resolution_cap`,
+    not at the source resolution.
+
+    Returns None when no pairs survive (eval_dir empty, originals missing,
+    all loads fail). The PlateauMonitor treats None as "eval incomplete,
+    skip this step" — never aborts training.
+    """
+    if not eval_dir.is_dir():
+        return None
+
+    renders = sorted(eval_dir.glob("*.png"))
+    if not renders:
+        return None
+
+    psnrs: list[float] = []
+    for render_path in renders:
+        # Match by stem — render is e.g. `<stem>_frame_00051.png`,
+        # original is `<stem>_frame_00051.jpg`.
+        candidates = list(frames_dir.glob(f"{render_path.stem}.*"))
+        if not candidates:
+            logger.warning("train.eval_no_match", render=str(render_path))
+            continue
+        original_path = candidates[0]
+
+        render = cv2.imread(str(render_path))
+        original = cv2.imread(str(original_path))
+        if render is None or original is None:
+            logger.warning(
+                "train.eval_imread_failed",
+                render=str(render_path),
+                original=str(original_path),
+            )
+            continue
+
+        # Downscale original to render resolution for like-for-like MSE.
+        if original.shape != render.shape:
+            target_h, target_w = render.shape[:2]
+            original = cv2.resize(
+                original, (target_w, target_h), interpolation=cv2.INTER_AREA
+            )
+
+        try:
+            psnrs.append(_psnr_for_pair(render, original))
+        except ValueError as exc:
+            logger.warning("train.eval_psnr_failed", error=str(exc))
+            continue
+
+    if not psnrs:
+        return None
+    return float(np.mean(psnrs))
 
 
 def estimate_wall_time_s(cfg: BrushConfig) -> float:
