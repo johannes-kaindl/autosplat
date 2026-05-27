@@ -1,9 +1,10 @@
-const SHELL = 'autosplat-shell-v6';
-const RUNTIME = 'autosplat-runtime-v6';
+const SHELL = 'autosplat-shell-v9';
+const RUNTIME = 'autosplat-runtime-v9';
 const SHELL_FILES = [
   './', './index.html', './css/style.css',
   './js/app.js', './js/viewer.js', './js/dropzone.js',
   './js/hud.js', './js/heightmap.js', './js/controls.js', './js/walking.js',
+  './js/splat-data.js',
   './js/collision/voxelize.js', './js/collision/mc-tables.js',
   './js/collision/marching-cubes.js', './js/collision/mesh-bvh.js',
   './js/collision/editor.js', './js/collision/persist.js',

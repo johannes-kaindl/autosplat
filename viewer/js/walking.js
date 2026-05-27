@@ -17,6 +17,7 @@ import {
   robustBounds,
 } from './heightmap.js';
 import { raycast as bvhRaycast, capsuleSweep as bvhCapsuleSweep } from './collision/mesh-bvh.js';
+import { extractSplatPositions } from './splat-data.js';
 
 const LOOK_SENSITIVITY = 0.0022;  // radians per pixel of mouse movement
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
@@ -101,31 +102,6 @@ function boundsFromEntityAabb(splatEntity, root) {
       max: { x: p.x + 1, y: p.y + 1, z: p.z + 1 },
     };
   } catch { return null; }
-}
-
-function extractSplatPositions(splatEntity) {
-  try {
-    const r = splatEntity?.gsplat?.asset?.resource;
-    const splatData = r?.splatData ?? r?.data;
-    if (!splatData) return null;
-    // PlayCanvas exposes per-attribute typed accessors; fall back to .position.
-    const posX = splatData.getProp?.('x');
-    const posY = splatData.getProp?.('y');
-    const posZ = splatData.getProp?.('z');
-    if (posX && posY && posZ) {
-      const n = posX.length;
-      const out = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) {
-        out[i * 3] = posX[i];
-        out[i * 3 + 1] = posY[i];
-        out[i * 3 + 2] = posZ[i];
-      }
-      return out;
-    }
-    const flat = splatData.position ?? splatData.positions;
-    if (flat instanceof Float32Array) return flat;
-  } catch { /* fall through */ }
-  return null;
 }
 
 function transformPositions(local, entity) {
