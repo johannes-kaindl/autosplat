@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { voxelize } from '../../js/collision/voxelize.js';
+import { voxelize, smoothDensity } from '../../js/collision/voxelize.js';
 
 const bounds10 = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } };
 
@@ -35,4 +35,19 @@ test('voxelize: degenerate bounds (zero extent) → all-zero', () => {
   const bad = { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } };
   const { density } = voxelize(flat(0, 0, 0), bad, 4);
   for (const v of density) assert.equal(v, 0);
+});
+
+test('smoothDensity: single non-zero cell spreads to 3x3x3 neighbourhood', () => {
+  const res = 5;
+  const density = new Float32Array(res ** 3);
+  density[2 * 25 + 2 * 5 + 2] = 27;
+  const out = smoothDensity(density, res);
+  assert.equal(out[2 * 25 + 2 * 5 + 2], 1);
+  assert.equal(out[2 * 25 + 2 * 5 + 3], 1);
+  assert.equal(out[0], 0);
+});
+
+test('smoothDensity: empty grid stays empty', () => {
+  const out = smoothDensity(new Float32Array(64), 4);
+  for (const v of out) assert.equal(v, 0);
 });
