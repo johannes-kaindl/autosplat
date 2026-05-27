@@ -73,6 +73,20 @@ def _load_or_die(config_path: Path | None) -> object:
         raise typer.Exit(EXIT_USER_ERROR) from e
 
 
+def _remote_supersplat_url_for(ply_url: str) -> str:
+    """Wrap a local PLY URL in the remote SuperSplat editor's `?load=` param.
+
+    Used by `autosplat serve` (without `--with-supersplat`) to avoid the
+    browser-download dialog that fires when the raw `.ply` URL is opened —
+    `.ply` has no native browser MIME handler, so the browser offers the
+    file as a download instead of rendering it. The remote SuperSplat
+    editor fetches the same URL itself and renders the splat in a canvas.
+    """
+    import urllib.parse
+
+    return f"{viewer_mod.SUPERSPLAT_URL}?load={urllib.parse.quote(ply_url, safe='')}"
+
+
 def _open_viewer_if_configured(output_ply: Path, cfg: object) -> None:
     """Open the result in the configured viewer, blocking on a local PLY
     server until Ctrl-C. Called by process/resume/add-video/rescue *after*
@@ -599,8 +613,13 @@ def serve(
         try:
             with viewer_mod.serve_directory(ply.parent, effective_ply_port) as ply_base:
                 ply_url = f"{ply_base}/{ply.name}"
+                # v1.4.3 — opening ply_url directly triggers a browser
+                # download (.ply has no MIME handler). Route through the
+                # remote SuperSplat editor with ?load=<our-server-url>.
+                viewer_url = _remote_supersplat_url_for(ply_url)
                 if not no_open_browser:
-                    webbrowser.open(ply_url)
+                    webbrowser.open(viewer_url)
+                console.print(f"[green]Viewer:[/green] {viewer_url}")
                 console.print(f"[green]PLY server:[/green] {ply_url}")
                 console.print("Press Ctrl+C to stop.")
                 while not stop_event.wait(timeout=1.0):

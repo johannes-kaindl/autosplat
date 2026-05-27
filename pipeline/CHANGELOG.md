@@ -13,6 +13,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.4.3] — 2026-05-27 — `autosplat serve` Browser-Download Hotfix
+
+Follow-up to v1.4.2 — the auto-open path was fixed for `process` / `rescue`, but `autosplat serve` (without `--with-supersplat`) still opened the raw `http://127.0.0.1:8765/scene.ply` URL in the browser. Browsers have no MIME handler for `.ply`, so the result was a download prompt instead of a rendered splat.
+
+### Fixed
+
+- **`autosplat serve` (no `--with-supersplat`) opens the remote SuperSplat editor**, not the raw PLY URL. New `_remote_supersplat_url_for(ply_url)` helper wraps the local PLY URL in `https://playcanvas.com/supersplat/editor?load=<encoded-ply-url>` — the same pattern `viewer.open_in_viewer` uses for `target="supersplat"`. The local PLY server keeps running so the remote editor can fetch the file. `--no-open-browser` still suppresses the browser launch for headless / CI use.
+
+### Tests
+
+- 2 new tests in `test_cli_serve.py` cover URL construction (default port, high port). End-to-end CliRunner tests of the serve loop are intentionally avoided because they involve threading + signals + sockets and add fragility for no extra coverage — the helper is pure.
+- 314 tests passing.
+
+---
+
 ## [v1.4.2] — 2026-05-27 — Viewer Auto-Open Hotfix
 
 Pre-v1.4.2, `autosplat process` opened SuperSplat in the browser with `?load=http://127.0.0.1:8765/scene.ply` but never actually started a server on port 8765 — SuperSplat tried to fetch, silently failed, and the editor opened blank. Drag-and-drop the file manually was the only workaround. The pattern existed since the earliest CLI but was first surfaced by the real-world v1.4.0 max_strasse rescue run (5 h 36 min total, 490/493 cams = 99.4 %, then SuperSplat opened empty).
