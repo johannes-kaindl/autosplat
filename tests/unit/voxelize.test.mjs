@@ -1,0 +1,38 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { voxelize } from '../../js/collision/voxelize.js';
+
+const bounds10 = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } };
+
+function flat(...pts) {
+  const f = new Float32Array(pts.length);
+  for (let i = 0; i < pts.length; i++) f[i] = pts[i];
+  return f;
+}
+
+test('voxelize: empty positions → all-zero grid', () => {
+  const { density, resolution } = voxelize(new Float32Array(0), bounds10, 8);
+  assert.equal(resolution, 8);
+  assert.equal(density.length, 8 ** 3);
+  for (const v of density) assert.equal(v, 0);
+});
+
+test('voxelize: single splat at centre → exactly one non-zero cell', () => {
+  const { density } = voxelize(flat(5, 5, 5), bounds10, 8);
+  let nonZero = 0;
+  for (const v of density) if (v > 0) nonZero++;
+  assert.equal(nonZero, 1);
+  const idx = 4 * 64 + 4 * 8 + 4;
+  assert.equal(density[idx], 1);
+});
+
+test('voxelize: out-of-bounds splats are rejected', () => {
+  const { density } = voxelize(flat(-1, -1, -1, 11, 11, 11), bounds10, 8);
+  for (const v of density) assert.equal(v, 0);
+});
+
+test('voxelize: degenerate bounds (zero extent) → all-zero', () => {
+  const bad = { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } };
+  const { density } = voxelize(flat(0, 0, 0), bad, 4);
+  for (const v of density) assert.equal(v, 0);
+});
