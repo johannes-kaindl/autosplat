@@ -13,6 +13,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.4.2] — 2026-05-27 — Viewer Auto-Open Hotfix
+
+Pre-v1.4.2, `autosplat process` opened SuperSplat in the browser with `?load=http://127.0.0.1:8765/scene.ply` but never actually started a server on port 8765 — SuperSplat tried to fetch, silently failed, and the editor opened blank. Drag-and-drop the file manually was the only workaround. The pattern existed since the earliest CLI but was first surfaced by the real-world v1.4.0 max_strasse rescue run (5 h 36 min total, 490/493 cams = 99.4 %, then SuperSplat opened empty).
+
+### Fixed
+
+- **`viewer.open_in_viewer` now actually serves the PLY.** For remote targets (`supersplat` / `playcanvas`) the function wraps `serve_directory()` around the browser-open and blocks on a `threading.Event` that a SIGINT/SIGTERM handler sets — so the local HTTP server stays up as long as the user wants to look at the splat, then shuts down cleanly when they press Ctrl-C. Console prints the viewer URL + PLY URL upfront so the user knows what's running.
+
+### Changed
+
+- **`pipeline.run_pipeline` no longer calls the viewer.** Blocking inside the pipeline orchestrator would stall the watch-folder daemon between captures and prevent the WebUI's JobRunner from marking jobs done. CLI commands (`process`, `resume`, `add-video`, `rescue`) now invoke a new `_open_viewer_if_configured()` helper *after* their Done summary, so the user sees the result first and then learns the server URL. Daemon and WebUI already had the same broken viewer path — removing it there is a no-op for users (it was never opening anything anyway).
+
+### Tests
+
+- 2 new end-to-end viewer tests: one verifies `serve_directory` is actually called inside `open_in_viewer`; the other fetches the PLY over HTTP from the running server to prove the bytes are reachable.
+- `test_cli_rescue` gets `test_rescue_invokes_viewer_after_done` verifying the wiring at the CLI layer.
+- Removed three obsolete `patch("autosplat.pipeline.viewer_mod.open_in_viewer")` in `test_pipeline` (the attribute no longer exists).
+- 311 tests passing, ruff clean, mypy clean on viewer.py + pipeline.py.
+
+### UX note
+
+`autosplat process video.mp4` now blocks at the very end with a console message:
+
+```
+Viewer: https://playcanvas.com/supersplat/editor?load=…
+Serving PLY at http://127.0.0.1:8765/scene.ply. Press Ctrl-C when finished to stop the local server.
+```
+
+To opt out — e.g. for CI runs or when SuperSplat is started manually — set `[viewer] auto_open = false` or `[viewer] target = "none"` in the config.
+
+---
+
 ## [v1.4.1] — 2026-05-26 — Bisection Polish
 
 Follow-up to v1.4.0 — a probe-performance cap, a manual `rescue` CLI command, per-clip progress visibility in the WebUI, and an optional smart-split at the motion peak. Plus the pre-existing `dict | None` mypy noise in `pipeline.py` is finally cleared.

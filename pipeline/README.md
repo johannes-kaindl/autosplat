@@ -11,7 +11,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.4.1 — Bisection Polish.** Auto-bisection-rescue with manual `autosplat rescue` command, optional smart-split at motion peaks, per-clip progress in the WebUI, and ~4× faster probes. Mac Silicon, AGPL-3.0.
+> **Status: v1.4.2 — Viewer Auto-Open Hotfix.** Auto-bisection-rescue + `autosplat rescue` CLI + smart-split at motion peaks + per-clip WebUI progress, with the long-standing viewer-auto-open bug (SuperSplat opening empty) finally fixed. Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -79,6 +79,7 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 | Version  | Date       | Headline                                                                                  |
 | -------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v1.4.2   | 2026-05-27 | **Viewer Auto-Open Hotfix** — `viewer.open_in_viewer` now actually starts the local PLY server (was silent no-op since the very first viewer flow); CLI blocks on Ctrl-C while you look at the splat. |
 | v1.4.1   | 2026-05-26 | **Bisection Polish** — `autosplat rescue` CLI, opt-in smart-split at motion peak (OpenCV optical flow), WebUI per-clip progress (`bisect · probing clip 0_1`), 4× faster probes, pre-existing mypy noise cleared. |
 | v1.4.0   | 2026-05-26 | **Auto-Bisection-Rescue** — when `sequential→exhaustive` exhausts itself, binary-subdivide the source video, probe each leaf clip, and recombine the survivors automatically. `[retry] bisect_*` config knobs. |
 | v1.3.0   | 2026-05-24 | **Multi-Video Rescue** — combine N video passes into one capture, `add-video`, `--target-frames`, CAPTURE-GUIDE |
