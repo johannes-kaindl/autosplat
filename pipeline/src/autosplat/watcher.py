@@ -49,6 +49,7 @@ def _as_str(path: bytes | str) -> str:
     """Normalise watchdog's bytes|str path to str — Mac always sends str."""
     return path.decode("utf-8") if isinstance(path, bytes) else path
 
+
 VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v"}
 DEFAULT_STATE_FILE = Path("~/.autosplat/state.json").expanduser()
 STABILITY_CHECK_INTERVAL_S = 2.0

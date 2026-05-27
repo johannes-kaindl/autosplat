@@ -95,6 +95,71 @@ def test_build_url_playcanvas() -> None:
 # ─── open_in_viewer behaviour ─────────────────────────────────────────────────
 
 
+def test_open_in_viewer_remote_supersplat_logs_deprecation_warning(
+    tmp_path: Path,
+) -> None:
+    """v1.4.5 — target='supersplat' (remote, HTTPS) emits a deprecation
+    warning pointing the user at the supersplat-local default. Hooked into
+    the existing block-with-server path so the warning fires only when the
+    code path is actually reached (not on auto_open=False / target=none)."""
+    import threading
+
+    ply = tmp_path / "scene.ply"
+    ply.write_bytes(b"ply")
+    cfg = _make_cfg(target="supersplat", local_http_port=_pick_free_port())
+
+    stop = threading.Event()
+    stop.set()
+
+    with (
+        patch("autosplat.viewer.webbrowser.open"),
+        patch("autosplat.viewer.logger") as mock_logger,
+    ):
+        open_in_viewer(ply, cfg, stop_event=stop)
+
+    # `logger.warning("viewer.remote_supersplat_deprecated", ...)` should fire
+    warning_calls = [
+        c
+        for c in mock_logger.warning.call_args_list
+        if c.args and c.args[0] == "viewer.remote_supersplat_deprecated"
+    ]
+    assert len(warning_calls) == 1, mock_logger.warning.call_args_list
+
+
+def test_open_in_viewer_supersplat_local_no_deprecation_warning(
+    tmp_path: Path,
+) -> None:
+    """Sanity: supersplat-local path must NOT fire the deprecation warning."""
+    import threading
+
+    ply = tmp_path / "scene.ply"
+    ply.write_bytes(b"ply")
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("ok", encoding="utf-8")
+    cfg = _make_cfg(
+        target="supersplat-local",
+        supersplat_dist_path=dist,
+        local_http_port=_pick_free_port(),
+        supersplat_local_port=_pick_free_port(),
+    )
+    stop = threading.Event()
+    stop.set()
+
+    with (
+        patch("autosplat.viewer.webbrowser.open"),
+        patch("autosplat.viewer.logger") as mock_logger,
+    ):
+        open_in_viewer(ply, cfg, stop_event=stop)
+
+    warning_calls = [
+        c
+        for c in mock_logger.warning.call_args_list
+        if c.args and c.args[0] == "viewer.remote_supersplat_deprecated"
+    ]
+    assert warning_calls == []
+
+
 def test_open_in_viewer_supersplat_local_no_browser_when_dist_missing(
     tmp_path: Path,
 ) -> None:

@@ -233,7 +233,7 @@ def open_in_viewer(
             "[yellow]Warning:[/yellow] target='supersplat' may leave the "
             "editor empty because modern browsers block HTTPS→HTTP fetches. "
             "Run [bold]bash scripts/setup_supersplat.sh[/bold] once, then "
-            "set [bold][viewer] target = \"supersplat-local\"[/bold] for a "
+            'set [bold][viewer] target = "supersplat-local"[/bold] for a '
             "fully-local, blocking-server-free experience."
         )
 

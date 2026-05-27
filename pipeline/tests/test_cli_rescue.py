@@ -126,9 +126,7 @@ def test_rescue_invokes_viewer_after_done(tmp_path: Path) -> None:
         patch("autosplat.cli.rescue_via_bisection", return_value=success),
         patch("autosplat.cli.viewer_mod.open_in_viewer") as viewer,
     ):
-        result = runner.invoke(
-            app, ["rescue", str(video), "--output-dir", str(captures_root)]
-        )
+        result = runner.invoke(app, ["rescue", str(video), "--output-dir", str(captures_root)])
 
     assert result.exit_code == 0, result.output
     viewer.assert_called_once()

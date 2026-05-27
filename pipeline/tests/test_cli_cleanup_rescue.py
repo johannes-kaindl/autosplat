@@ -47,9 +47,7 @@ def test_cleanup_rescue_removes_probes_keeps_clips_by_default(tmp_path: Path) ->
 def test_cleanup_rescue_remove_clips_also_drops_clips(tmp_path: Path) -> None:
     capture_dir = _make_rescue_layout(tmp_path)
 
-    result = runner.invoke(
-        app, ["cleanup-rescue", str(capture_dir), "--remove-clips"]
-    )
+    result = runner.invoke(app, ["cleanup-rescue", str(capture_dir), "--remove-clips"])
 
     assert result.exit_code == 0, result.output
     assert not (capture_dir / "rescue" / "probes").exists()
@@ -59,9 +57,7 @@ def test_cleanup_rescue_remove_clips_also_drops_clips(tmp_path: Path) -> None:
 def test_cleanup_rescue_dry_run_touches_nothing(tmp_path: Path) -> None:
     capture_dir = _make_rescue_layout(tmp_path)
 
-    result = runner.invoke(
-        app, ["cleanup-rescue", str(capture_dir), "--dry-run"]
-    )
+    result = runner.invoke(app, ["cleanup-rescue", str(capture_dir), "--dry-run"])
 
     assert result.exit_code == 0, result.output
     assert "Would remove" in result.output

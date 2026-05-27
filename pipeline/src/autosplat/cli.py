@@ -87,6 +87,32 @@ def _remote_supersplat_url_for(ply_url: str) -> str:
     return f"{viewer_mod.SUPERSPLAT_URL}?load={urllib.parse.quote(ply_url, safe='')}"
 
 
+def _warn_if_viewer_misconfigured(cfg: object) -> None:
+    """v1.4.6 — fail loudly at the *start* of a pipeline run if the viewer
+    is configured for supersplat-local but the dist isn't built. Otherwise
+    the user only finds out after the ~5 h run finishes and the auto-open
+    silently falls back to a hint message. We print, but don't exit — the
+    user might want to set up the dist during the run, or accept the
+    fallback. `autosplat doctor` covers the same check independently.
+    """
+    if not cfg.viewer.auto_open:  # type: ignore[attr-defined]
+        return
+    if cfg.viewer.target != "supersplat-local":  # type: ignore[attr-defined]
+        return
+    dist = cfg.viewer.supersplat_dist_path  # type: ignore[attr-defined]
+    if not dist.is_absolute():
+        dist = Path.cwd() / dist
+    if (dist / "index.html").is_file():
+        return
+    err_console.print(
+        "[yellow]Warning:[/yellow] [viewer] target='supersplat-local' but no "
+        f"SuperSplat dist at {dist}. Auto-open at the end of the run will "
+        "fall back to a hint message instead of opening the editor.\n"
+        "[dim]Fix during this run with: [bold]bash scripts/setup_supersplat.sh[/bold] "
+        "— or set [bold][viewer] auto_open = false[/bold] to silence this.[/dim]"
+    )
+
+
 def _open_viewer_if_configured(output_ply: Path, cfg: object) -> None:
     """Open the result in the configured viewer, blocking on a local PLY
     server until Ctrl-C. Called by process/resume/add-video/rescue *after*
@@ -155,6 +181,7 @@ def process(
     if target_frames is not None:
         cfg = apply_override(cfg, {"preprocess": {"target_frames": target_frames}})
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+    _warn_if_viewer_misconfigured(cfg)
 
     # Report status into WatcherState so the WebUI can track this CLI-direct run.
     state = WatcherState.load()
@@ -214,6 +241,7 @@ def resume(
     if target_frames is not None:
         cfg = apply_override(cfg, {"preprocess": {"target_frames": target_frames}})
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+    _warn_if_viewer_misconfigured(cfg)
 
     completed = detect_completed_stages(capture_dir)
     if completed:
@@ -262,6 +290,7 @@ def add_video(
     """
     cfg = _load_or_die(config)
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+    _warn_if_viewer_misconfigured(cfg)
 
     state = WatcherState.load()
     try:
@@ -321,6 +350,7 @@ def rescue(
     """
     cfg = _load_or_die(config)
     configure_logging(level=cfg.logging.level, console=cfg.logging.console)
+    _warn_if_viewer_misconfigured(cfg)
 
     if target.is_file():
         # Mode A: fresh video.

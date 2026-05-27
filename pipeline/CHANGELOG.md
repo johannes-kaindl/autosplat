@@ -13,6 +13,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.4.6] — 2026-05-27 — Final Polish
+
+Closes the v1.4 line: small coverage gaps + early-warning UX + repo hygiene, so v1.5 starts from a clean baseline.
+
+### Added
+
+- **Pre-flight viewer-config check** (`cli._warn_if_viewer_misconfigured`). When `[viewer] auto_open=true` + `target="supersplat-local"` but the dist isn't built, the warning fires at the *start* of `process` / `resume` / `add-video` / `rescue` — not after the ~5 h run finishes and the auto-open silently falls back. Doctor still catches the same case independently. 4 unit tests.
+- **Test coverage for the v1.4.5 deprecation warning** at `target="supersplat"` (remote). Verifies the `viewer.remote_supersplat_deprecated` logger.warning fires for the remote path and stays silent for the local one. 2 new tests in `test_viewer.py`.
+
+### Removed
+
+- **Orphaned v1.3 hero assets** — `docs/assets/max_strasse_hero.{gif,mp4,webm,jpg}` (≈9 MB). The README has pointed at `max_strasse_autobisect_hero.*` since v1.4.4; the v1.3 originals are still reachable via the `v1.3.0` git tag for historical purposes.
+
+### Fixed
+
+- **v1.4.0 Codeberg release-page body** PATCH'd to remove the stale "no real-world smoke against a non-trivial structurally-failing capture" line — refuted by the v1.4.4 max_strasse end-to-end success (490/493 cams, 5 h 36 min).
+
+### Tests
+
+- 328 tests passing (up from 322 at v1.4.5), ruff clean, mypy clean on the four core modules.
+
+---
+
 ## [v1.4.5] — 2026-05-27 — Quality Sweep
 
 Follow-up to the v1.4.0–v1.4.4 burst — non-feature improvements that accumulated during the v1.4 work: code hygiene, observability, disk reclaim, and a docs refresh that catches up with the local-viewer default.
