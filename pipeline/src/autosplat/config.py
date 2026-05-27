@@ -101,6 +101,61 @@ class BrushConfig(BaseModel):
         default_factory=list,
         description="Passthrough flags appended to the Brush command.",
     )
+    # v1.5.0 — Train-till-Plateau (opt-in)
+    plateau_enabled: bool = Field(
+        default=False,
+        description="v1.5.0 — when true, hold out 1/N frames as eval set, compute PSNR "
+        "against rendered eval images every plateau_eval_every steps, and SIGTERM Brush "
+        "when the PSNR curve flattens (Δ < plateau_min_delta_psnr over plateau_patience "
+        "consecutive evals, after plateau_min_steps).",
+    )
+    plateau_eval_split_every: int = Field(
+        default=10,
+        ge=2,
+        le=50,
+        description="Hold out every Nth frame as the eval set. 10 ≈ 10 % holdout.",
+    )
+    plateau_eval_every: int = Field(
+        default=1000,
+        ge=100,
+        le=10000,
+        description="Brush --eval-every. Also drives --export-every so every eval "
+        "checkpoint has a fresh PLY in case SIGTERM fires mid-iteration.",
+    )
+    plateau_min_steps: int = Field(
+        default=5000,
+        ge=100,
+        description="Don't trigger plateau-stop before this many steps — densification "
+        "needs time before the PSNR curve is meaningful.",
+    )
+    plateau_patience: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Number of consecutive evals with Δ < plateau_min_delta_psnr "
+        "required to declare a plateau.",
+    )
+    plateau_min_delta_psnr: float = Field(
+        default=0.05,
+        gt=0.0,
+        le=5.0,
+        description="ε in dB — PSNR improvement below this counts as 'flat'.",
+    )
+
+    @field_validator("plateau_min_steps")
+    @classmethod
+    def _plateau_min_steps_below_max(cls, v: int, info: object) -> int:
+        # Only enforce the cross-field constraint when the feature is enabled
+        # — otherwise a user lowering max_steps for a quick CI run gets
+        # rejected for no reason. info.data carries already-validated fields;
+        # `plateau_enabled` and `max_steps` are declared before this field.
+        data = info.data if hasattr(info, "data") else {}  # type: ignore[attr-defined]
+        if data.get("plateau_enabled") and v > data.get("max_steps", v):
+            raise ValueError(
+                f"plateau_min_steps ({v}) must be ≤ max_steps ({data['max_steps']}) "
+                "when plateau_enabled=true — otherwise the plateau-check never engages."
+            )
+        return v
 
 
 class ExportConfig(BaseModel):

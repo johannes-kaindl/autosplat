@@ -191,3 +191,87 @@ def test_apply_override_can_disable_bisect() -> None:
     assert new_cfg.retry.bisect_enabled is False
     # Other retry fields untouched
     assert new_cfg.retry.max_retries == cfg.retry.max_retries
+
+
+# ─── v1.5.0 — Train-till-Plateau config ─────────────────────────────────────
+
+
+def test_default_includes_v150_plateau_fields() -> None:
+    cfg = load_config(include_xdg=False)
+    assert cfg.brush.plateau_enabled is False
+    assert cfg.brush.plateau_eval_split_every == 10
+    assert cfg.brush.plateau_eval_every == 1000
+    assert cfg.brush.plateau_min_steps == 5000
+    assert cfg.brush.plateau_patience == 3
+    assert cfg.brush.plateau_min_delta_psnr == 0.05
+
+
+def test_plateau_min_steps_above_max_steps_rejected_only_when_enabled(
+    tmp_path: Path,
+) -> None:
+    """plateau_min_steps > max_steps would mean the check never engages — reject,
+    but only when plateau_enabled=true. Otherwise a user lowering max_steps for
+    CI shouldn't have to also touch plateau_min_steps."""
+    enabled = tmp_path / "enabled.toml"
+    enabled.write_text(
+        """
+[brush]
+max_steps = 1000
+plateau_enabled = true
+plateau_min_steps = 5000
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception):
+        load_config(user_config_path=enabled, include_xdg=False)
+
+    # Same min_steps > max_steps, but plateau disabled → loads fine.
+    disabled = tmp_path / "disabled.toml"
+    disabled.write_text(
+        """
+[brush]
+max_steps = 1000
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(user_config_path=disabled, include_xdg=False)
+    assert cfg.brush.max_steps == 1000
+    assert cfg.brush.plateau_enabled is False
+
+
+def test_plateau_min_delta_psnr_rejects_zero(tmp_path: Path) -> None:
+    user = tmp_path / "u.toml"
+    user.write_text(
+        """
+[brush]
+plateau_min_delta_psnr = 0.0
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception):
+        load_config(user_config_path=user, include_xdg=False)
+
+
+def test_plateau_patience_rejects_zero(tmp_path: Path) -> None:
+    user = tmp_path / "u.toml"
+    user.write_text(
+        """
+[brush]
+plateau_patience = 0
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception):
+        load_config(user_config_path=user, include_xdg=False)
+
+
+def test_apply_override_can_enable_plateau() -> None:
+    cfg = load_config(include_xdg=False)
+    new_cfg = apply_override(
+        cfg,
+        {"brush": {"plateau_enabled": True, "plateau_patience": 5}},
+    )
+    assert new_cfg.brush.plateau_enabled is True
+    assert new_cfg.brush.plateau_patience == 5
+    # Other brush fields untouched
+    assert new_cfg.brush.max_steps == cfg.brush.max_steps

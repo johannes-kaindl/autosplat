@@ -25,6 +25,17 @@ resolution_cap = 1600
 sh_degree = 3
 densify_until_iter = 15000
 extra_args = []                 # passthrough for advanced users
+# v1.5.0 — Train-till-Plateau (opt-in). When enabled, Brush is launched with
+# eval-flags that hold out 1/plateau_eval_split_every frames and render them
+# every plateau_eval_every steps. A PlateauMonitor thread computes mean PSNR
+# from the rendered evals and SIGTERMs Brush when plateau_patience consecutive
+# Δ-PSNR values fall below plateau_min_delta_psnr (after plateau_min_steps).
+plateau_enabled = false
+plateau_eval_split_every = 10   # every 10th frame held out (~10 %)
+plateau_eval_every = 1000       # also drives Brush --export-every for safe SIGTERM
+plateau_min_steps = 5000        # ≥ this many steps before plateau-check engages
+plateau_patience = 3            # M consecutive flat-Δ evals → stop
+plateau_min_delta_psnr = 0.05   # ε in dB — Δ below this counts as flat
 
 [export]
 formats = ["ply"]               # future: ["ply", "splat", "spz"]
