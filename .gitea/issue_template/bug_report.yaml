@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kaindl
+# SPDX-License-Identifier: CC-BY-SA-4.0
+name: Bug report
+about: Something doesn't work as expected
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please keep the report concrete — the
+        easier it is to reproduce, the faster the fix.
+
+        **Security-sensitive issues** do not belong here — see
+        [`SECURITY.md`](https://codeberg.org/jkaindl/autosplat-viewer/src/branch/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A short, precise description of the problem.
+      placeholder: Walking-mode collision drops me through the floor on this specific .ply.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Which steps reliably trigger the issue?
+      placeholder: |
+        1. Open https://jkaindl.codeberg.page/autosplat-viewer/
+        2. Drag in attached scene.ply (5 MB)
+        3. Click "▶ Walk through this scene"
+        4. WASD-walk forward 2 m → fall through ground
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Heightmap collision should keep me on the surface.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      options:
+        - Web (live demo)
+        - Web (local — running index.html directly)
+        - PWA-installed (added to Home Screen / Dock)
+        - Other / not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Render mode
+      options:
+        - Auto-orbit
+        - Walking-mode
+        - File loading (never got to a render)
+        - Not relevant
+  - type: input
+    id: browser
+    attributes:
+      label: Browser + OS + device
+      placeholder: Safari 18.5, iOS 18, iPhone 15 Pro
+  - type: input
+    id: ply-info
+    attributes:
+      label: Splat file (size, format, source)
+      placeholder: 5 MB .ply, exported from autosplat pipeline v1.4.4
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console / logs
+      description: Errors from the DevTools console, if any.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I checked [existing issues](https://codeberg.org/jkaindl/autosplat-viewer/issues) for duplicates.
+          required: true
+        - label: This is not a security issue (otherwise → SECURITY.md).
+          required: true
