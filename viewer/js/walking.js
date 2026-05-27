@@ -60,6 +60,21 @@ export function heightmapFromSplat(splatEntity, splatPivot, resolution = 128) {
 // Retain the simpler buildHeightmap re-export so e2e/unit tests keep working.
 export { buildHeightmap };
 
+/**
+ * Public helper: extract world-space splat positions + outlier-robust bounds.
+ * Used by both walking-mode and the collision editor. Returns null if no
+ * positions are available.
+ */
+export function splatWorldGeometry(splatEntity, splatPivot) {
+  const root = splatPivot ?? splatEntity;
+  const positions = extractSplatPositions(splatEntity);
+  if (!positions || positions.length === 0) return null;
+  const world = transformPositions(positions, root);
+  const bounds = robustBounds(world);
+  if (!bounds) return null;
+  return { positions: world, bounds };
+}
+
 function flatHeightmap(bounds, resolution = 8) {
   const grid = new Float32Array(resolution * resolution);
   grid.fill(bounds.min.y);
