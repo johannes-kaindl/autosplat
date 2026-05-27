@@ -82,7 +82,13 @@ def build_brush_command(
     """Construct the Brush invocation for v0.3.x.
 
     Source is positional (`brush <PATH_OR_URL>`). All other params are flags.
+
+    v1.5.0 — when `cfg.plateau_enabled`, also append `--eval-split-every`,
+    `--eval-every`, `--eval-save-to-disk`, and override `--export-every`
+    to the eval cadence so every eval checkpoint has a fresh PLY in case
+    SIGTERM fires mid-iteration.
     """
+    export_every = cfg.plateau_eval_every if cfg.plateau_enabled else cfg.max_steps
     cmd: list[str] = [
         str(brush_binary),
         str(dataset_root),
@@ -99,8 +105,18 @@ def build_brush_command(
         "--export-name",
         export_name,
         "--export-every",
-        str(cfg.max_steps),  # only export at the very end
+        str(export_every),
     ]
+    if cfg.plateau_enabled:
+        cmd.extend(
+            [
+                "--eval-split-every",
+                str(cfg.plateau_eval_split_every),
+                "--eval-every",
+                str(cfg.plateau_eval_every),
+                "--eval-save-to-disk",
+            ]
+        )
     cmd.extend(cfg.extra_args)
     return cmd
 
@@ -134,9 +150,7 @@ def _psnr_for_pair(render: np.ndarray, original: np.ndarray) -> float:
     number so the plateau-monitor's arithmetic doesn't blow up.
     """
     if render.shape != original.shape:
-        raise ValueError(
-            f"PSNR shape mismatch: render={render.shape} original={original.shape}"
-        )
+        raise ValueError(f"PSNR shape mismatch: render={render.shape} original={original.shape}")
     diff = render.astype(np.float64) - original.astype(np.float64)
     mse = float(np.mean(diff * diff))
     if mse <= 1e-12:
@@ -187,9 +201,7 @@ def compute_eval_psnr(eval_dir: Path, frames_dir: Path) -> float | None:
         # Downscale original to render resolution for like-for-like MSE.
         if original.shape != render.shape:
             target_h, target_w = render.shape[:2]
-            original = cv2.resize(
-                original, (target_w, target_h), interpolation=cv2.INTER_AREA
-            )
+            original = cv2.resize(original, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
         try:
             psnrs.append(_psnr_for_pair(render, original))
@@ -243,7 +255,8 @@ class PlateauMonitor:
         new_steps = sorted(
             step
             for d in self.output_dir.glob("eval_*")
-            if d.is_dir() and (step := _parse_eval_step(d)) is not None
+            if d.is_dir()
+            and (step := _parse_eval_step(d)) is not None
             and step not in self._seen_steps
         )
         for step in new_steps:
@@ -363,6 +376,46 @@ def run_brush(
         bufsize=1,
     )
 
+    # v1.5.0 — Plateau monitor thread (only when plateau_enabled). Polls
+    # eval_<step>/ dirs every 5 s; when monitor.should_stop fires we send
+    # SIGTERM and use the most-recent exported scene.ply as the final.
+    monitor: PlateauMonitor | None = None
+    plateau_thread: threading.Thread | None = None
+    plateau_stop = threading.Event()
+    plateau_triggered_at_step: int | None = None
+    if cfg.plateau_enabled:
+        monitor = PlateauMonitor(
+            output_dir=output_dir,
+            frames_dir=frames_dir,
+            min_steps=cfg.plateau_min_steps,
+            patience=cfg.plateau_patience,
+            min_delta_psnr=cfg.plateau_min_delta_psnr,
+        )
+
+        def _plateau_loop() -> None:
+            nonlocal plateau_triggered_at_step
+            assert monitor is not None
+            while not plateau_stop.wait(5.0):
+                try:
+                    monitor.poll_once()
+                except Exception as e:
+                    logger.warning("train.plateau_poll_failed", error=str(e))
+                    continue
+                if monitor.should_stop:
+                    plateau_triggered_at_step = monitor.history[-1][0] if monitor.history else None
+                    logger.warning(
+                        "train.plateau_detected",
+                        triggering_at_step=plateau_triggered_at_step,
+                        history=monitor.history,
+                    )
+                    proc.terminate()
+                    return
+
+        plateau_thread = threading.Thread(
+            target=_plateau_loop, name="brush-plateau-monitor", daemon=True
+        )
+        plateau_thread.start()
+
     # Heartbeat thread for progress callback — fires every 2 s while training.
     # Brush v0.3 doesn't emit step counts on stdout, so we estimate from
     # wall-time against `eta_s`.
@@ -378,13 +431,12 @@ def run_brush(
                 except Exception as cb_err:
                     logger.warning("train.brush.progress_cb_error", error=str(cb_err))
 
+    heartbeat_thread: threading.Thread | None = None
     if progress_callback is not None:
-        heartbeat_thread: threading.Thread | None = threading.Thread(
+        heartbeat_thread = threading.Thread(
             target=_heartbeat, name="brush-progress", daemon=True
         )
         heartbeat_thread.start()
-    else:
-        heartbeat_thread = None
     steps_completed = 0
     output_tail: list[str] = []  # last 50 lines for OOM diagnosis
     assert proc.stdout is not None
@@ -402,6 +454,9 @@ def run_brush(
             logger.debug("train.brush.out", line=line)
     proc.wait()
     stop_heartbeat.set()
+    plateau_stop.set()
+    if plateau_thread is not None:
+        plateau_thread.join(timeout=5)
     if heartbeat_thread is not None:
         heartbeat_thread.join(timeout=3)
         # Final 100% tick so the bar lands clean.
@@ -411,7 +466,10 @@ def run_brush(
             with contextlib.suppress(Exception):
                 progress_callback(time.monotonic() - t0, 1.0)
 
-    if proc.returncode != 0:
+    # v1.5.0 — a non-zero returncode caused by *our* SIGTERM (plateau hit)
+    # is expected, not a failure. The most-recent exported scene.ply is the
+    # final PLY. Anything else still goes through OOM / CalledProcessError.
+    if proc.returncode != 0 and plateau_triggered_at_step is None:
         tail = "\n".join(output_tail)
         if _looks_like_oom(tail):
             logger.warning(
@@ -423,10 +481,20 @@ def run_brush(
         raise subprocess.CalledProcessError(proc.returncode, cmd, output=tail)
 
     final_ply = _find_latest_ply(output_dir)
+    if plateau_triggered_at_step is not None and final_ply is None:
+        # SIGTERM fired before Brush exported anything — surface as a real
+        # failure (the user will see the train.plateau_detected event in
+        # the log followed by this error).
+        raise RuntimeError(
+            "Brush terminated by plateau-monitor before any checkpoint was "
+            f"written (triggered at step {plateau_triggered_at_step}). "
+            "Consider lowering plateau_eval_every or raising plateau_min_steps."
+        )
+
     result = TrainResult(
         training_dir=output_dir,
         final_ply=final_ply,
-        steps_completed=steps_completed,
+        steps_completed=plateau_triggered_at_step or steps_completed,
         duration_s=time.monotonic() - t0,
     )
     logger.info(

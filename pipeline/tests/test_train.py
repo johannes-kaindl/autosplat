@@ -323,7 +323,7 @@ def _scripted_psnr(by_step: dict[int, float]):
     """Returns a psnr_fn that maps a step number (parsed from eval_dir name)
     to a fixed PSNR. Steps not in the dict get None ('eval incomplete')."""
 
-    def _fn(eval_dir, frames_dir):  # noqa: ARG001
+    def _fn(eval_dir, frames_dir):
         from autosplat.train import _parse_eval_step
 
         step = _parse_eval_step(eval_dir)
@@ -450,6 +450,52 @@ def test_plateau_monitor_idempotent_polls(tmp_path: Path) -> None:
     m.poll_once()
     m.poll_once()
     assert len(m.history) == 2
+
+
+# ─── v1.5.0: build_brush_command plateau-flags integration ─────────────────
+
+
+def test_build_brush_command_no_eval_flags_when_disabled(tmp_path: Path) -> None:
+    """plateau_enabled=false (default) → no --eval-* flags."""
+    from autosplat.train import build_brush_command
+
+    cfg = BrushConfig(
+        max_steps=30000,
+        resolution_cap=1600,
+        sh_degree=3,
+        densify_until_iter=15000,
+    )
+    cmd = build_brush_command(tmp_path / "brush", tmp_path / "ds", tmp_path / "out", cfg)
+    assert "--eval-split-every" not in cmd
+    assert "--eval-every" not in cmd
+    assert "--eval-save-to-disk" not in cmd
+    # export-every is the legacy "only at the end" value
+    assert cmd[cmd.index("--export-every") + 1] == str(cfg.max_steps)
+
+
+def test_build_brush_command_emits_eval_flags_when_enabled(tmp_path: Path) -> None:
+    """plateau_enabled=true → --eval-* flags appended, --export-every tied to eval-every."""
+    from autosplat.train import build_brush_command
+
+    cfg = BrushConfig(
+        max_steps=30000,
+        resolution_cap=1600,
+        sh_degree=3,
+        densify_until_iter=15000,
+        plateau_enabled=True,
+        plateau_eval_split_every=10,
+        plateau_eval_every=1000,
+        plateau_min_steps=5000,
+        plateau_patience=3,
+        plateau_min_delta_psnr=0.05,
+    )
+    cmd = build_brush_command(tmp_path / "brush", tmp_path / "ds", tmp_path / "out", cfg)
+    assert "--eval-split-every" in cmd
+    assert cmd[cmd.index("--eval-split-every") + 1] == "10"
+    assert cmd[cmd.index("--eval-every") + 1] == "1000"
+    assert "--eval-save-to-disk" in cmd
+    # export-every == eval-every so every eval checkpoint is also a fresh PLY
+    assert cmd[cmd.index("--export-every") + 1] == "1000"
 
 
 def test_plateau_monitor_incomplete_step_retried_later(tmp_path: Path) -> None:
