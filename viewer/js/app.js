@@ -2,6 +2,7 @@ import { createViewer } from './viewer.js';
 import { initDropzone } from './dropzone.js';
 import { HUD } from './hud.js';
 import { KeyboardInput, TouchInput, CompositeInput } from './controls.js';
+import { collisionFilename } from './filename.js';
 
 const DEMO_URL = 'assets/demo/scene.sog';
 const PREFERS_REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -213,8 +214,8 @@ viewer.onCollisionEnter?.(({ mode }) => {
     },
     onUndo: () => mode.undo(),
     onReset: () => mode.build(),
-    onExportObj: () => downloadString(mode.exportObj(), 'collider.obj', 'text/plain'),
-    onSaveSidecar: () => downloadString(mode.exportSidecar(), 'collider.collision.json', 'application/json'),
+    onExportObj: () => downloadString(mode.exportObj(), collisionFilename('obj'), 'text/plain'),
+    onSaveSidecar: () => downloadString(mode.exportSidecar(), collisionFilename('collision.json'), 'application/json'),
     onIsoChange: (v) => mode.setIso(v),
     onToolChange: (v) => {
       if (v === 'add' || v === 'remove') {
