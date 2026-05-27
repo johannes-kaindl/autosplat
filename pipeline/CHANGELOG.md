@@ -13,6 +13,46 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.4.4] — 2026-05-27 — Local-Viewer Default
+
+After the v1.4.2/v1.4.3 viewer hotfixes, the default `target="supersplat"` (remote editor at playcanvas.com) still produced an empty editor for users on modern browsers: HTTPS pages cannot fetch HTTP localhost resources (Mixed-Content blocking). The user could work around it with `--with-supersplat`; v1.4.4 just makes that the default.
+
+### Changed
+
+- **`[viewer] target` default flipped to `"supersplat-local"`.** When the dist is built (`bash scripts/setup_supersplat.sh` — already part of repo setup), `autosplat process` / `rescue` finish by starting *both* a local SuperSplat HTTP server and a local PLY server, opening `http://127.0.0.1:3000?load=http://127.0.0.1:8765/scene.ply` in the browser, and blocking until Ctrl-C. Everything is HTTP-on-localhost — no mixed-content blocking, no `.ply` download dialog, no manual drag-and-drop.
+- **Graceful fallback when the dist is missing.** If `target="supersplat-local"` but `target/supersplat/dist/index.html` doesn't exist, the viewer prints a clear console hint to run the setup script and falls back to a no-op (the existing `autosplat doctor` warning already covers this).
+
+### Added
+
+- `viewer._serve_local_and_block()` — shared helper that wraps `serve_supersplat_local()` + browser-open + signal-handled block. Re-used by the auto-open path; `cli.serve --with-supersplat` keeps its inline equivalent for now.
+
+### Tests
+
+- `test_open_in_viewer_supersplat_local_no_browser` rewritten to assert the **dist-missing fallback** (no browser, hint message).
+- New `test_open_in_viewer_supersplat_local_opens_local_servers_when_dist_present` verifies the dist-present path: fake dist with `index.html`, both servers start, browser receives a `http://127.0.0.1:*?load=http://127.0.0.1:*/scene.ply` URL, `stop_event` keeps the test from blocking.
+- `test_load_default_config_parses_cleanly` updated to expect the new default target.
+- 315 tests passing.
+
+### Real-world validation
+
+First end-to-end smoke against `max_strasse.MP4` — the same 5:35 drone pass that v1.2.0 left at 5/244 cameras and that v1.3.0 only rescued after a manual 4-clip cut. **`autosplat rescue max_strasse.MP4` produced a 2.0 GB scene.ply with 490/493 cameras registered (99.4 %) in 5 h 36 min on M5**, fully automatic. Pipeline trail in the logs:
+
+```
+bisection.start            duration_s=335.6
+bisection.probe  clip=0    cameras_registered=120  passed=true
+bisection.probe  clip=1    cameras_registered=115  passed=true
+bisection.combine_start    leaves=[0, 1]
+pipeline.adaptive_retry    reason="low_camera_ratio: 0.03 < 0.5"  matcher=sequential
+sfm.done                   cams=490  points=368582
+quality_gate.passed        ratio=0.9939  matcher=exhaustive
+train.done                 duration_s=8398
+pipeline.done              duration_s=20168
+```
+
+Fly-through: [YouTube](https://www.youtube.com/watch?v=1U-onh-9QNY). Updated hero asset in `docs/assets/max_strasse_autobisect_hero.*`.
+
+---
+
 ## [v1.4.3] — 2026-05-27 — `autosplat serve` Browser-Download Hotfix
 
 Follow-up to v1.4.2 — the auto-open path was fixed for `process` / `rescue`, but `autosplat serve` (without `--with-supersplat`) still opened the raw `http://127.0.0.1:8765/scene.ply` URL in the browser. Browsers have no MIME handler for `.ply`, so the result was a download prompt instead of a rendered splat.

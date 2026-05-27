@@ -34,7 +34,11 @@ outputs_dir = "~/AutoSplat/outputs"
 [viewer]
 auto_open = true
 local_http_port = 8765
-target = "supersplat"           # supersplat | supersplat-local | playcanvas | none
+# v1.4.4: default to supersplat-local. With the dist built, autosplat starts
+# both servers locally and opens the editor — no Mixed-Content blocking from
+# the HTTPS remote editor refusing to fetch the HTTP localhost PLY. If the
+# dist isn't built, the viewer prints a hint to run setup_supersplat.sh.
+target = "supersplat-local"     # supersplat-local | supersplat | playcanvas | none
 supersplat_local_port = 3000
 supersplat_dist_path = "target/supersplat/dist"
 notify_on_complete = false       # macOS Notification after training. Opt-in.

@@ -28,7 +28,9 @@ def test_load_default_config_parses_cleanly() -> None:
     assert cfg.preprocess.target_frames == 250
     assert cfg.colmap.matcher == "sequential"
     assert cfg.brush.max_steps == 30000
-    assert cfg.viewer.target == "supersplat"
+    # v1.4.4 — default flipped to supersplat-local to avoid the HTTPS->HTTP
+    # mixed-content blocking the remote SuperSplat editor suffers from.
+    assert cfg.viewer.target == "supersplat-local"
     assert cfg.obsidian.enabled is False
 
 

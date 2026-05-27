@@ -95,16 +95,57 @@ def test_build_url_playcanvas() -> None:
 # ─── open_in_viewer behaviour ─────────────────────────────────────────────────
 
 
-def test_open_in_viewer_supersplat_local_no_browser(tmp_path: Path) -> None:
-    """supersplat-local must NOT call webbrowser.open."""
+def test_open_in_viewer_supersplat_local_no_browser_when_dist_missing(
+    tmp_path: Path,
+) -> None:
+    """v1.4.4 — supersplat-local without a built dist falls back to a
+    console hint and does NOT open a browser."""
     ply = tmp_path / "scene.ply"
     ply.write_bytes(b"ply")
-    cfg = _make_cfg(target="supersplat-local")
+    # Point dist_path at a tmp dir that doesn't have index.html
+    cfg = _make_cfg(target="supersplat-local", supersplat_dist_path=tmp_path / "no_dist")
 
     with patch("autosplat.viewer.webbrowser.open") as mock_open:
         open_in_viewer(ply, cfg)
 
     mock_open.assert_not_called()
+
+
+def test_open_in_viewer_supersplat_local_opens_local_servers_when_dist_present(
+    tmp_path: Path,
+) -> None:
+    """v1.4.4 — supersplat-local WITH a built dist starts both local
+    servers, opens the browser at the local SuperSplat URL with ?load=
+    pointing at the local PLY server, and blocks until stop_event is set."""
+    import threading
+
+    ply = tmp_path / "scene.ply"
+    ply.write_bytes(b"\x00ply")
+
+    # Fake "built" dist
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>fake supersplat</html>", encoding="utf-8")
+
+    cfg = _make_cfg(
+        target="supersplat-local",
+        supersplat_dist_path=dist,
+        local_http_port=_pick_free_port(),
+        supersplat_local_port=_pick_free_port(),
+    )
+
+    stop = threading.Event()
+    stop.set()  # don't actually block
+
+    with patch("autosplat.viewer.webbrowser.open") as mock_open:
+        open_in_viewer(ply, cfg, stop_event=stop)
+
+    mock_open.assert_called_once()
+    called = mock_open.call_args[0][0]
+    # Local SuperSplat URL with ?load=<local PLY URL>
+    assert called.startswith("http://127.0.0.1:")
+    assert "?load=http://127.0.0.1:" in called
+    assert "/scene.ply" in called
 
 
 def test_open_in_viewer_auto_open_false_no_browser(tmp_path: Path) -> None:

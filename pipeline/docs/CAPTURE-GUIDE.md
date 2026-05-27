@@ -157,7 +157,8 @@ Worst case for a 5-minute video with depth=3 and 60 s min-clip is 8 probes × ~5
 ## Reference cases that worked
 
 - **`herkules_brunnen`** (2026-05-22, 1h23m end-to-end, 100% COLMAP): wide arc around a fountain, slow translation, textured stone background. Canonical "shoot like this."
-- **`max_strasse`** (2026-05-25, manual 4-clip combine before v1.4): 5:35 street drive with a 180° turn. The standalone capture registered 5 / 244 frames (exhaustive); hand-cut into 4 segments and recombined via `autosplat process v1.mp4 v2.mp4 v3.mp4 v4.mp4`, it produced a 1.8 GB scene.ply with 100 % of frames registered. v1.4's auto-bisection is the automation of that workflow.
+- **`max_strasse` — manual rescue** (2026-05-25, v1.3.0): 5:35 street drive with a 180° turn. Standalone capture registered 5/244 frames; hand-cut into 4 segments and recombined via `autosplat process v1.mp4 v2.mp4 v3.mp4 v4.mp4` → 1.8 GB scene.ply, 865/865 frames registered.
+- **`max_strasse` — auto-bisection rescue** (2026-05-27, v1.4.0+): same source video, no manual cutting. `autosplat rescue max_strasse.MP4` ran for 5 h 36 min on an M5: bisection cut the video at midpoint, both halves passed the SfM probe at depth 1 with exhaustive matcher, the combined-set sequential run failed at 14/493 cams (loop-closure across the cut still hard), the adaptive-retry escalation to exhaustive on the combined frame set finally registered **490/493 cameras (99.4 %)** with 368 k SfM points and 2.0 GB scene.ply. This was the first end-to-end success of the v1.4 auto-bisection-rescue against the same failing video v1.2.0 had given up on. See [the fly-through on YouTube](https://www.youtube.com/watch?v=1U-onh-9QNY).
 
 ---
 

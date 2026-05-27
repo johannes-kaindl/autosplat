@@ -90,6 +90,51 @@ def serve_supersplat_local(
         yield {"supersplat": ss_base, "ply": ply_base}
 
 
+def _serve_local_and_block(
+    ply_path: Path,
+    cfg: ViewerConfig,
+    dist_path: Path,
+    stop_event: threading.Event | None,
+) -> None:
+    """v1.4.4 — start local SuperSplat dist + PLY server, open browser, block.
+
+    Same building blocks as `cli.serve --with-supersplat` but invoked
+    inline at the end of `autosplat process` / `rescue` so the user gets
+    one-step "video → viewable splat" without a second command. Avoids
+    the Mixed-Content blocking the remote `target=supersplat` path
+    suffers from (HTTPS editor refuses to fetch HTTP localhost PLY).
+
+    Blocks until SIGINT/SIGTERM (or pre-set `stop_event` for tests). The
+    two ThreadingTCPServers are torn down cleanly via the nested
+    context managers.
+    """
+    with serve_supersplat_local(
+        supersplat_dist=dist_path,
+        supersplat_port=cfg.supersplat_local_port,
+        ply_dir=ply_path.parent,
+        ply_port=cfg.local_http_port,
+    ) as urls:
+        viewer_url = f"{urls['supersplat']}?load={urls['ply']}/{ply_path.name}"
+        logger.info(
+            "viewer.open_local",
+            url=viewer_url,
+            supersplat=urls["supersplat"],
+            ply=urls["ply"],
+        )
+        webbrowser.open(viewer_url)
+        _user_console.print(
+            f"[green]Viewer:[/green] {viewer_url}\n"
+            f"[dim]SuperSplat: {urls['supersplat']}\n"
+            f"PLY server: {urls['ply']}/{ply_path.name}\n"
+            "Press [bold]Ctrl-C[/bold] when finished to stop the local servers.[/dim]"
+        )
+
+        event = stop_event if stop_event is not None else _install_stop_handler()
+        with suppress(KeyboardInterrupt):
+            event.wait()
+        _user_console.print("[dim]Viewer servers stopped.[/dim]")
+
+
 def _install_stop_handler() -> threading.Event:
     """Install SIGINT/SIGTERM handler that sets a fresh Event. Returns it.
 
@@ -147,14 +192,25 @@ def open_in_viewer(
         return
 
     if cfg.target == "supersplat-local":
+        # v1.4.4 — when the local SuperSplat dist is built, run both servers
+        # and open the browser inline, just like `autosplat serve --with-supersplat`
+        # does. Falls back to the old hint-only path if the dist isn't there.
+        dist_path = cfg.supersplat_dist_path
+        if not dist_path.is_absolute():
+            dist_path = Path.cwd() / dist_path
+        if dist_path.is_dir() and (dist_path / "index.html").is_file():
+            _serve_local_and_block(ply_path, cfg, dist_path, stop_event)
+            return
         logger.info(
-            "viewer.local_hint",
+            "viewer.local_dist_missing",
             command=f"autosplat serve {ply_path.parent} --with-supersplat",
+            expected_path=str(dist_path),
         )
         _user_console.print(
-            "[dim]Local SuperSplat dist needs its own server. "
-            f"Run [bold]autosplat serve {ply_path.parent} --with-supersplat[/bold] "
-            "to view the PLY in a browser.[/dim]"
+            "[dim]Local SuperSplat dist not built. "
+            f"Run [bold]bash scripts/setup_supersplat.sh[/bold] once, then "
+            "the auto-open will work. For now, drag the PLY into "
+            f"[bold]{SUPERSPLAT_URL}[/bold] manually.[/dim]"
         )
         return
 

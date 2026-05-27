@@ -11,22 +11,22 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.4.3 — Browser-Download Hotfix.** Auto-bisection-rescue + `autosplat rescue` CLI + smart-split + per-clip WebUI progress; both viewer-auto-open paths (`process`/`rescue` + `autosplat serve`) now open SuperSplat correctly instead of triggering a `.ply` download. Mac Silicon, AGPL-3.0.
+> **Status: v1.4.4 — Local-Viewer Default.** Auto-bisection-rescue + `autosplat rescue` CLI + smart-split + per-clip WebUI progress, viewer defaults to the local SuperSplat dist (no more Mixed-Content blocking, no more drag-and-drop). Mac Silicon, AGPL-3.0.
 
 ---
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=vIXaQPNe_Yk" title="Watch the full 24-second fly-through on YouTube">
-    <img src="docs/assets/max_strasse_hero.gif" alt="5-second flythrough of a trained Gaussian Splat — Augsburg's St. Ulrich und Afra basilica, reconstructed from drone footage that v1.2.0 could not solve" width="720" />
+  <a href="https://www.youtube.com/watch?v=1U-onh-9QNY" title="Watch the v1.4 Auto-Bisection-Rescue fly-through on YouTube">
+    <img src="docs/assets/max_strasse_autobisect_hero.gif" alt="Trained Gaussian Splat fly-through — Augsburg's St. Ulrich und Afra basilica, reconstructed automatically by v1.4 auto-bisection-rescue from drone footage that v1.2.0 could not solve" width="720" />
   </a>
 </p>
 
-<p align="center"><strong><a href="https://www.youtube.com/watch?v=vIXaQPNe_Yk">▶ Watch the full 24-second fly-through on YouTube</a></strong></p>
+<p align="center"><strong><a href="https://www.youtube.com/watch?v=1U-onh-9QNY">▶ Watch the v1.4 Auto-Bisection-Rescue fly-through on YouTube</a></strong></p>
 
 <p align="center"><sub><em>Trained splat fly-through — Augsburg's St. Ulrich und Afra basilica.<br />
-Reconstructed from 4 sub-clips of a 5:35 drone pass with 4 turns that v1.2.0 could not solve (<code>max_strasse.MP4</code>).<br />
-<code>autosplat process A.mp4 B.mp4 C.mp4 D.mp4</code> → 865/865 cameras → 597k SfM points → 1.8 GB scene.ply.<br />
-See <a href="#expected-behavior">Expected Behavior</a> for the full rescue story · <a href="docs/assets/max_strasse_hero.mp4">MP4</a> · <a href="docs/assets/max_strasse_hero.webm">WebM</a></em></sub></p>
+v1.4 auto-bisection rescued the same 5:35 drone pass (<code>max_strasse.MP4</code>) that v1.2.0 left at 5/244 cameras and that v1.3.0 only solved after the user hand-cut it into 4 clips.<br />
+<code>autosplat rescue max_strasse.MP4</code> → bisection found 2 leaves at depth 1 → exhaustive matcher on the combined 493 frames → <strong>490/493 cameras (99.4 %)</strong>, 368 k SfM points, 2.0 GB scene.ply in 5 h 36 min on M5.<br />
+See <a href="#expected-behavior">Expected Behavior</a> for the full rescue story · <a href="docs/assets/max_strasse_autobisect_hero.mp4">MP4</a> · <a href="docs/assets/max_strasse_autobisect_hero.webm">WebM</a> · <a href="docs/assets/max_strasse_autobisect_scene.jpg">still</a></em></sub></p>
 
 ---
 
@@ -36,7 +36,7 @@ Video footage — drone, handheld, anything with enough motion parallax — goes
 
 No cloud. No GPU server. No CUDA stack. Everything runs locally on a Mac with Apple Silicon using WebGPU-native tooling. The pipeline handles preprocessing, Structure-from-Motion via COLMAP, quality gating with adaptive retry, Gaussian Splat training via Brush, compression, Obsidian capture-note generation, and automatic SuperSplat launch.
 
-Real-world validated on 11 captures: **8/11 (73%) trained successfully** in an overnight run on 2026-05-15. v1.2.0 added [resume](#resume-failed-captures) for crash/sleep recovery; v1.3.0 added [multi-video captures](#multi-video-capture) — a rotation-broken pass that previously failed (`max_strasse`, 4 turns) reconstructed at 865/865 cameras after manually splitting into 4 sub-clips. See [Expected Behavior](#expected-behavior) for the honest benchmark.
+Real-world validated on 11+ captures. v1.2.0 added [resume](#resume-failed-captures) for crash/sleep recovery; v1.3.0 added [multi-video captures](#multi-video-capture); v1.4.0 added **auto-bisection-rescue**, which on 2026-05-26 reconstructed the same `max_strasse` capture v1.2.0 had given up on — fully automatic, from the single failing video, with no user intervention beyond `autosplat rescue max_strasse.MP4`. See [Expected Behavior](#expected-behavior) for the honest benchmark.
 
 ---
 
@@ -79,6 +79,7 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 | Version  | Date       | Headline                                                                                  |
 | -------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v1.4.4   | 2026-05-27 | **Local-Viewer Default** — `[viewer] target` defaults to `supersplat-local`. Auto-open at end of `process`/`rescue` now starts both local servers + opens the local SuperSplat editor, dodging the HTTPS→HTTP Mixed-Content blocking that left the remote editor empty. First end-to-end success: `max_strasse` 5:35 drone pass → 99.4 % camera registration via `autosplat rescue`. |
 | v1.4.3   | 2026-05-27 | **`autosplat serve` Browser-Download Hotfix** — serve (no --with-supersplat) now opens remote SuperSplat with `?load=<our-server-url>` instead of the raw PLY URL (which triggered a download prompt). |
 | v1.4.2   | 2026-05-27 | **Viewer Auto-Open Hotfix** — `viewer.open_in_viewer` now actually starts the local PLY server (was silent no-op since the very first viewer flow); CLI blocks on Ctrl-C while you look at the splat. |
 | v1.4.1   | 2026-05-26 | **Bisection Polish** — `autosplat rescue` CLI, opt-in smart-split at motion peak (OpenCV optical flow), WebUI per-clip progress (`bisect · probing clip 0_1`), 4× faster probes, pre-existing mypy noise cleared. |
