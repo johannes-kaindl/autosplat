@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kaindl
+# SPDX-License-Identifier: CC-BY-SA-4.0
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://codeberg.org/jkaindl/autosplat-viewer/src/branch/main/SECURITY.md
+    about: Security-sensitive issues — please do not file publicly. See SECURITY.md.
+  - name: Live demo
+    url: https://jkaindl.codeberg.page/autosplat-viewer/
+    about: Try the live version before filing — many issues are easier to reproduce there.
