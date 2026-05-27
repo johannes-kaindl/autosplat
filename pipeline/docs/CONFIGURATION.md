@@ -66,6 +66,28 @@ Quality presets:
 | `densify_until_iter` | `15000` | Mapped to `--growth-stop-iter`. Stop adding new gaussians after this iteration.  |
 | `extra_args`         | `[]`    | Passthrough for advanced Brush flags. Appended after the canonical ones.         |
 
+### v1.5.0 — Train-till-Plateau (opt-in)
+
+When `plateau_enabled = true`, a `PlateauMonitor` thread polls `<output_dir>/eval_<step>/` directories that Brush's `--eval-save-to-disk` writes, computes mean PSNR vs the originals in `frames/`, and SIGTERMs Brush when the curve flattens. Saves 30-50 % of the Brush stage on a typical converging capture.
+
+| Key                         | Default  | Notes                                                                            |
+| --------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `plateau_enabled`           | `false`  | Master switch. Default off in v1.5.0; default-on candidate after real-world validation. |
+| `plateau_eval_split_every`  | `10`     | Hold out every Nth frame for eval. `10` ≈ 10 % holdout. Mapped to `--eval-split-every`. |
+| `plateau_eval_every`        | `1000`   | Steps between eval checkpoints. Mapped to `--eval-every` and to `--export-every` (so every eval checkpoint is also a fresh PLY — SIGTERM-safe). |
+| `plateau_min_steps`         | `5000`   | Don't trigger the plateau-stop before this step — densification needs time first. Pydantic validator rejects `plateau_min_steps > max_steps` when `plateau_enabled = true`. |
+| `plateau_patience`          | `3`      | Number of consecutive `Δ < plateau_min_delta_psnr` evals required to declare a plateau. |
+| `plateau_min_delta_psnr`    | `0.05`   | ε in dB — PSNR improvement below this counts as "flat".                          |
+
+Lifecycle (when enabled):
+
+1. `build_brush_command` appends `--eval-split-every`, `--eval-every`, `--eval-save-to-disk`; ties `--export-every` to `plateau_eval_every`.
+2. `run_brush` spawns a daemon `PlateauMonitor` thread polling every 5 s.
+3. Each new `eval_<step>/` dir → `compute_eval_psnr` (cv2, BGR, downscaled to render resolution) → appended to history → `train.eval` log event.
+4. `(step ≥ min_steps) ∧ (last <patience> Δ all < min_delta_psnr)` → `proc.terminate()`. The non-zero returncode is recognised; the most-recent exported `scene.ply` becomes the final PLY.
+
+`pipeline.log` carries the full trail — look for `train.eval`, `train.plateau_detected`, and `train.plateau_poll_failed`.
+
 ## `[export]`
 
 | Key               | Default                     | Notes                                                              |

@@ -13,6 +13,49 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.5.0] — 2026-05-27 — Train-till-Plateau
+
+Brush trains for `--total-steps` (default 30 000) regardless of whether the splat already converged. v1.5.0 adds an **opt-in patience-stop**: hold out ~10 % of frames, monitor PSNR while training, and SIGTERM Brush when the curve flattens. On a typical converging capture this can save 30-50 % of the Brush stage.
+
+### Added
+
+- **`PlateauMonitor`** in `train.py` — pure-logic class that polls `<output_dir>/eval_<step>/` directories, computes mean PSNR via `compute_eval_psnr`, maintains the `(step, psnr)` history, and decides `should_stop` once the last `patience` consecutive Δ-PSNR values are all below `min_delta_psnr` and the last step is ≥ `min_steps`. Idempotent; missing/in-progress eval dirs are handled gracefully.
+- **`compute_eval_psnr(eval_dir, frames_dir)`** — cv2-based mean PSNR across rendered eval images vs originals. Pairs by filename stem so Brush's `<orig>.png` lines up with our `frames/<orig>.jpg`. Originals get downscaled (`cv2.INTER_AREA`) to the render resolution before MSE.
+- **Six new `[brush]` config fields**: `plateau_enabled` (bool, default `false`), `plateau_eval_split_every` (2-50, default 10), `plateau_eval_every` (100-10000, default 1000), `plateau_min_steps` (default 5000), `plateau_patience` (1-20, default 3), `plateau_min_delta_psnr` (0 < x ≤ 5, default 0.05). Cross-field validator rejects `plateau_min_steps > max_steps` *only when* the feature is enabled (so a CI-config lowering `max_steps` doesn't have to touch plateau fields).
+- **`build_brush_command` extension**: when `plateau_enabled`, appends `--eval-split-every`, `--eval-every`, `--eval-save-to-disk`, and ties `--export-every` to `plateau_eval_every` so every eval checkpoint has a fresh PLY for the SIGTERM-safe stop mechanism.
+- **`run_brush` orchestration**: spawns a daemon `PlateauMonitor` thread, polls every 5 s, sends `proc.terminate()` on `should_stop`. The non-zero returncode from our own SIGTERM is recognised and not re-raised as `CalledProcessError`. Edge case: SIGTERM before any export → `RuntimeError` with an actionable hint.
+
+### Discovery (in spec doc)
+
+A 250-step Brush probe against `max_strasse/brush_dataset` confirmed three load-bearing assumptions, all documented in `docs/superpowers/specs/2026-05-27-v15-train-till-plateau-design.md`:
+
+1. **Brush emits no stdout/stderr in subprocess mode** (TUI suppressed) — stdout-PSNR parsing is not viable, hence the filesystem-watch approach.
+2. **`--eval-save-to-disk` is reliable** and writes `eval_<step>/<orig_filename>.png`.
+3. **`--eval-split-every N` is deterministic** — every Nth frame, sorted by filename.
+
+### Tests
+
+- 13 new unit tests (5 in `test_config.py`, 6 in `test_train.py` for PSNR helper, 6 in `test_train.py` for `PlateauMonitor`, 2 in `test_train.py` for `build_brush_command` branches). All purely synthetic — no Brush invocation, no real-world frames.
+- 347 tests passing (up from 328 at v1.4.6), ruff clean, mypy clean on `train.py`.
+
+### UX
+
+In the default config (`plateau_enabled = false`), v1.5.0 changes nothing. Enable via your user config:
+
+```toml
+[brush]
+plateau_enabled = true
+# defaults are fine; tune patience / min_delta_psnr if you want aggressive stops
+```
+
+When triggered, `pipeline.log` will contain a `train.plateau_detected` event with the full history of `train.eval` events leading up to the stop. The final scene.ply is whichever export was written most recently before SIGTERM (one per `plateau_eval_every` steps).
+
+### Default-on candidacy
+
+v1.5.0 ships opt-in. After real-world validation on 2-3 captures, a follow-up release will likely flip the default to `true`.
+
+---
+
 ## [v1.4.6] — 2026-05-27 — Final Polish
 
 Closes the v1.4 line: small coverage gaps + early-warning UX + repo hygiene, so v1.5 starts from a clean baseline.
