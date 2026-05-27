@@ -24,7 +24,6 @@ from . import preprocess as preprocess_mod
 from . import quality as quality_mod
 from . import sfm as sfm_mod
 from . import train as train_mod
-from . import viewer as viewer_mod
 from .config import Config, apply_override
 from .logging import configure_logging, get_logger
 from .quality import QualityGateFailure
@@ -396,9 +395,13 @@ def run_pipeline(
                     error=str(e),
                 )
 
-    # ── Viewer (opt-in) ────────────────────────────────────────────────
-    if config.viewer.auto_open and config.viewer.target != "none":
-        viewer_mod.open_in_viewer(exp.output_ply, config.viewer)
+    # ── Viewer is now CLI's responsibility ──────────────────────────────
+    # v1.4.2 — the viewer-auto-open path used to live here, but it now
+    # blocks until the user stops the PLY server (Ctrl-C). Blocking inside
+    # run_pipeline would stall the watch-folder daemon between captures
+    # and prevent the WebUI's JobRunner from marking jobs done. CLI
+    # callers (process/resume/add-video/rescue) invoke viewer.open_in_viewer
+    # *after* the "Done" message they print to the user.
 
     # ── Obsidian (opt-in, Phase 4) ─────────────────────────────────────
     # Build embed_url for supersplat-local target — auto-fills the Obsidian note.

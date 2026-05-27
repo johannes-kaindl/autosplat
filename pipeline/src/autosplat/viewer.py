@@ -9,18 +9,22 @@ HTTP server that serves the freshly trained .ply.
 from __future__ import annotations
 
 import http.server
+import signal
 import socketserver
 import threading
 import urllib.parse
 import webbrowser
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
+
+from rich.console import Console
 
 from .config import ViewerConfig
 from .logging import get_logger
 
 logger = get_logger(__name__)
+_user_console = Console()
 
 SUPERSPLAT_URL = "https://playcanvas.com/supersplat/editor"
 PLAYCANVAS_VIEWER_URL = "https://playcanvas.com/viewer"
@@ -86,8 +90,54 @@ def serve_supersplat_local(
         yield {"supersplat": ss_base, "ply": ply_base}
 
 
-def open_in_viewer(ply_path: Path, cfg: ViewerConfig) -> None:
-    """Open `ply_path` in the configured viewer. No-op if `target == "none"`."""
+def _install_stop_handler() -> threading.Event:
+    """Install SIGINT/SIGTERM handler that sets a fresh Event. Returns it.
+
+    Used by `open_in_viewer` to wait until the user presses Ctrl-C without
+    busy-looping. The handler replaces (does not chain) any existing one
+    for the duration of the wait — viewer.open_in_viewer is always the
+    outermost blocking call at that point in the CLI lifecycle, so we don't
+    need to preserve a prior handler.
+    """
+    event = threading.Event()
+
+    def _handler(signum: int, frame: object) -> None:
+        event.set()
+
+    signal.signal(signal.SIGINT, _handler)
+    signal.signal(signal.SIGTERM, _handler)
+    return event
+
+
+def open_in_viewer(
+    ply_path: Path,
+    cfg: ViewerConfig,
+    *,
+    stop_event: threading.Event | None = None,
+) -> None:
+    """Open `ply_path` in the configured viewer.
+
+    Behaviour by target:
+      • `none` / `auto_open=false` — no-op.
+      • `supersplat-local` — log a hint, return immediately. The local
+        SuperSplat dist needs its own server, started by `autosplat serve`.
+      • `supersplat` / `playcanvas` — start a local HTTP server serving
+        `ply_path.parent`, open the viewer URL (`?load=…127.0.0.1:port/…`)
+        in the browser, then **block** until the user sends SIGINT
+        (Ctrl-C) or `stop_event` is set. The server is shut down cleanly
+        on exit so the port is reusable.
+
+    Pre-v1.4.2 this function was fire-and-forget for remote targets: it
+    constructed the URL with `?load=http://127.0.0.1:8765/…` but never
+    started a server on 8765. SuperSplat's load attempt silently failed
+    and the editor opened empty — drag-and-drop the file manually was the
+    only workaround. The blocking-server fix restores the originally-meant
+    behaviour at the cost of one extra Ctrl-C at the end of `autosplat
+    process`.
+
+    `stop_event` is injection-only for tests. Production callers omit it;
+    the function installs its own SIGINT handler and creates a fresh Event.
+    """
     if not cfg.auto_open or cfg.target == "none":
         logger.info("viewer.skip", auto_open=cfg.auto_open, target=cfg.target)
         return
@@ -97,21 +147,42 @@ def open_in_viewer(ply_path: Path, cfg: ViewerConfig) -> None:
         return
 
     if cfg.target == "supersplat-local":
-        # No browser open — the local SuperSplat server is not running at pipeline
-        # exit time. Phase 9.2 adds `autosplat serve` which starts both servers.
         logger.info(
             "viewer.local_hint",
             command=f"autosplat serve {ply_path.parent} --with-supersplat",
         )
+        _user_console.print(
+            "[dim]Local SuperSplat dist needs its own server. "
+            f"Run [bold]autosplat serve {ply_path.parent} --with-supersplat[/bold] "
+            "to view the PLY in a browser.[/dim]"
+        )
         return
 
-    # Remote targets: serve the .ply via a short-lived local server and embed its
-    # URL in the viewer URL.
-    ply_url = f"http://127.0.0.1:{cfg.local_http_port}/{ply_path.name}"
+    # Remote targets — serve the .ply locally so SuperSplat's ?load= URL
+    # actually resolves, instead of silently failing to fetch.
     viewer_url = _build_viewer_url(cfg, ply_path)
+    with serve_directory(ply_path.parent, cfg.local_http_port) as ply_base:
+        ply_url = f"{ply_base}/{ply_path.name}"
+        logger.info(
+            "viewer.open",
+            viewer=cfg.target,
+            url=viewer_url,
+            ply_url=ply_url,
+        )
+        webbrowser.open(viewer_url)
+        _user_console.print(
+            f"[green]Viewer:[/green] {viewer_url}\n"
+            f"[dim]Serving PLY at {ply_url}. "
+            "Press [bold]Ctrl-C[/bold] when finished to stop the local server.[/dim]"
+        )
 
-    logger.info("viewer.open", viewer=cfg.target, url=viewer_url, ply_url=ply_url)
-    webbrowser.open(viewer_url)
+        event = stop_event if stop_event is not None else _install_stop_handler()
+        # Belt-and-braces — _install_stop_handler swallows SIGINT into the
+        # event, but a test pre-passing an Event may not have installed a
+        # handler, in which case Ctrl-C surfaces here.
+        with suppress(KeyboardInterrupt):
+            event.wait()
+        _user_console.print("[dim]Viewer server stopped.[/dim]")
 
 
 def _build_viewer_url(cfg: ViewerConfig, ply_path: Path) -> str:

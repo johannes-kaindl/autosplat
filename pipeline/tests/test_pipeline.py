@@ -238,7 +238,6 @@ def test_run_pipeline_with_list_routes_to_multi_extractor(tmp_path: Path) -> Non
         patch("autosplat.pipeline.quality_mod.check_sfm_quality", patches["quality"]),
         patch("autosplat.pipeline.train_mod.run_brush", patches["train"]),
         patch("autosplat.pipeline.export_mod.export_capture", patches["export"]),
-        patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
     ):
         run_pipeline([v1, v2], cfg, output_dir_override=tmp_path / "captures")
 
@@ -267,7 +266,6 @@ def test_run_pipeline_single_video_keeps_legacy_extractor(tmp_path: Path) -> Non
         patch("autosplat.pipeline.quality_mod.check_sfm_quality", patches["quality"]),
         patch("autosplat.pipeline.train_mod.run_brush", patches["train"]),
         patch("autosplat.pipeline.export_mod.export_capture", patches["export"]),
-        patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
     ):
         run_pipeline(video, cfg, output_dir_override=tmp_path / "captures")
 
@@ -525,7 +523,6 @@ def _run_with_mocks(video: Path, cfg, patches: dict, tmp_path: Path, state=None)
         patch("autosplat.pipeline.export_mod.export_capture", patches["export"]),
         patch("autosplat.pipeline.obsidian_mod.read_ply_header", patches["ply_header"]),
         patch("autosplat.pipeline.obsidian_mod.write_capture_note") as mock_write,
-        patch("autosplat.pipeline.viewer_mod.open_in_viewer"),
     ):
         result = run_pipeline(
             video,

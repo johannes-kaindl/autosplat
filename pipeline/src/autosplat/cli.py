@@ -73,6 +73,22 @@ def _load_or_die(config_path: Path | None) -> object:
         raise typer.Exit(EXIT_USER_ERROR) from e
 
 
+def _open_viewer_if_configured(output_ply: Path, cfg: object) -> None:
+    """Open the result in the configured viewer, blocking on a local PLY
+    server until Ctrl-C. Called by process/resume/add-video/rescue *after*
+    the Done summary so the user sees the result first.
+
+    v1.4.2 — moved out of `pipeline.run_pipeline` because the new
+    blocking-server behaviour would stall the watch-folder daemon and the
+    WebUI's JobRunner between captures. Only CLI commands open the viewer.
+    """
+    # cfg is typed as `object` because _load_or_die returns object — viewer
+    # access is field-by-field so mypy can resolve it via runtime attrs.
+    if not cfg.viewer.auto_open or cfg.viewer.target == "none":  # type: ignore[attr-defined]
+        return
+    viewer_mod.open_in_viewer(output_ply, cfg.viewer)  # type: ignore[attr-defined]
+
+
 def _find_ply(capture_dir: Path) -> Path | None:
     """Find scene.ply in capture_dir or capture_dir/output/."""
     for candidate in [
@@ -152,6 +168,7 @@ def process(
     console.print(f"[green]Done:[/green] {result.output_ply}")
     console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
     console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+    _open_viewer_if_configured(result.output_ply, cfg)
 
 
 @app.command()
@@ -208,6 +225,7 @@ def resume(
     console.print(f"[green]Done:[/green] {result.output_ply}")
     console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
     console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+    _open_viewer_if_configured(result.output_ply, cfg)
 
 
 @app.command("add-video")
@@ -249,6 +267,7 @@ def add_video(
     console.print(f"[green]Done:[/green] {result.output_ply}")
     console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
     console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+    _open_viewer_if_configured(result.output_ply, cfg)
 
 
 @app.command()
@@ -336,6 +355,7 @@ def rescue(
     console.print(f"[green]Done:[/green] {result.output_ply}")
     console.print(f"[dim]Capture dir:[/dim] {result.capture_dir}")
     console.print(f"[dim]Duration:[/dim] {result.duration_s:.1f}s")
+    _open_viewer_if_configured(result.output_ply, cfg)
 
 
 @app.command()

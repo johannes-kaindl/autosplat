@@ -104,6 +104,37 @@ def test_rescue_capture_dir_video_override(tmp_path: Path) -> None:
     assert rescue.call_args.args[0] == override
 
 
+def test_rescue_invokes_viewer_after_done(tmp_path: Path) -> None:
+    """v1.4.2 — after the Done summary, rescue must call viewer.open_in_viewer
+    so the user-facing local PLY server actually starts (the blocking happens
+    inside open_in_viewer; here we patch it to keep the test fast)."""
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"\0")
+    captures_root = tmp_path / "captures"
+    capture_dir = captures_root / "2026-05-27_v"
+    capture_dir.mkdir(parents=True)
+    output_ply = capture_dir / "output" / "scene.ply"
+    output_ply.parent.mkdir()
+    output_ply.write_bytes(b"ply real bytes")
+
+    success = MagicMock()
+    success.capture_dir = capture_dir
+    success.output_ply = output_ply
+    success.duration_s = 1.0
+
+    with (
+        patch("autosplat.cli.rescue_via_bisection", return_value=success),
+        patch("autosplat.cli.viewer_mod.open_in_viewer") as viewer,
+    ):
+        result = runner.invoke(
+            app, ["rescue", str(video), "--output-dir", str(captures_root)]
+        )
+
+    assert result.exit_code == 0, result.output
+    viewer.assert_called_once()
+    assert viewer.call_args.args[0] == output_ply
+
+
 def test_rescue_capture_dir_multi_video_requires_explicit_choice(
     tmp_path: Path,
 ) -> None:

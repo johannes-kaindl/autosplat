@@ -22,6 +22,21 @@ from autosplat.viewer import (
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
+def _pick_free_port() -> int:
+    """Bind to 0 → kernel picks a free high port; close, return it.
+
+    Slightly race-y in theory (the port could be claimed between close and
+    re-bind), but `_ReuseAddrTCPServer.allow_reuse_address` handles the case
+    in practice — and ViewerConfig.local_http_port forbids 0 directly so we
+    can't pass through.
+    """
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def _make_cfg(**overrides) -> ViewerConfig:
     """Return a ViewerConfig with sensible defaults, accepting field overrides."""
     defaults = dict(
@@ -114,17 +129,78 @@ def test_open_in_viewer_target_none_no_browser(tmp_path: Path) -> None:
     mock_open.assert_not_called()
 
 
-def test_open_in_viewer_supersplat_opens_browser(tmp_path: Path) -> None:
+def test_open_in_viewer_supersplat_opens_browser_and_serves_ply(tmp_path: Path) -> None:
+    """v1.4.2: open_in_viewer must (a) open browser at viewer URL,
+    (b) actually serve the PLY on local_http_port so SuperSplat's
+    ?load= fetch resolves, (c) block until stop_event is set."""
+    import threading
+
     ply = tmp_path / "scene.ply"
     ply.write_bytes(b"ply")
-    cfg = _make_cfg(target="supersplat")
+    cfg = _make_cfg(target="supersplat", local_http_port=_pick_free_port())
 
-    with patch("autosplat.viewer.webbrowser.open") as mock_open:
-        open_in_viewer(ply, cfg)
+    stop = threading.Event()
+    stop.set()  # don't actually block
+
+    from contextlib import contextmanager as _ctx
+
+    served_paths: list[str] = []
+    real_serve_directory = serve_directory
+
+    @_ctx
+    def tracking_serve(directory, port):
+        with real_serve_directory(directory, port) as base:
+            served_paths.append(f"{base}/{ply.name}")
+            yield base
+
+    with (
+        patch("autosplat.viewer.webbrowser.open") as mock_open,
+        patch("autosplat.viewer.serve_directory", tracking_serve),
+    ):
+        open_in_viewer(ply, cfg, stop_event=stop)
 
     mock_open.assert_called_once()
     called_url: str = mock_open.call_args[0][0]
     assert "playcanvas.com" in called_url
+    # The ply server was actually started — its base-url appears in the
+    # tracking list. Without the v1.4.2 fix this list would be empty.
+    assert len(served_paths) == 1
+
+
+def test_open_in_viewer_serves_ply_reachable_via_http(tmp_path: Path) -> None:
+    """End-to-end: the PLY is actually fetchable from the served URL during
+    the block (otherwise SuperSplat's ?load= would silently fail like
+    pre-v1.4.2)."""
+    import threading
+    import urllib.parse
+    from urllib.request import urlopen
+
+    ply = tmp_path / "scene.ply"
+    ply.write_bytes(b"\x00\x01\x02ply-content")
+    cfg = _make_cfg(target="supersplat", local_http_port=_pick_free_port())
+
+    stop = threading.Event()
+    fetched: dict[str, bytes] = {}
+
+    def consumer() -> None:
+        # Sleep briefly so the server is up before we hit it
+        import time as _t
+
+        _t.sleep(0.2)
+        # Recover the actual ply URL from mock_open call
+        url = mock_open.call_args[0][0]
+        parsed = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        ply_url = urllib.parse.unquote(parsed["load"][0])
+        fetched["body"] = urlopen(ply_url).read()
+        stop.set()
+
+    with patch("autosplat.viewer.webbrowser.open") as mock_open:
+        consumer_thread = threading.Thread(target=consumer, daemon=True)
+        consumer_thread.start()
+        open_in_viewer(ply, cfg, stop_event=stop)
+        consumer_thread.join(timeout=5)
+
+    assert fetched["body"] == b"\x00\x01\x02ply-content"
 
 
 def test_open_in_viewer_missing_ply_no_browser(tmp_path: Path) -> None:
