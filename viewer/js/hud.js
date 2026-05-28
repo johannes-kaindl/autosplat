@@ -3,7 +3,7 @@
 // PlayCanvas dependency. Caller injects the stage element and wires
 // callbacks; HUD owns its own timers and class toggling.
 
-const CTA_VISIBLE_MS = 4000;    // CTA auto-fades after this idle
+const CTA_VISIBLE_MS = 8000;    // CTA auto-fades after this much pointer-idle
 const CTA_FADE_MS = 500;
 const HINT_VISIBLE_MS = 4000;   // controls-hint dims after this
 const EYE_OVERLAY_MS = 1200;
@@ -22,6 +22,7 @@ export class HUD {
 
     this._ctaTimer = null;
     this._ctaClick = null;
+    this._ctaArmFade = null;
     this._hintTimer = null;
     this._eyeTimer = null;
     this._exitCallback = null;
@@ -42,14 +43,25 @@ export class HUD {
     void this.cta.offsetWidth;
     this.cta.classList.add('is-visible');
     this.cta.addEventListener('click', this._ctaClick, { once: true });
-    clearTimeout(this._ctaTimer);
-    this._ctaTimer = setTimeout(() => this.hideCTA(), CTA_VISIBLE_MS);
+    // Keep the CTA up while the user is active over the viewer; only fade
+    // after CTA_VISIBLE_MS of pointer idle (video-player controls pattern),
+    // so it never vanishes mid-reach.
+    this._ctaArmFade = () => {
+      clearTimeout(this._ctaTimer);
+      this._ctaTimer = setTimeout(() => this.hideCTA(), CTA_VISIBLE_MS);
+    };
+    this.stage.addEventListener('pointermove', this._ctaArmFade);
+    this._ctaArmFade();
   }
 
   hideCTA() {
     if (!this.cta) return;
     clearTimeout(this._ctaTimer);
     this._ctaTimer = null;
+    if (this._ctaArmFade) {
+      this.stage.removeEventListener('pointermove', this._ctaArmFade);
+      this._ctaArmFade = null;
+    }
     this.cta.classList.remove('is-visible');
     if (this._ctaClick) {
       this.cta.removeEventListener('click', this._ctaClick);
