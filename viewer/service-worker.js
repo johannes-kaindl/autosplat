@@ -1,5 +1,5 @@
-const SHELL = 'autosplat-shell-v14';
-const RUNTIME = 'autosplat-runtime-v14';
+const SHELL = 'autosplat-shell-v15';
+const RUNTIME = 'autosplat-runtime-v15';
 const SHELL_FILES = [
   './', './index.html', './css/style.css',
   './js/app.js', './js/viewer.js', './js/dropzone.js',

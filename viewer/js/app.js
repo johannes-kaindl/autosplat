@@ -218,7 +218,11 @@ viewer.onCollisionEnter?.(({ mode }) => {
     onSaveSidecar: () => downloadString(mode.exportSidecar(), collisionFilename('collision.json'), 'application/json'),
     onIsoChange: (v) => mode.setIso(v),
     onToolChange: (v) => {
-      if (v === 'add' || v === 'remove') {
+      const brushing = v === 'add' || v === 'remove';
+      // Brush tools own the pointer: silence the orbit-cam so it neither spins
+      // the view nor competes for setPointerCapture during a stroke.
+      viewer.setCameraControlsEnabled?.(!brushing);
+      if (brushing) {
         if (document.pointerLockElement && document.exitPointerLock) {
           mode._lockReleasedForBrush = true;
           document.exitPointerLock();
@@ -235,6 +239,7 @@ viewer.onCollisionEnter?.(({ mode }) => {
 
 viewer.onCollisionExit?.(() => {
   hud.exitCollisionUI();
+  viewer.setCameraControlsEnabled?.(true);  // restore orbit if we left mid-brush
   syncCollisionButton();
 });
 
@@ -260,7 +265,11 @@ canvasHost?.addEventListener('pointerdown', (e) => {
   const kind = strokeKindNow();
   if (!kind) return;
   e.preventDefault();
-  canvasHost.setPointerCapture?.(e.pointerId);
+  // Pointer-capture is an optimisation (keeps pointermove flowing if the
+  // cursor leaves the canvas mid-stroke). It throws InvalidStateError when
+  // another element already owns the pointer — don't let that abort the
+  // stroke, which is the actual work below.
+  try { canvasHost.setPointerCapture?.(e.pointerId); } catch { /* capture optional */ }
   mode.editor.beginStroke(kind);
   strokeActive = true;
   mode.applyBrushAt(e.clientX, e.clientY, kind, hud.getCollisionBrushSize(), 3, true);

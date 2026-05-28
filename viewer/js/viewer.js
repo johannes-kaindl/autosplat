@@ -306,6 +306,10 @@ export function createViewer(hostElement) {
     onCollisionMeshBuilt(fn) { collisionBuiltListeners.push(fn); },
     setUseMeshCollider,
     isUsingMeshCollider() { return useMeshCollider; },
+    // Toggle the orbit/pan/zoom camera controls. Used by the collision editor
+    // to stop the camera from spinning (and fighting for pointer-capture)
+    // while the user is brushing on the mesh.
+    setCameraControlsEnabled(on) { if (cc) cc.enabled = !!on; },
     unsupported: false
   };
 }
