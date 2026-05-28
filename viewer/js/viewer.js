@@ -197,8 +197,12 @@ export function createViewer(hostElement) {
         }
       },
     });
-    walkingMode.enter();
+    // Apply the collider strategy BEFORE enter() so _chooseSpawn samples the
+    // active collider (mesh raycast vs heightmap) and the spawn lands on the
+    // surface the user will actually collide with. Doing it after enter()
+    // computed spawn against the heightmap and then silently swapped colliders.
     applyWalkingColliderPreference();
+    walkingMode.enter();
     for (const fn of walkEnterListeners) {
       try { fn(); } catch (e) { console.error(e); }
     }
