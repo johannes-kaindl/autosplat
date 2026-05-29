@@ -1,33 +1,60 @@
-{%- from "_icons.html" import icon -%}
+{#- Polled inner region only. The <details> card wrapper + summary live in
+    detail.html so they are NOT re-rendered every 3 s (collapse state survives). -#}
 <div class="as-poll-region"
      hx-get="/partials/capture/{{ capture.id }}/brush"
      hx-trigger="every 3s"
      hx-swap="outerHTML">
-  <div class="as-card">
-    <div class="as-card-head">
-      <span class="t" style="color:var(--stage-brush)">{{ icon('activity', 12) }} brush · gaussian training</span>
-      <span class="spacer"></span>
-      <span style="font-family:var(--font-mono);font-size:10px;color:var(--fg-disabled)">live · check log for detail</span>
-    </div>
-    <div class="as-card-body">
-      <div class="as-brush-metrics-cols">
-        {%- set tiles = [
-          ('iter/s',  '—', ''),
-          ('loss',    '—', ''),
-          ('psnr',    '—', 'dB'),
-          ('gauss',   '—', ''),
-          ('elapsed', '—', ''),
-          ('eta',     '—', ''),
-          ('gpu',     '—', '%'),
-          ('vram',    '—', 'mb'),
-        ] -%}
-        {% for label, val, unit in tiles %}
-        <div style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-3);display:flex;flex-direction:column;gap:4px">
-          <div style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg-disabled)">{{ label }}</div>
-          <div style="font-family:var(--font-mono);font-size:18px;font-weight:600;color:var(--fg-tertiary);line-height:1">{{ val }}<span style="font-size:10px;margin-left:2px">{{ unit }}</span></div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
+
+  <!-- Liveness line -->
+  <div style="display:flex;align-items:center;margin-bottom:var(--space-3)">
+    {% if progress and progress.stalled %}
+    <span style="font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--stage-failed)">
+      ⚠ stalled? · no update for {{ progress.updated_ago_s }}s
+    </span>
+    {% elif progress %}
+    <span style="display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--fg-tertiary)">
+      <span class="as-pulse-dot" style="width:7px;height:7px;border-radius:50%;background:var(--stage-brush);display:inline-block"></span>
+      live · updated {{ progress.updated_ago_s }}s ago
+    </span>
+    {% else %}
+    <span style="font-family:var(--font-mono);font-size:10px;color:var(--fg-disabled)">warming up…</span>
+    {% endif %}
   </div>
+
+  {% if progress %}
+  <!-- Progress bar -->
+  <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+    <div style="flex:1;height:10px;background:var(--surface-inset);border-radius:999px;overflow:hidden;border:1px solid var(--border-subtle)">
+      <div style="height:100%;width:{{ progress.pct }}%;background:var(--stage-brush);border-radius:999px;transition:width 0.6s ease"></div>
+    </div>
+    <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--fg-primary);min-width:46px;text-align:right">{{ progress.pct }}%</span>
+  </div>
+
+  <!-- Tiles -->
+  <div class="as-brush-metrics-cols">
+    {%- set tiles = [
+      ('elapsed', progress.elapsed_str, ''),
+      ('eta', progress.eta_remaining_str, 'left'),
+    ] -%}
+    {% if progress.has_eval %}
+      {%- set tiles = tiles + [
+        ('step', '{:,}'.format(progress.step) ~ ' / ' ~ '{:,}'.format(progress.total_steps), ''),
+        ('psnr', progress.psnr, 'dB'),
+      ] -%}
+    {% endif %}
+    {% for label, val, unit in tiles %}
+    <div style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-3);display:flex;flex-direction:column;gap:4px">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg-disabled)">{{ label }}</div>
+      <div style="font-family:var(--font-mono);font-size:18px;font-weight:600;color:var(--fg-primary);line-height:1">{{ val }}<span style="font-size:10px;margin-left:2px;color:var(--fg-tertiary)">{{ unit }}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="as-sub" style="font-size:10px;margin:var(--space-2) 0 0;color:var(--fg-disabled)">
+    % + eta are wall-time estimates{% if not progress.has_eval %} · enable <code>plateau</code> for real per-step metrics{% endif %} · check the log below for detail
+  </p>
+  {% else %}
+  <p class="as-sub" style="font-size:12px;margin:0;color:var(--fg-tertiary)">
+    Brush is starting up — live metrics appear once the first heartbeat lands (≈2 s).
+  </p>
+  {% endif %}
 </div>

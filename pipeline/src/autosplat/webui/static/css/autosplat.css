@@ -1176,6 +1176,11 @@ html, body { height: 100%; margin: 0; }
 .as-dashboard-cols    { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5); }
 .as-brush-metrics-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
 
+/* v1.6.0 — live heartbeat dot: a slow pulse so a healthy run is visibly alive
+   even between the slower percent updates. */
+.as-pulse-dot { animation: as-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .as-pulse-dot { animation: none; } }
+
 /* ── Hamburger button: only visible on mobile ─────────────────────────── */
 .as-hamburger {
   display: none;

@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from autosplat.progress import read_progress
+from autosplat.webui.progress_view import build_progress_view
 from autosplat.webui.state import get_capture, list_captures, read_log_tail
 
 router = APIRouter(prefix="/partials")
@@ -107,8 +111,10 @@ async def capture_brush_partial(request: Request, capture_id: str) -> HTMLRespon
     capture = get_capture(captures_dir, capture_id)
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    state = read_progress(capture.path)
+    progress = build_progress_view(state, datetime.now(UTC)) if state else None
     return _templates(request).TemplateResponse(
         request,
         "partials/brush_metrics.html",
-        {"capture": capture},
+        {"capture": capture, "progress": progress},
     )

@@ -59,8 +59,30 @@
     <div style="display:flex;flex-direction:column;gap:var(--space-5)">
 
       {% if capture.status == 'running' %}
-      {# Brush metrics — poll-region/card pattern (no live stream in v1.1.0, shows log-derived data) #}
-      {% include "partials/brush_metrics.html" %}
+      {%- from "_icons.html" import icon -%}
+      {# v1.6.0 — collapsible live-progress card. The <details> wrapper is static
+         (rendered once here); only the inner region polls, so collapse state
+         survives the 3 s swaps and is persisted in localStorage. #}
+      <details class="as-card" open id="as-brush-details">
+        <summary class="as-card-head" style="cursor:pointer;list-style:none">
+          <span class="t" style="color:var(--stage-brush)">{{ icon('activity', 12) }} brush · gaussian training</span>
+          <span class="spacer"></span>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--fg-disabled)">click to collapse</span>
+        </summary>
+        <div class="as-card-body">
+          {% include "partials/brush_metrics.html" %}
+        </div>
+      </details>
+      <script>
+      (function () {
+        var d = document.getElementById('as-brush-details');
+        if (!d) return;
+        if (localStorage.getItem('autosplat-brush-collapsed') === '1') d.removeAttribute('open');
+        d.addEventListener('toggle', function () {
+          localStorage.setItem('autosplat-brush-collapsed', d.open ? '0' : '1');
+        });
+      })();
+      </script>
       {% endif %}
 
       {% if capture.status == 'done' and capture.has_ply %}
