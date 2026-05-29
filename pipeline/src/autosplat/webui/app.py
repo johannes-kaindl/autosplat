@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from autosplat import __version__
 from autosplat.config import Config
+from autosplat.failure import classify_failure
 
 from .routes import captures, dashboard, health, jobs, partials, source
 
@@ -73,6 +74,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     templates.env.globals["version"] = __version__
     templates.env.globals["now"] = datetime.datetime.now
+    templates.env.globals["classify_failure"] = classify_failure
     app.state.templates = templates
     app.state.cfg = cfg
 

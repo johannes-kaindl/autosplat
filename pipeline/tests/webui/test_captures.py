@@ -367,6 +367,34 @@ def test_capture_detail_done_has_no_failure_panel(app: FastAPI, tmp_path: Path) 
     assert "What to do" not in response.text
 
 
+def test_captures_list_shows_failure_headline(app: FastAPI, tmp_path: Path) -> None:
+    """The captures list shows a one-line failure headline on failed rows so the
+    cause is visible at a glance, not only on the detail page."""
+    from autosplat.watcher import FailedEntry, WatcherState
+
+    capture_dir = tmp_path / "2026-05-29_failed_sfm"
+    capture_dir.mkdir(parents=True)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    state = WatcherState()
+    state.failed = [
+        FailedEntry(
+            path=str(capture_dir),
+            failed_at="2026-05-29T14:00:00Z",
+            reason="No images with matches",
+            stage="sfm",
+        )
+    ]
+    with (
+        patch("autosplat.webui.state._load_watcher_state", return_value=state),
+        TestClient(app) as client,
+    ):
+        response = client.get("/captures/")
+
+    assert response.status_code == 200
+    assert "align the frames" in response.text  # sfm headline
+
+
 # ── Native Finder file-picker (osascript) ────────────────────────────────────
 
 

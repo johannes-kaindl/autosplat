@@ -48,7 +48,12 @@
       <tbody>
         {% for c in captures %}
         <tr>
-          <td class="mono"><a href="/captures/{{ c.id }}" style="color:var(--fg-primary);text-decoration:none">{{ c.id }}</a></td>
+          <td class="mono">
+            <a href="/captures/{{ c.id }}" style="color:var(--fg-primary);text-decoration:none">{{ c.id }}</a>
+            {% if c.status == 'failed' %}
+            <div style="font-size:10px;color:var(--stage-failed);margin-top:2px">⚠ {{ classify_failure(c.reason, c.stage).headline }}</div>
+            {% endif %}
+          </td>
           <td>{{ capture_badge(c) }}</td>
           <td class="dim mono" style="font-size:11px">
             {%- if c.stage -%}
