@@ -135,12 +135,20 @@ def probe_clip(
     clip: BisectionClip,
     probe_workspace: Path,
     cfg: Config,
+    *,
+    target_frames: int | None = None,
 ) -> bool:
     """Run preprocess + SfM-only against one sub-clip; return True if QG passes.
 
     Probes always use `cfg.colmap.matcher='exhaustive'` — sequential is
     unreliable on short segments and we've already spent two attempts on it
     in the parent capture's adaptive-retry path.
+
+    `target_frames` overrides `preprocess.target_frames` for this probe. When
+    omitted it defaults to `cfg.retry.bisect_probe_target_frames` (the cheap
+    sub-clip cap). The multi-video rescue passes the full pipeline budget when
+    probing a whole source video, so a long flight isn't false-failed by the
+    sparse sub-clip cap.
 
     Artifacts (frames/, colmap/) stay on disk under `probe_workspace` for
     forensic debugging (which clips passed, which didn't, why). The final
@@ -158,11 +166,12 @@ def probe_clip(
     # pipeline default of 250 to 120 cuts a single probe's matcher cost
     # by ~4×. The threshold is high enough that legitimate sub-clips
     # still register past the 50 %-ratio quality-gate.
+    frames_cap = target_frames if target_frames is not None else cfg.retry.bisect_probe_target_frames
     probe_cfg = apply_override(
         cfg,
         {
             "colmap": {"matcher": "exhaustive"},
-            "preprocess": {"target_frames": cfg.retry.bisect_probe_target_frames},
+            "preprocess": {"target_frames": frames_cap},
         },
     )
 

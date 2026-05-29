@@ -277,6 +277,41 @@ def test_probe_clip_caps_preprocess_target_frames(monkeypatch, tmp_path: Path) -
     assert seen_target_frames == [120]
 
 
+def test_probe_clip_honours_explicit_target_frames(monkeypatch, tmp_path: Path) -> None:
+    """An explicit target_frames overrides the bisect_probe_target_frames cap.
+
+    The multi-video rescue probes whole source videos with the full pipeline
+    frame budget (~250), not the cheap sub-clip cap (~120), to avoid a
+    false-fail on a long flight that would trigger needless bisection.
+    """
+    cfg = load_config(include_xdg=False)
+    assert cfg.retry.bisect_probe_target_frames == 120
+
+    clip = _clip_at(tmp_path, "whole")
+    workspace = tmp_path / "rescue" / "probes" / clip.clip_id
+
+    seen_target_frames: list[int] = []
+
+    def capture_preprocess(video, frames_dir, pp_cfg):
+        seen_target_frames.append(pp_cfg.target_frames)
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        return PreprocessResult(
+            frames_dir=frames_dir,
+            extracted_count=200,
+            kept_count=200,
+            rejected_blur=0,
+            duration_s=0.0,
+        )
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_run_preprocess", capture_preprocess)
+    monkeypatch.setattr(bm, "_run_sfm", _stub_sfm(cams=160, points=20000))
+
+    probe_clip(clip, workspace, cfg, target_frames=250)
+    assert seen_target_frames == [250]
+
+
 def test_probe_clip_returns_false_on_preprocess_error(monkeypatch, tmp_path: Path) -> None:
     """A subprocess error during probe is logged + treated as a failed probe."""
     cfg = load_config(include_xdg=False)
