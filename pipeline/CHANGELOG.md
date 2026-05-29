@@ -13,6 +13,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.7.2] — 2026-05-29 — Blur fast-fail + install fix
+
+### Added
+
+- **Fail fast on all-blurry footage.** `extract_frames` / `extract_frames_from_many`
+  now route through `filter_blurry_frames`, which raises a typed
+  `AllFramesRejectedError` with an actionable message when frames were extracted
+  but every one scored below `blur_threshold`. Previously the run proceeded into
+  COLMAP and died with a cryptic "No images with matches". (Surfaced by a real
+  4K capture whose Laplacian-variance scores were ~10 against the 100 threshold —
+  high bitrate, but genuinely soft footage.)
+
+### Docs
+
+- Install instructions now tell recipients to clear the quarantine flag
+  (`xattr -dr com.apple.quarantine /Applications/AutoSplat.app`) rather than the
+  unreliable right-click → Open: for an ad-hoc-signed (un-notarized) app, App
+  Translocation still blocks the launch with a `-1712` error otherwise.
+
+---
+
 ## [v1.7.1] — 2026-05-29 — Classic app window
 
 v1.7.0 shipped the app as a menubar agent (`LSUIElement`) — no Dock icon, no

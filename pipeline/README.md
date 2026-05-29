@@ -123,7 +123,15 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 ### Option A — the app (DMG)
 
-Grab `AutoSplat.dmg` from the [latest release](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases), drag **AutoSplat** to Applications, and launch it. On first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window, then opens the WebUI; a menubar item keeps it running. The app is unsigned — the first launch is **right-click → Open** to clear Gatekeeper.
+Grab `AutoSplat.dmg` from the [latest release](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases), open it, and drag **AutoSplat** to Applications. The app opens as a normal window; on first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window.
+
+The app is **unsigned / not notarized** (no Apple Developer ID yet), so macOS quarantines it and the launch is blocked. Clear the quarantine flag once:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/AutoSplat.app
+```
+
+(Right-click → Open is unreliable for ad-hoc-signed apps — it leaves the quarantine flag and App Translocation still blocks launch with a `-1712` error.)
 
 Build it yourself with `./scripts/build_app.sh` (needs `brew install create-dmg` + `uv sync --group build`).
 
