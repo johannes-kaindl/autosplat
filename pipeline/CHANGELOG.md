@@ -13,6 +13,53 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.6.0] — 2026-05-29 — Live Progress / Mission-Control
+
+The WebUI no longer sits frozen during the long, silent stages. A capture's
+progress is now published to a `progress.json` single-source-of-truth and
+surfaced live: a moving percent bar, elapsed + ETA-remaining, a pulsing
+"updated Xs ago" health dot with a stall warning, and a stage-agnostic
+liveness pulse that also covers the silent COLMAP mapper. Real step/PSNR
+tiles appear when the plateau monitor is enabled.
+
+Honest about the data: `%`/ETA are wall-time estimates; loss/iter-s/GPU/VRAM
+are *not* shown because Brush emits no per-step stdout and exposes no GPU
+telemetry — the old all-`—` placeholder card is gone.
+
+### Added
+
+- **`progress.py`** — `ProgressState` dataclass + atomic `write_progress` /
+  `read_progress` (`os.replace`, returns `None` on missing/corrupt JSON), the
+  single channel between the running pipeline and any reader.
+- **`_ProgressWriter`** (`pipeline.py`) — merges the 2 s time heartbeat
+  (`tick`) and the slower plateau eval points (`record_eval`) into one
+  `progress.json`, so the fast heartbeat never clobbers real step/PSNR.
+- **`run_brush(eval_callback=…)`** + `_drain_eval_history` — forward each new
+  `(step, psnr)` from the plateau monitor exactly once to the progress writer.
+- **`progress_view.build_progress_view`** — pure, clock-injected view model
+  (percent, mm:ss elapsed/remaining, `updated_ago_s`, `stalled`).
+- **Live `brush_metrics.html`** — moving bar, elapsed/ETA tiles, health dot +
+  stall warning, real step/PSNR tiles when present, wrapped in a collapsible
+  `<details>` (state persisted in `localStorage`) whose static wrapper lives in
+  `detail.html` so collapse survives the 3 s polls.
+- **`last_activity_age_s`** + `/partials/capture/{id}/liveness` — stage-agnostic
+  "last activity Xs ago" pulse from `pipeline.log` mtime, with a "quiet for Xs"
+  warning past 120 s.
+- **`brush.stdout.log`** — `_consume_brush_stream` tees every Brush stdout line
+  into a dedicated, live-readable log beside the training output.
+- **Native Finder file-picker** for the New-capture form — `POST
+  /captures/pick-file` runs `osascript choose file` (a browser `<input
+  type=file>` can't hand the server an absolute path) and fills the textarea.
+
+### Changed
+
+- Train heartbeat log throttle tightened 300 s → 30 s (the live view reads the
+  unthrottled `progress.json`, so the log just needs a fresher trail).
+- The brush card is gated to `stage == train`; SfM no longer renders a
+  misleading "brush warming up" card.
+
+---
+
 ## [v1.5.0] — 2026-05-27 — Train-till-Plateau
 
 Brush trains for `--total-steps` (default 30 000) regardless of whether the splat already converged. v1.5.0 adds an **opt-in patience-stop**: hold out ~10 % of frames, monitor PSNR while training, and SIGTERM Brush when the curve flattens. On a typical converging capture this can save 30-50 % of the Brush stage.
