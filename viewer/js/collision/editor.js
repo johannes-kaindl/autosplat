@@ -4,6 +4,22 @@
 
 const UNDO_LIMIT = 8;
 
+// Brush radius is exposed to the user as a scene-relative slider value
+// (~0.05–2). Convert it to a world-space radius against the scene bounds, so
+// the brush feels the same regardless of how big the captured scene is. A
+// fixed world radius (the old behaviour) was smaller than a single voxel cell
+// on large scenes and silently touched nothing. The floor guarantees the
+// smallest brush still spans at least one of the largest voxel cells.
+const BRUSH_DIAG_FRACTION = 0.08;
+export function brushWorldRadius(frac, bounds, resolution = 64) {
+  const dx = bounds.max.x - bounds.min.x;
+  const dy = bounds.max.y - bounds.min.y;
+  const dz = bounds.max.z - bounds.min.z;
+  const diag = Math.hypot(dx, dy, dz);
+  const maxCell = Math.max(dx, dy, dz) / resolution;
+  return Math.max(frac * diag * BRUSH_DIAG_FRACTION, maxCell);
+}
+
 export class CollisionEditor {
   constructor({ density, resolution, bounds, iso }) {
     this.density = density;

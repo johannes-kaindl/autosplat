@@ -1,8 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CollisionEditor } from '../../js/collision/editor.js';
+import { CollisionEditor, brushWorldRadius } from '../../js/collision/editor.js';
 
 const bounds = { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } };
+
+// --- brushWorldRadius: the slider value is scene-relative, not world units.
+// Regression: a fixed 0.3 world-radius brush touched zero voxels on large
+// scenes (voxel cells were tens of units wide), so the brush silently no-oped.
+
+test('brushWorldRadius: scales with scene diagonal', () => {
+  const small = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } };
+  const big   = { min: { x: 0, y: 0, z: 0 }, max: { x: 1000, y: 1000, z: 1000 } };
+  const rSmall = brushWorldRadius(0.3, small, 64);
+  const rBig   = brushWorldRadius(0.3, big, 64);
+  assert.ok(rBig > rSmall * 50, 'a 100x larger scene gets a proportionally larger brush');
+});
+
+test('brushWorldRadius: larger slider value → larger radius', () => {
+  const b = { min: { x: 0, y: 0, z: 0 }, max: { x: 100, y: 100, z: 100 } };
+  assert.ok(brushWorldRadius(2.0, b, 64) > brushWorldRadius(0.3, b, 64));
+});
+
+test('brushWorldRadius: tiny slider value still spans at least one voxel cell', () => {
+  // big anisotropic scene; smallest slider value must still touch a voxel,
+  // otherwise the brush no-ops exactly like the original bug.
+  const b = { min: { x: 0, y: 0, z: 0 }, max: { x: 640, y: 6, z: 640 } };
+  const resolution = 64;
+  const maxCell = 640 / resolution; // = 10 world units
+  const r = brushWorldRadius(0.05, b, resolution);
+  assert.ok(r >= maxCell, `radius ${r} must be >= one max cell (${maxCell})`);
+});
+
+test('brushWorldRadius: default 0.3 on a unit cube is positive and finite', () => {
+  const r = brushWorldRadius(0.3, bounds, 8);
+  assert.ok(Number.isFinite(r) && r > 0);
+});
 
 function blank() {
   return new CollisionEditor({

@@ -10,7 +10,7 @@ import {
 import { voxelize, smoothDensity, defaultIso } from './voxelize.js';
 import { marchingCubes } from './marching-cubes.js';
 import { buildBvh, raycast } from './mesh-bvh.js';
-import { CollisionEditor } from './editor.js';
+import { CollisionEditor, brushWorldRadius } from './editor.js';
 import { writeObj, encodeSidecar, decodeSidecar } from './persist.js';
 
 const RESOLUTION = 64;
@@ -65,16 +65,18 @@ export class CollisionMode {
   }
 
   /**
-   * Apply one brush sample at a screen-space pointer position. If `continuing`
-   * is true, the caller is mid-stroke (drag-brush) — beginStroke/endStroke
-   * and the mesh-rebuild are the caller's responsibility, so the call is
-   * cheap enough to run on every pointermove. If `continuing` is false (or
-   * omitted), this is a one-shot stroke: begin + apply + end + rebuild.
+   * Apply one brush sample at a screen-space pointer position. `brushFrac` is
+   * the scene-relative slider value (0–2); it's converted to a world radius
+   * against the editor bounds so the brush feels the same on any scene scale.
+   * If `continuing` is true, the caller is mid-stroke (drag-brush) —
+   * beginStroke/endStroke and the mesh-rebuild are the caller's
+   * responsibility. If false, this is a one-shot stroke: begin+apply+end+rebuild.
    */
-  applyBrushAt(screenX, screenY, kind, radius, strength, continuing = false) {
+  applyBrushAt(screenX, screenY, kind, brushFrac, strength, continuing = false) {
     if (!this.editor) return;
     const hit = this._raycastFromScreen(screenX, screenY);
     if (!hit) return;
+    const radius = brushWorldRadius(brushFrac, this.editor.bounds, this.editor.resolution);
     if (!continuing) {
       this.editor.beginStroke(kind);
       this.editor.applyAt(hit.point, radius, strength);
