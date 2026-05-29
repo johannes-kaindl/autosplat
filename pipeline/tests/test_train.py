@@ -491,6 +491,36 @@ def test_drain_eval_history_emits_only_new_entries(tmp_path: Path) -> None:
     assert cursor == 3
 
 
+# ─── v1.6.0: brush stdout tee ──────────────────────────────────────────────
+
+
+def test_consume_brush_stream_tees_all_lines_and_returns_tail(tmp_path: Path) -> None:
+    """Every non-blank Brush line is mirrored into brush.stdout.log; the return
+    value is the last-50 tail used for OOM diagnosis."""
+    from autosplat.train import _consume_brush_stream
+
+    lines = [f"step {i}\n" for i in range(60)]
+    tee = tmp_path / "brush.stdout.log"
+    tail = _consume_brush_stream(iter(lines), tee)
+
+    written = tee.read_text(encoding="utf-8").splitlines()
+    assert len(written) == 60
+    assert written[0] == "step 0"
+    assert written[-1] == "step 59"
+    assert len(tail) == 50
+    assert tail[-1] == "step 59"
+
+
+def test_consume_brush_stream_skips_blank_lines(tmp_path: Path) -> None:
+    from autosplat.train import _consume_brush_stream
+
+    tee = tmp_path / "brush.stdout.log"
+    tail = _consume_brush_stream(iter(["a\n", "\n", "   \n", "b\n"]), tee)
+
+    assert tail == ["a", "b"]
+    assert tee.read_text(encoding="utf-8").splitlines() == ["a", "b"]
+
+
 # ─── v1.5.0: build_brush_command plateau-flags integration ─────────────────
 
 

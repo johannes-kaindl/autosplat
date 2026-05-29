@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -324,6 +324,30 @@ ProgressCallback = Callable[[float, float], None]
 EvalCallback = Callable[[int, float], None]
 
 
+def _consume_brush_stream(lines: Iterable[str], tee_path: Path) -> list[str]:
+    """Mirror Brush's stdout into `tee_path` (line-buffered so the file is live-
+    readable during the run), log each line, and return the last-50 tail used
+    for OOM diagnosis. Blank lines are dropped.
+    """
+    output_tail: list[str] = []
+    with tee_path.open("w", encoding="utf-8") as tee:
+        for raw_line in lines:
+            line = raw_line.rstrip()
+            if not line:
+                continue
+            tee.write(line + "\n")
+            tee.flush()
+            output_tail.append(line)
+            if len(output_tail) > 50:
+                output_tail.pop(0)
+            lowered = line.lower()
+            if "step" in lowered or "iter" in lowered:
+                logger.info("train.brush.progress", line=line)
+            else:
+                logger.debug("train.brush.out", line=line)
+    return output_tail
+
+
 def _drain_eval_history(
     monitor: PlateauMonitor, cursor: int, eval_callback: EvalCallback
 ) -> int:
@@ -455,20 +479,10 @@ def run_brush(
         )
         heartbeat_thread.start()
     steps_completed = 0
-    output_tail: list[str] = []  # last 50 lines for OOM diagnosis
     assert proc.stdout is not None
-    for raw_line in proc.stdout:
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        output_tail.append(line)
-        if len(output_tail) > 50:
-            output_tail.pop(0)
-        lowered = line.lower()
-        if "step" in lowered or "iter" in lowered:
-            logger.info("train.brush.progress", line=line)
-        else:
-            logger.debug("train.brush.out", line=line)
+    # v1.6.0 — tee Brush's stdout into a dedicated log alongside the training
+    # output so anything it flushes (even only at exit) is kept for diagnosis.
+    output_tail = _consume_brush_stream(proc.stdout, output_dir / "brush.stdout.log")
     proc.wait()
     stop_heartbeat.set()
     plateau_stop.set()
