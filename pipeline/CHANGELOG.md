@@ -13,6 +13,40 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.8.0] — 2026-05-29 — Failure diagnostics
+
+Failed captures now say — prominently — **when** they failed, **why** in plain
+language, and **what to do** so it doesn't recur, instead of leaving you to read
+a raw COLMAP stderr tail.
+
+### Added
+
+- **`failure.py`** — `classify_failure(reason, stage)` maps a stored failure
+  reason to a `FailureInfo{category, headline, hint}` via an ordered rules table
+  (blur / SfM-no-overlap / OOM / missing-video / interrupted / generic fallback),
+  with an English headline + actionable remediation hint.
+  `failure_reason_from_log` recovers a reason from `pipeline.log` for records
+  predating this feature.
+- **Prominent failure panel** on the capture detail page: ⚠ headline, when
+  (stage + failed-at), the verbatim reason, 💡 what-to-do, and Resume / jump-to-log.
+- **Failure headline on the captures list** so the cause is visible at a glance
+  on every failed row.
+
+### Fixed
+
+- **Durable failed status.** A WebUI job that failed before a restart reverted to
+  "idle" because `get_job` only returns live in-memory jobs. `JobRunner.last_run`
+  now surfaces the most recent persisted run from `runs.jsonl`, so `list_captures`
+  keeps the failed status + reason across restarts — which is what makes the new
+  panel appear for real past failures.
+
+### Notes
+
+All UI strings are English; German / i18n is intentionally out of scope (a
+separate project — the WebUI has no localization framework).
+
+---
+
 ## [v1.7.2] — 2026-05-29 — Blur fast-fail + install fix
 
 ### Added
