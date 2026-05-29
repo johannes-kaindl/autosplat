@@ -116,6 +116,24 @@ def test_open_browser_calls_opener_with_url() -> None:
     assert calls == ["http://127.0.0.1:9999"]
 
 
+def test_wait_until_serving_true_when_port_listens() -> None:
+    from autosplat.desktop import wait_until_serving
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        assert wait_until_serving("127.0.0.1", port, timeout=2.0) is True
+
+
+def test_wait_until_serving_false_on_timeout() -> None:
+    from autosplat.desktop import pick_free_port, wait_until_serving
+
+    # A free (unbound) port → nothing accepts → times out to False fast.
+    dead = pick_free_port()
+    assert wait_until_serving("127.0.0.1", dead, timeout=0.5) is False
+
+
 def test_run_first_run_setup_invokes_osascript_with_command(tmp_path: Path) -> None:
     from autosplat.desktop import run_first_run_setup
 

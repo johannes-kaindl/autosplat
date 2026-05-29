@@ -13,6 +13,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.7.1] — 2026-05-29 — Classic app window
+
+v1.7.0 shipped the app as a menubar agent (`LSUIElement`) — no Dock icon, no
+window, so a double-click looked like nothing happened. v1.7.1 makes it a
+classic app: a real **AutoSplat** window (WKWebView via pywebview) shows the
+WebUI, with a Dock icon and Cmd-Q to quit. No browser, no menubar.
+
+### Changed
+
+- `desktop.main` now opens a native pywebview window pointed at the local WebUI
+  instead of a rumps menubar + external browser. `wait_until_serving` (new,
+  tested — condition-based, replaces a fixed sleep) ensures uvicorn is bound
+  before the window loads. Falls back to the default browser if pywebview is
+  unavailable.
+- `Info.plist` drops `LSUIElement` (Dock icon + foreground app). Bundle hidden
+  imports + the `app`/`build` dependency groups swap `rumps` → `pywebview`.
+- `scripts/build_app.sh` detaches a stale mounted `/Volumes/AutoSplat` before
+  cleaning `dist/` (it otherwise held the directory busy).
+
+### Verification
+
+The frozen `.app` launches as a foreground app with a window titled
+"AutoSplat" serving the WebUI (confirmed via System Events + healthz). Headless
+smoke (`AUTOSPLAT_APP_HEADLESS`) still serves end-to-end.
+
+---
+
 ## [v1.7.0] — 2026-05-29 — AutoSplat.app (DMG)
 
 autosplat now ships as a double-clickable macOS app in a `.dmg`. The Python

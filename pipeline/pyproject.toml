@@ -1,6 +1,6 @@
 [project]
 name = "autosplat"
-version = "1.7.0"
+version = "1.7.1"
 description = "Automated local pipeline for drone-video → Gaussian Splat (Apple Silicon)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,7 +37,7 @@ obsidian = [
     "python-frontmatter>=1.1",
 ]
 app = [
-    "rumps>=0.4",
+    "pywebview>=5.0",
 ]
 dev = [
     "pytest>=8.0",
@@ -104,5 +104,5 @@ dev = [
 ]
 build = [
     "pyinstaller>=6.6",
-    "rumps>=0.4",
+    "pywebview>=5.0",
 ]

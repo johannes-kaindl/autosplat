@@ -28,6 +28,10 @@ uv run --group build python -c "import PyInstaller" 2>/dev/null \
 cd "${REPO_ROOT}"
 
 log "Cleaning previous build…"
+# A previously-mounted AutoSplat.dmg volume holds dist/ busy → detach it first.
+if [[ -d "/Volumes/AutoSplat" ]]; then
+  hdiutil detach "/Volumes/AutoSplat" >/dev/null 2>&1 || true
+fi
 rm -rf build dist
 
 log "Freezing app with PyInstaller…"

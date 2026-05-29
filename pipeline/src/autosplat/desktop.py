@@ -103,6 +103,22 @@ def open_browser(url: str, opener: Callable[[str], Any] = webbrowser.open) -> No
     opener(url)
 
 
+def wait_until_serving(host: str, port: int, timeout: float = 10.0) -> bool:
+    """Poll until `host:port` accepts a TCP connection, or `timeout` elapses.
+
+    Condition-based readiness so the app window loads the WebUI only once uvicorn
+    is actually bound — no arbitrary sleep, no blank-page-then-error flash.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            if s.connect_ex((host, port)) == 0:
+                return True
+        time.sleep(0.1)
+    return False
+
+
 def main() -> None:  # pragma: no cover - integration entry (rumps UI + real server)
     """Frozen-app / `autosplat app` entry point.
 
@@ -128,18 +144,16 @@ def main() -> None:  # pragma: no cover - integration entry (rumps UI + real ser
     url = serve_url(port)
     logger.info("desktop.serving", url=url)
 
-    # Headless smoke mode (build verification / CI): serve without browser or
-    # menubar so the frozen bundle can be curl-checked end-to-end.
+    # Headless smoke mode (build verification / CI): serve without a window so
+    # the frozen bundle can be curl-checked end-to-end.
     if os.environ.get("AUTOSPLAT_APP_HEADLESS"):
-        while not getattr(server, "should_exit", False):
-            time.sleep(1)
+        _block_until_exit(server)
         return
 
-    # Give uvicorn a moment to bind before opening the browser.
-    time.sleep(1.0)
-    open_browser(url)
-
-    _run_menubar(url, server)
+    # Wait for uvicorn to bind before pointing the window at it.
+    if not wait_until_serving(_HOST, port):
+        logger.error("desktop.server_not_ready", url=url)
+    _run_window(url, server)
 
 
 def _bundled_install_script() -> Path | None:
@@ -151,30 +165,22 @@ def _bundled_install_script() -> Path | None:
     return next((c for c in candidates if c.is_file()), None)
 
 
-def _run_menubar(url: str, server: uvicorn.Server) -> None:  # pragma: no cover - rumps UI
-    """Show a menubar item. Falls back to blocking on the server if rumps is absent."""
+def _block_until_exit(server: uvicorn.Server) -> None:  # pragma: no cover - loop
+    while not getattr(server, "should_exit", False):
+        time.sleep(1)
+
+
+def _run_window(url: str, server: uvicorn.Server) -> None:  # pragma: no cover - GUI
+    """Open a native app window (WKWebView) showing the WebUI and block until it
+    closes. Falls back to the default browser if pywebview is unavailable."""
     try:
-        import rumps
+        import webview
     except ImportError:
-        logger.warning("desktop.rumps_missing", detail="menubar unavailable; serving headless")
-        while not getattr(server, "should_exit", False):
-            time.sleep(1)
+        logger.warning("desktop.webview_missing", detail="no pywebview; opening browser instead")
+        open_browser(url)
+        _block_until_exit(server)
         return
 
-    class AutoSplatApp(rumps.App):  # type: ignore[misc]
-        def __init__(self) -> None:
-            super().__init__("AutoSplat", title="◆ AutoSplat")
-            self.menu = ["Open AutoSplat"]
-
-        @rumps.clicked("Open AutoSplat")
-        def open_app(self, _: object) -> None:
-            open_browser(url)
-
-    app = AutoSplatApp()
-
-    @rumps.clicked("Quit")  # type: ignore[misc]
-    def _quit(_: object) -> None:
-        server.should_exit = True
-        rumps.quit_application()
-
-    app.run()
+    webview.create_window("AutoSplat", url, width=1280, height=860, min_size=(900, 600))
+    webview.start()  # blocks on the Cocoa run loop until the window is closed
+    server.should_exit = True

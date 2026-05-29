@@ -39,7 +39,8 @@ hiddenimports = [
     "uvicorn.protocols.websockets.wsproto_impl",
     "uvicorn.lifespan.on",
     "uvicorn.lifespan.off",
-    "rumps",
+    "webview",
+    "webview.platforms.cocoa",
     *collect_submodules("autosplat.webui.routes"),
 ]
 
@@ -87,8 +88,7 @@ app = BUNDLE(
     info_plist={
         "CFBundleDisplayName": "AutoSplat",
         "CFBundleName": "AutoSplat",
-        # Menubar agent app — no Dock icon, the rumps item is the UI.
-        "LSUIElement": True,
+        # Classic app: Dock icon + a real WebView window (no LSUIElement).
         "NSHighResolutionCapable": True,
     },
 )
