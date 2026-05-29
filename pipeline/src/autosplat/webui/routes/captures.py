@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 
 from autosplat import __version__
+from autosplat.config import apply_override
 from autosplat.failure import classify_failure, failure_reason_from_log
 from autosplat.webui.jobs_runner import JobRunner
 from autosplat.webui.state import (
@@ -139,16 +140,32 @@ async def capture_pick_file(request: Request) -> JSONResponse:
     return JSONResponse({"paths": [str(p) for p in paths]})
 
 
+def _parse_blur_threshold(raw: str) -> tuple[float | None, str | None]:
+    """Parse the optional blur-threshold override. ('' → None, no override).
+    Returns (value, error)."""
+    if not raw.strip():
+        return None, None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None, f"blur_threshold must be a number, got '{raw}'."
+    if value < 0:
+        return None, "blur_threshold must be ≥ 0."
+    return value, None
+
+
 @router.post("/new")
 async def capture_new_submit(
     request: Request,
     video_path: str = Form(""),
     video_paths: str = Form(""),
+    blur_threshold: str = Form(""),
 ) -> Response:
     """Validate the submitted video path(s) and launch a new pipeline run.
 
     `video_paths` (newline-separated, multi-video) takes precedence over the
     legacy single-line `video_path` so v1.2.0 forms still work unchanged.
+    An optional `blur_threshold` overrides preprocess for this run only.
     """
     raw_lines = (
         [line for line in video_paths.splitlines() if line.strip()]
@@ -156,6 +173,8 @@ async def capture_new_submit(
         else [video_path]
     )
     videos, error = _validate_video_paths(raw_lines)
+    if error is None:
+        blur_value, error = _parse_blur_threshold(blur_threshold)
     if error is not None:
         return _templates(request).TemplateResponse(
             request,
@@ -164,6 +183,7 @@ async def capture_new_submit(
                 "version": __version__,
                 "error": error,
                 "video_paths": video_paths or video_path,
+                "blur_threshold": blur_threshold,
             },
             status_code=400,
         )
@@ -171,8 +191,13 @@ async def capture_new_submit(
     job_runner = getattr(request.app.state, "job_runner", None)
     if job_runner is None:
         raise HTTPException(status_code=503, detail="Job runner not available")
+
+    cfg = request.app.state.cfg
+    if blur_value is not None:
+        cfg = apply_override(cfg, {"preprocess": {"blur_threshold": blur_value}})
+
     payload: Path | list[Path] = videos if len(videos) > 1 else videos[0]
-    job = await job_runner.start_job_from_video(payload, request.app.state.cfg)
+    job = await job_runner.start_job_from_video(payload, cfg)
     return RedirectResponse(url=f"/captures/{job.capture_id}", status_code=303)
 
 

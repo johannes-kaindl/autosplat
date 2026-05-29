@@ -35,6 +35,17 @@
       lines combine into one multi-video capture (see CAPTURE-GUIDE). The
       capture is named <code>&lt;date&gt;_&lt;first-filename&gt;</code>.
     </p>
+    <label style="display:flex;flex-direction:column;gap:var(--space-2)">
+      <span class="as-eyebrow">Blur threshold — optional override</span>
+      <input type="number" name="blur_threshold" min="0" step="1"
+             value="{{ blur_threshold or '' }}" placeholder="default 100"
+             style="background:var(--surface-inset);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--space-3);font-family:var(--font-mono);font-size:13px;color:var(--fg-primary);outline:none;max-width:220px">
+    </label>
+    <p class="as-sub" style="font-size:11px;margin:0">
+      Laplacian-variance floor; frames below it are dropped as blurry. Leave empty
+      for the default (<code>100</code>). Lower it (e.g. <code>25</code>) for soft
+      or fast-motion footage that would otherwise be fully rejected.
+    </p>
     <div style="display:flex;gap:var(--space-2)">
       <button type="submit" class="as-btn primary">Start pipeline</button>
       <button type="button" class="as-btn" id="as-browse-btn">Browse…</button>

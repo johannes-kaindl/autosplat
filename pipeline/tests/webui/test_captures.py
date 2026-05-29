@@ -127,6 +127,69 @@ def test_capture_new_submit_starts_job_and_redirects(app: FastAPI, tmp_path: Pat
     assert location.endswith("_clip")
 
 
+def test_capture_new_submit_applies_blur_threshold_override(app: FastAPI, tmp_path: Path) -> None:
+    """An optional blur_threshold on the form overrides cfg.preprocess for the run."""
+    from autosplat.webui.jobs_runner import JobState
+
+    video = tmp_path / "soft.mp4"
+    video.write_bytes(b"x")
+    captured: dict[str, object] = {}
+
+    async def fake_start(self: object, payload: object, cfg: object) -> JobState:
+        captured["cfg"] = cfg
+        return JobState(capture_id="2026-05-29_soft", status="queued")
+
+    with (
+        patch("autosplat.webui.jobs_runner.JobRunner.start_job_from_video", fake_start),
+        TestClient(app) as client,
+    ):
+        response = client.post(
+            "/captures/new",
+            data={"video_path": str(video), "blur_threshold": "8"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert captured["cfg"].preprocess.blur_threshold == 8.0  # type: ignore[attr-defined]
+
+
+def test_capture_new_submit_default_blur_threshold_unchanged(app: FastAPI, tmp_path: Path) -> None:
+    from autosplat.webui.jobs_runner import JobState
+
+    video = tmp_path / "ok.mp4"
+    video.write_bytes(b"x")
+    captured: dict[str, object] = {}
+
+    async def fake_start(self: object, payload: object, cfg: object) -> JobState:
+        captured["cfg"] = cfg
+        return JobState(capture_id="2026-05-29_ok", status="queued")
+
+    with (
+        patch("autosplat.webui.jobs_runner.JobRunner.start_job_from_video", fake_start),
+        TestClient(app) as client,
+    ):
+        response = client.post(
+            "/captures/new", data={"video_path": str(video)}, follow_redirects=False
+        )
+
+    assert response.status_code == 303
+    # Untouched → packaged default (100.0).
+    assert captured["cfg"].preprocess.blur_threshold == 100.0  # type: ignore[attr-defined]
+
+
+def test_capture_new_submit_invalid_blur_threshold_400(app: FastAPI, tmp_path: Path) -> None:
+    video = tmp_path / "x.mp4"
+    video.write_bytes(b"x")
+    with TestClient(app) as client:
+        response = client.post(
+            "/captures/new",
+            data={"video_path": str(video), "blur_threshold": "-5"},
+            follow_redirects=False,
+        )
+    assert response.status_code == 400
+    assert "blur" in response.text.lower()
+
+
 def test_capture_new_submit_missing_file_shows_error(app: FastAPI, tmp_path: Path) -> None:
     """A non-existent path re-renders the form with a 400 and an error message."""
     with TestClient(app) as client:
