@@ -9,7 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-(no unreleased work)
+- **fix(failure):** corrected the SfM failure hint — auto-rescue
+  (sequential → exhaustive → bisection) already runs in the pipeline, so the
+  hint no longer implies a manual `autosplat rescue` step; it points at the real
+  fix (footage overlap). Ships with the next release.
 
 ---
 
