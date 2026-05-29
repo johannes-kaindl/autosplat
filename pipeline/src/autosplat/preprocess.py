@@ -31,6 +31,11 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 
+# Below this many sharp frames, COLMAP can't build a meaningful model — fail
+# fast rather than waste an SfM run that dies with 'No images with matches'.
+MIN_USABLE_FRAMES = 3
+
+
 class AllFramesRejectedError(RuntimeError):
     """Every extracted frame scored below `blur_threshold`, leaving nothing for
     COLMAP. Raised to fail fast with an actionable message instead of letting
@@ -44,6 +49,21 @@ class AllFramesRejectedError(RuntimeError):
             f"(Laplacian variance below blur_threshold={blur_threshold}). "
             f"The footage is too soft for SfM — use sharper video (slower "
             f"flight, check focus) or lower blur_threshold in your config."
+        )
+
+
+class TooFewFramesError(RuntimeError):
+    """Some frames passed the blur filter, but fewer than `MIN_USABLE_FRAMES` —
+    not enough for SfM. Fails fast with an actionable message."""
+
+    def __init__(self, kept: int, extracted: int, blur_threshold: float) -> None:
+        self.kept = kept
+        self.extracted = extracted
+        self.blur_threshold = blur_threshold
+        super().__init__(
+            f"Only {kept} of {extracted} frames passed the blur filter — fewer "
+            f"than the {MIN_USABLE_FRAMES} needed for SfM. The footage is mostly "
+            f"too soft — use sharper video or lower blur_threshold to keep more."
         )
 
 
@@ -202,6 +222,14 @@ def filter_blurry_frames(
             blur_threshold=blur_threshold,
         )
         raise AllFramesRejectedError(len(frames), blur_threshold)
+    if frames and 0 < kept < MIN_USABLE_FRAMES:
+        logger.error(
+            "preprocess.too_few_frames",
+            kept=kept,
+            extracted=len(frames),
+            blur_threshold=blur_threshold,
+        )
+        raise TooFewFramesError(kept, len(frames), blur_threshold)
     return kept, rejected
 
 

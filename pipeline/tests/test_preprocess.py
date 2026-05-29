@@ -122,9 +122,11 @@ def test_extract_frames_from_many_uses_per_video_prefix(tmp_path: Path) -> None:
     frames_dir = tmp_path / "frames"
 
     def fake_run(cmd, **_):
-        # Simulate ffmpeg dropping one file per video into frames_dir.
+        # Simulate ffmpeg dropping two files per video into frames_dir
+        # (≥ MIN_USABLE_FRAMES total once combined).
         prefix = "pass_a" if "pass_a" in " ".join(cmd) else "pass_b"
-        (frames_dir / f"{prefix}_frame_00001.jpg").write_bytes(b"\xff\xd8")
+        for i in (1, 2):
+            (frames_dir / f"{prefix}_frame_{i:05d}.jpg").write_bytes(b"\xff\xd8")
         return MagicMock(stderr="", returncode=0)
 
     fake_meta = VideoMeta(duration_s=50.0, fps=30.0, width=1920, height=1080, nb_frames=1500)
@@ -136,9 +138,14 @@ def test_extract_frames_from_many_uses_per_video_prefix(tmp_path: Path) -> None:
         result = extract_frames_from_many([v1, v2], frames_dir, _preprocess_cfg())
 
     names = sorted(p.name for p in frames_dir.glob("*.jpg"))
-    assert names == ["pass_a_frame_00001.jpg", "pass_b_frame_00001.jpg"]
-    assert result.extracted_count == 2
-    assert result.kept_count == 2
+    assert names == [
+        "pass_a_frame_00001.jpg",
+        "pass_a_frame_00002.jpg",
+        "pass_b_frame_00001.jpg",
+        "pass_b_frame_00002.jpg",
+    ]
+    assert result.extracted_count == 4
+    assert result.kept_count == 4
 
 
 def test_extract_frames_from_many_aggregates_blur_rejections(tmp_path: Path) -> None:
@@ -149,7 +156,7 @@ def test_extract_frames_from_many_aggregates_blur_rejections(tmp_path: Path) -> 
     v2.write_bytes(b"\0")
     frames_dir = tmp_path / "frames"
 
-    blur_scores: list[float] = []  # sharp, blur, sharp, blur
+    blur_scores: list[float] = []
 
     def fake_run(cmd, **_):
         prefix = "v1" if "v1.mp4" in " ".join(cmd) else "v2"
@@ -158,9 +165,9 @@ def test_extract_frames_from_many_aggregates_blur_rejections(tmp_path: Path) -> 
         return MagicMock(stderr="", returncode=0)
 
     def fake_blur(_path):
-        # Two videos × two frames; one blurry per video.
+        # Four frames total; one blurry → 3 kept (≥ MIN_USABLE_FRAMES), 1 rejected.
         blur_scores.append(1.0)
-        return [999.0, 1.0, 999.0, 1.0][len(blur_scores) - 1]
+        return [999.0, 999.0, 999.0, 1.0][len(blur_scores) - 1]
 
     fake_meta = VideoMeta(duration_s=10.0, fps=30.0, width=1920, height=1080, nb_frames=300)
     with (
@@ -171,8 +178,8 @@ def test_extract_frames_from_many_aggregates_blur_rejections(tmp_path: Path) -> 
         result = extract_frames_from_many([v1, v2], frames_dir, _preprocess_cfg())
 
     assert result.extracted_count == 4
-    assert result.rejected_blur == 2
-    assert result.kept_count == 2
+    assert result.rejected_blur == 1
+    assert result.kept_count == 3
 
 
 def test_extract_frames_from_many_single_video_matches_legacy_layout(tmp_path: Path) -> None:
@@ -184,7 +191,8 @@ def test_extract_frames_from_many_single_video_matches_legacy_layout(tmp_path: P
     frames_dir = tmp_path / "frames"
 
     def fake_run(cmd, **_):
-        (frames_dir / "frame_00001.jpg").write_bytes(b"\xff\xd8")
+        for i in (1, 2, 3):  # ≥ MIN_USABLE_FRAMES
+            (frames_dir / f"frame_{i:05d}.jpg").write_bytes(b"\xff\xd8")
         return MagicMock(stderr="", returncode=0)
 
     fake_meta = VideoMeta(duration_s=50.0, fps=30.0, width=1920, height=1080, nb_frames=1500)
@@ -215,14 +223,14 @@ def _make_frames(frames_dir: Path, n: int) -> list[Path]:
 def test_filter_blurry_frames_keeps_sharp_deletes_blurry(tmp_path: Path) -> None:
     from autosplat.preprocess import filter_blurry_frames
 
-    frames = _make_frames(tmp_path, 4)
-    # scores: 50, 150, 30, 200 — threshold 100 → keep #2 and #4
-    scores = iter([50.0, 150.0, 30.0, 200.0])
+    frames = _make_frames(tmp_path, 5)
+    # scores vs threshold 100 → keep #2, #4, #5 (3 sharp ≥ MIN_USABLE_FRAMES)
+    scores = iter([50.0, 150.0, 30.0, 200.0, 250.0])
     kept, rejected = filter_blurry_frames(frames, blur_threshold=100.0, scorer=lambda _: next(scores))
 
-    assert (kept, rejected) == (2, 2)
+    assert (kept, rejected) == (3, 2)
     assert not frames[0].exists() and frames[1].exists()
-    assert not frames[2].exists() and frames[3].exists()
+    assert not frames[2].exists() and frames[3].exists() and frames[4].exists()
 
 
 def test_filter_blurry_frames_raises_when_all_rejected(tmp_path: Path) -> None:
@@ -246,3 +254,32 @@ def test_filter_blurry_frames_empty_list_no_raise(tmp_path: Path) -> None:
 
     kept, rejected = filter_blurry_frames([], blur_threshold=100.0, scorer=lambda _: 0.0)
     assert (kept, rejected) == (0, 0)
+
+
+def test_filter_blurry_frames_raises_when_too_few_kept(tmp_path: Path) -> None:
+    """0 < kept < MIN_USABLE_FRAMES → fail fast: too few sharp frames for SfM,
+    rather than a cryptic COLMAP failure downstream."""
+    from autosplat.preprocess import MIN_USABLE_FRAMES, TooFewFramesError, filter_blurry_frames
+
+    n = MIN_USABLE_FRAMES + 2
+    frames = _make_frames(tmp_path, n)
+    # Keep exactly MIN_USABLE_FRAMES - 1 sharp; reject the rest → too few.
+    keep = MIN_USABLE_FRAMES - 1
+    scores = iter([200.0] * keep + [10.0] * (n - keep))
+    with pytest.raises(TooFewFramesError) as exc:
+        filter_blurry_frames(frames, blur_threshold=100.0, scorer=lambda _: next(scores))
+
+    assert exc.value.kept == keep
+    assert str(MIN_USABLE_FRAMES) in str(exc.value)
+    assert "blur_threshold" in str(exc.value)
+
+
+def test_filter_blurry_frames_ok_at_minimum(tmp_path: Path) -> None:
+    """Exactly MIN_USABLE_FRAMES kept is allowed — no raise."""
+    from autosplat.preprocess import MIN_USABLE_FRAMES, filter_blurry_frames
+
+    n = MIN_USABLE_FRAMES + 2
+    frames = _make_frames(tmp_path, n)
+    scores = iter([200.0] * MIN_USABLE_FRAMES + [10.0] * (n - MIN_USABLE_FRAMES))
+    kept, _ = filter_blurry_frames(frames, blur_threshold=100.0, scorer=lambda _: next(scores))
+    assert kept == MIN_USABLE_FRAMES
