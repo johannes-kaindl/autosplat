@@ -13,6 +13,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.9.0] — 2026-05-29 — Quality pass: actionable blur control + green type-check
+
+### Added
+
+- **`blur_threshold` override on the New-capture form** — an optional numeric
+  field applies a per-run `preprocess.blur_threshold` override (via
+  `apply_override`), so when a capture fails with "all frames too blurry" you can
+  retry with a lower threshold right there, without editing the config file.
+- **Fast-fail on too-few frames** — `filter_blurry_frames` now raises
+  `TooFewFramesError` when `0 < kept < MIN_USABLE_FRAMES` (3), extending the
+  existing kept-0 guard so 1–2 surviving frames also fail clearly instead of via
+  a cryptic COLMAP error.
+
+### Changed
+
+- **mypy strict is runnable and green again.** It was documented in AGENTS.md but
+  missing from the uv dev group and not in pre-commit, so it had drifted to 66
+  errors. Added `mypy` to `[dependency-groups].dev` and fixed every error with
+  type annotations / casts only — no behaviour change (`_load_or_die -> Config`,
+  typed WebUI route helpers, scoped `ignore_missing_imports` for webview + yaml).
+
+---
+
 ## [v1.8.0] — 2026-05-29 — Failure diagnostics
 
 Failed captures now say — prominently — **when** they failed, **why** in plain
