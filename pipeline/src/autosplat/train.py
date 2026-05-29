@@ -320,6 +320,19 @@ def estimate_wall_time_s(cfg: BrushConfig) -> float:
 
 # Progress callback signature: (elapsed_s, estimated_pct) → None
 ProgressCallback = Callable[[float, float], None]
+# Eval callback signature: (step, eval_psnr_dB) → None — fired per new eval point
+EvalCallback = Callable[[int, float], None]
+
+
+def _drain_eval_history(
+    monitor: PlateauMonitor, cursor: int, eval_callback: EvalCallback
+) -> int:
+    """Emit each (step, psnr) in `monitor.history` beyond `cursor` and return
+    the new cursor. Lets the plateau loop forward fresh eval points to a
+    progress sink without ever re-emitting old ones."""
+    for step, psnr in monitor.history[cursor:]:
+        eval_callback(step, psnr)
+    return len(monitor.history)
 
 
 def _find_latest_ply(directory: Path) -> Path | None:
@@ -339,6 +352,7 @@ def run_brush(
     *,
     export_name: str = "scene.ply",
     progress_callback: ProgressCallback | None = None,
+    eval_callback: EvalCallback | None = None,
 ) -> TrainResult:
     """Invoke Brush against a staged COLMAP dataset, stream its output.
 
@@ -395,12 +409,15 @@ def run_brush(
         def _plateau_loop() -> None:
             nonlocal plateau_triggered_at_step
             assert monitor is not None
+            eval_cursor = 0
             while not plateau_stop.wait(5.0):
                 try:
                     monitor.poll_once()
                 except Exception as e:
                     logger.warning("train.plateau_poll_failed", error=str(e))
                     continue
+                if eval_callback is not None:
+                    eval_cursor = _drain_eval_history(monitor, eval_cursor, eval_callback)
                 if monitor.should_stop:
                     plateau_triggered_at_step = monitor.history[-1][0] if monitor.history else None
                     logger.warning(

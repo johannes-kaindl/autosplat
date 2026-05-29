@@ -82,31 +82,49 @@ def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _make_progress_persister(
-    capture_dir: Path, stage: str, eta_s: float, total_steps: int
-) -> Callable[[float, float], None]:
-    """Return a heartbeat callback that writes `progress.json` on every tick.
+class _ProgressWriter:
+    """Owns a capture's `progress.json` and merges two cadences into it.
 
-    Unlike the log emitter this is unthrottled: it persists the latest
-    (elapsed_s, est_pct) every ~2 s so the WebUI always has a fresh, atomically
-    written snapshot. `step`/`psnr` stay None here — slice 3 merges real eval
-    metrics in via a separate hook when the plateau monitor is active.
+    `tick(elapsed_s, est_pct)` fires on every ~2 s heartbeat (always available);
+    `record_eval(step, psnr)` fires only when the plateau monitor produces a real
+    eval point (slower, opt-in). Both flush the *merged* state atomically, so the
+    fast heartbeat never wipes the slower eval metrics back to None.
     """
 
-    def _persist(elapsed_s: float, est_pct: float) -> None:
+    def __init__(self, capture_dir: Path, stage: str, eta_s: float, total_steps: int) -> None:
+        self._capture_dir = capture_dir
+        self._stage = stage
+        self._eta_s = eta_s
+        self._total_steps = total_steps
+        self._elapsed_s = 0.0
+        self._est_pct = 0.0
+        self._step: int | None = None
+        self._psnr: float | None = None
+
+    def _flush(self) -> None:
         write_progress(
-            capture_dir,
+            self._capture_dir,
             ProgressState(
-                stage=stage,
-                elapsed_s=round(elapsed_s, 1),
-                est_pct=round(est_pct, 4),
-                eta_s=round(eta_s, 1),
+                stage=self._stage,
+                elapsed_s=round(self._elapsed_s, 1),
+                est_pct=round(self._est_pct, 4),
+                eta_s=round(self._eta_s, 1),
                 updated_at=_utc_now_iso(),
-                total_steps=total_steps,
+                step=self._step,
+                total_steps=self._total_steps,
+                psnr=self._psnr,
             ),
         )
 
-    return _persist
+    def tick(self, elapsed_s: float, est_pct: float) -> None:
+        self._elapsed_s = elapsed_s
+        self._est_pct = est_pct
+        self._flush()
+
+    def record_eval(self, step: int, psnr: float) -> None:
+        self._step = step
+        self._psnr = round(psnr, 2)
+        self._flush()
 
 
 def _make_capture_name(video: Path) -> str:
@@ -380,7 +398,7 @@ def run_pipeline(
 
         # v1.6.0 — also persist progress.json (unthrottled) so the WebUI shows a
         # moving bar + elapsed/ETA + liveness instead of a frozen screen.
-        _persist_progress = _make_progress_persister(
+        _progress = _ProgressWriter(
             capture_dir,
             "train",
             eta_s=train_mod.estimate_wall_time_s(config.brush),
@@ -389,7 +407,7 @@ def run_pipeline(
 
         def _heartbeat(elapsed_s: float, est_pct: float) -> None:
             _emit_heartbeat(elapsed_s, est_pct)
-            _persist_progress(elapsed_s, est_pct)
+            _progress.tick(elapsed_s, est_pct)
 
         progress_console = Console(stderr=True)
         if progress_console.is_terminal:
@@ -416,6 +434,7 @@ def run_pipeline(
                     training_dir,
                     config.brush,
                     progress_callback=_cb,
+                    eval_callback=_progress.record_eval,
                 )
         else:
             tr = train_mod.run_brush(
@@ -425,6 +444,7 @@ def run_pipeline(
                 training_dir,
                 config.brush,
                 progress_callback=_heartbeat,
+                eval_callback=_progress.record_eval,
             )
         if tr.final_ply is None:
             raise RuntimeError("Brush completed but produced no .ply")

@@ -1021,14 +1021,14 @@ def test_train_heartbeat_default_interval_tightened_to_30s() -> None:
     assert TRAIN_HEARTBEAT_INTERVAL_S == 30.0
 
 
-def test_progress_persister_writes_time_fields(tmp_path: Path) -> None:
-    """The persister turns a (elapsed_s, est_pct) heartbeat into a progress.json
-    the WebUI can read, carrying the known eta + total_steps but no step/psnr."""
-    from autosplat.pipeline import _make_progress_persister
+def test_progress_writer_tick_writes_time_fields(tmp_path: Path) -> None:
+    """A bare time heartbeat (plateau disabled) writes a progress.json the WebUI
+    can read, carrying the known eta + total_steps but no step/psnr."""
+    from autosplat.pipeline import _ProgressWriter
     from autosplat.progress import read_progress
 
-    persist = _make_progress_persister(tmp_path, "train", eta_s=2400.0, total_steps=30000)
-    persist(1204.0, 0.5017)
+    writer = _ProgressWriter(tmp_path, "train", eta_s=2400.0, total_steps=30000)
+    writer.tick(1204.0, 0.5017)
 
     state = read_progress(tmp_path)
     assert state is not None
@@ -1040,3 +1040,27 @@ def test_progress_persister_writes_time_fields(tmp_path: Path) -> None:
     assert state.step is None
     assert state.psnr is None
     assert state.updated_at.endswith("Z")
+
+
+def test_progress_writer_merges_eval_without_clobbering_time(tmp_path: Path) -> None:
+    """record_eval adds real step/psnr; a subsequent time tick must keep them
+    (the 2 s heartbeat must not wipe the slower eval metrics back to None)."""
+    from autosplat.pipeline import _ProgressWriter
+    from autosplat.progress import read_progress
+
+    writer = _ProgressWriter(tmp_path, "train", eta_s=2400.0, total_steps=30000)
+    writer.tick(1204.0, 0.50)
+    writer.record_eval(12000, 24.8)
+
+    merged = read_progress(tmp_path)
+    assert merged is not None
+    assert merged.step == 12000
+    assert merged.psnr == 24.8
+    assert merged.elapsed_s == 1204.0  # time field preserved
+
+    writer.tick(1210.0, 0.51)  # next heartbeat
+    after = read_progress(tmp_path)
+    assert after is not None
+    assert after.step == 12000  # eval metrics survive the tick
+    assert after.psnr == 24.8
+    assert after.elapsed_s == 1210.0  # time advanced

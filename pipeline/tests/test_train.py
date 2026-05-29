@@ -452,6 +452,45 @@ def test_plateau_monitor_idempotent_polls(tmp_path: Path) -> None:
     assert len(m.history) == 2
 
 
+# ─── v1.6.0: eval-history drain → progress callback ────────────────────────
+
+
+def test_drain_eval_history_emits_only_new_entries(tmp_path: Path) -> None:
+    """_drain_eval_history calls the eval_callback once per new (step, psnr)
+    and returns the new cursor, so repeat drains don't re-emit old metrics."""
+    from autosplat.train import PlateauMonitor, _drain_eval_history
+
+    out = tmp_path / "training"
+    _make_eval_dirs(out, [1000, 2000])
+    m = PlateauMonitor(
+        output_dir=out,
+        frames_dir=tmp_path / "frames",
+        min_steps=100,
+        patience=1,
+        min_delta_psnr=10.0,
+        psnr_fn=_scripted_psnr({1000: 25.0, 2000: 26.0}),
+    )
+    m.poll_once()
+
+    seen: list[tuple[int, float]] = []
+    cursor = _drain_eval_history(m, 0, lambda step, psnr: seen.append((step, psnr)))
+    assert seen == [(1000, 25.0), (2000, 26.0)]
+    assert cursor == 2
+
+    # A second drain with the returned cursor emits nothing new.
+    cursor = _drain_eval_history(m, cursor, lambda step, psnr: seen.append((step, psnr)))
+    assert seen == [(1000, 25.0), (2000, 26.0)]
+    assert cursor == 2
+
+    # New eval appears → only it is emitted.
+    _make_eval_dirs(out, [3000])
+    m.psnr_fn = _scripted_psnr({1000: 25.0, 2000: 26.0, 3000: 27.0})
+    m.poll_once()
+    cursor = _drain_eval_history(m, cursor, lambda step, psnr: seen.append((step, psnr)))
+    assert seen[-1] == (3000, 27.0)
+    assert cursor == 3
+
+
 # ─── v1.5.0: build_brush_command plateau-flags integration ─────────────────
 
 
