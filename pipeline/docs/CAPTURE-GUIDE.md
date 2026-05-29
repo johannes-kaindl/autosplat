@@ -99,6 +99,12 @@ INFO     bisection.probe clip_id=0_1 cameras_registered=78 ratio=0.62 passed=tru
 INFO     bisection.combine_start leaf_count=2
 ```
 
+In the WebUI, a failed capture surfaces a plain-language diagnosis — a headline, the raw reason, and a concrete "what to do" hint — plus a Resume button:
+
+![WebUI failure panel — the bisection_no_culprit diagnosis](assets/screenshots/webui-failure-panel.png)
+
+The example above is the v1.10.0 multi-video case: each flight registered on its own, but the set wouldn't co-register, so the run stopped with `bisection_no_culprit` rather than re-running an unchanged set — that's a cross-video overlap problem, fixed by reshooting with more overlap *between* the flights, not by shorter clips.
+
 If the combined re-run still fails with `retry_hint=null`, **no further automatic recovery is possible** — both the matcher swap and bisection have been tried. At that point:
 
 ### Read the camera count

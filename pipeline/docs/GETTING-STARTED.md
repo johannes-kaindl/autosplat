@@ -95,14 +95,27 @@ uv run autosplat webui --port 8080
 # Open http://127.0.0.1:8080 in your browser.
 ```
 
-From the dashboard:
+**1. Start a capture** — the **New capture** form takes one video path or several (one per line for a multi-video capture), plus an optional blur-threshold override:
 
-1. **Dashboard** — see the capture queue, recent runs, and active jobs at a glance.
-2. **Captures list** — every capture in your `captures_dir` with its current status badge.
-3. **Capture detail** — click a capture to see the stage timeline. Hit **Process** to start a pipeline run.
-4. **Live progress** — the stage timeline auto-refreshes every few seconds via HTMX polling.
-5. **Cancel** — hit **Cancel** on a running job (useful during the ~40-minute Brush stage).
-6. **View** — once a PLY is ready, the **View** button opens the SuperSplat embed directly in the browser.
+![New-capture form](assets/screenshots/webui-new-capture.png)
+
+**2. Watch it run** — the dashboard shows the active job, queue, and recent captures; open a running capture for the live stage timeline, a wall-time progress bar with ETA, and a `updated Ns ago` heartbeat:
+
+![Dashboard](assets/screenshots/webui-dashboard.png)
+
+![Live progress](assets/screenshots/webui-live-progress.png)
+
+**3. Open the result** — a finished capture shows the PLY size, exports, and a **View splat** button that opens the SuperSplat embed in the browser:
+
+![Finished capture detail](assets/screenshots/webui-capture-done.png)
+
+Other things you can do from the UI:
+
+- **Captures list** — every capture in your `captures_dir` with its current status badge.
+- **Cancel** — stop a running job (useful during the ~40-minute Brush stage) — it writes the last checkpoint first.
+- **Resume** — every failed capture gets a Resume button; failures also show a plain-language diagnosis of what went wrong and what to try (see [CAPTURE-GUIDE](CAPTURE-GUIDE.md)).
+
+The CLI (`autosplat process`, `autosplat watch`) continues to work alongside the WebUI — they share the same state file and captures directory.
 
 The CLI (`autosplat process`, `autosplat watch`) continues to work alongside the WebUI — they share the same state file and captures directory.
 

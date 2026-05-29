@@ -1,17 +1,17 @@
 # video-to-3d-gaussian-splat
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.3.0-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
+[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.10.0-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
 [![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS%2015%2B%20%C2%B7%20Apple%20Silicon-lightgrey)](https://www.apple.com/macos/)
-[![Tests](https://img.shields.io/badge/tests-267%20passing-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/tests)
+[![Tests](https://img.shields.io/badge/tests-426%20passing-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/tests)
 
 Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running locally on Apple Silicon.
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.5.0 — Train-till-Plateau.** Opt-in patience-stop for Brush: hold out ~10 % of frames, monitor PSNR during training, SIGTERM Brush when the curve flattens. On converging captures this saves 30-50 % of the Brush stage. Plus the full v1.4 stack — auto-bisection-rescue, manual `autosplat rescue` CLI, smart-split, per-clip WebUI progress, local-viewer default. Mac Silicon, AGPL-3.0.
+> **Status: v1.10.0 — Multi-video bisection-rescue.** Auto-bisection now fires for multi-video captures: each source flight is probed whole, the failing ones are bisected, and the survivors recombine — so one bad flight poisoning the joint SfM model is rescuable. Plus the full stack — single-video auto-bisection-rescue, train-till-plateau, live-progress mission control, failure diagnostics, and the `AutoSplat.app` DMG. Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -219,6 +219,23 @@ Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features:
 - **Jobs** — active + recent with per-job status badges (queued/running/done/failed/cancelled)
 - **Viewer** — SuperSplat iframe embed for finished splats, three-state fallback
 - **`/source`** — AGPL §13 compliance route
+
+<p align="center">
+  <img src="docs/assets/screenshots/webui-dashboard.png" alt="autosplat WebUI dashboard — capture stats, the active training job, and a list of recent captures with status badges and PLY sizes" width="800" />
+  <br /><sub><em>Dashboard — stats, the active job, and recent captures at a glance.</em></sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/webui-live-progress.png" alt="Live-progress mission control — the stage pipeline with Brush active, a 62 % progress bar, elapsed/ETA/step/PSNR tiles, and a live log" width="800" />
+  <br /><sub><em>Live progress — stage timeline, wall-time bar + ETA, and a live <code>updated Ns ago</code> heartbeat during Brush training.</em></sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/webui-failure-panel.png" alt="Failure panel showing the bisection_no_culprit diagnosis with a plain-language headline and a what-to-do hint" /><br /><sub><em>Failure diagnostics — every failed run gets a plain-language headline and a what-to-do hint (here: the v1.10.0 multi-video <code>bisection_no_culprit</code> case).</em></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/webui-new-capture.png" alt="New-capture form with a multi-line video-path field and an optional blur-threshold override" /><br /><sub><em>New capture — point it at one video or many (multi-video), with an optional blur-threshold override.</em></sub></td>
+  </tr>
+</table>
 
 Persistent history (`runs.jsonl` append-log) survives WebUI restart. Stale-job liveness reconciliation flips dead worker threads to `failed` instead of phantom `running`. Responsive: 3 breakpoints (Desktop ≥1024 / Tablet ≤1023 / Mobile ≤767), off-canvas sidebar on mobile. **Kuro Signal Protocol** design system (v1.1.0) with dark/light theme toggle (anti-flash, persisted) and HTMX polling on every surface. See [`docs/WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
 
