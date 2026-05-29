@@ -51,6 +51,32 @@
     </div>
   </div>
 
+  {% if capture.status == 'failed' and failure %}
+  <div class="as-card" role="alert"
+       style="border:1px solid var(--stage-failed);border-left-width:4px;background:color-mix(in oklab, var(--stage-failed) 8%, var(--surface-inset));margin-bottom:var(--space-4)">
+    <div class="as-card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
+      <div style="display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap">
+        <span style="color:var(--stage-failed);font-weight:700;font-size:15px">⚠ {{ failure.headline }}</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">
+          failed{% if capture.stage %} during {{ capture.stage }}{% endif %}{% if capture.finished_at %} · {{ capture.finished_at }}{% endif %}
+        </span>
+      </div>
+      {% if failure_reason %}
+      <div style="font-family:var(--font-mono);font-size:12px;color:var(--fg-secondary);background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-3);white-space:pre-wrap;word-break:break-word">{{ failure_reason }}</div>
+      {% endif %}
+      <div style="font-size:13px;color:var(--fg-primary);line-height:1.5">
+        <strong style="color:var(--stage-export)">💡 What to do:</strong> {{ failure.hint }}
+      </div>
+      <div style="display:flex;gap:var(--space-2)">
+        <form method="post" action="/captures/{{ capture.id }}/resume">
+          <button type="submit" class="as-btn primary">{{ icon('play', 13) }} Resume</button>
+        </form>
+        {% if capture.has_log %}<a href="#capture-log" class="as-btn">View log</a>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {{ stage_timeline(capture.stage, capture.status) }}
 
   {% if capture.status == 'running' %}
@@ -129,7 +155,7 @@
 
       {# Log tail #}
       {% if capture.has_log %}
-      <div class="as-log">
+      <div class="as-log" id="capture-log">
         <div class="as-log-head">
           {{ icon('terminal', 12) }}
           <span>{% if capture.status == 'running' %}live{% else %}final{% endif %} log · {{ capture.id[:8] }} · tail 40</span>

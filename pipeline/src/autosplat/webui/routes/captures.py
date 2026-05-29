@@ -8,6 +8,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from autosplat import __version__
+from autosplat.failure import classify_failure, failure_reason_from_log
 from autosplat.webui.state import (
     get_capture,
     last_activity_age_s,
@@ -179,6 +180,13 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     log_lines: list[str] = []
     if capture.has_log and capture.status != "running":
         log_lines = read_log_tail(capture.path, max_lines=40)
+
+    failure = None
+    failure_reason = None
+    if capture.status == "failed":
+        failure_reason = capture.reason or failure_reason_from_log(capture.path)
+        failure = classify_failure(failure_reason, capture.stage)
+
     return _templates(request).TemplateResponse(
         request,
         "capture/detail.html",
@@ -187,6 +195,8 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
             "capture": capture,
             "log_lines": log_lines,
             "age_s": last_activity_age_s(capture.path),
+            "failure": failure,
+            "failure_reason": failure_reason,
         },
     )
 

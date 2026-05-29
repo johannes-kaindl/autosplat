@@ -318,6 +318,55 @@ def test_capture_detail_done_hides_resume_button(app: FastAPI, tmp_path: Path) -
     assert "/resume" not in response.text
 
 
+# ── v1.8.0 — prominent failure panel ─────────────────────────────────────────
+
+
+def test_capture_detail_shows_failure_panel(app: FastAPI, tmp_path: Path) -> None:
+    """A failed capture's detail page surfaces a prominent panel with when it
+    failed, a human headline, and an actionable remediation hint."""
+    from autosplat.watcher import FailedEntry, WatcherState
+
+    capture_dir = tmp_path / "2026-05-29_failed_blur"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "pipeline.log").write_text('{"event": "x", "level": "info"}\n')
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    state = WatcherState()
+    state.failed = [
+        FailedEntry(
+            path=str(capture_dir),
+            failed_at="2026-05-29T14:17:48Z",
+            reason="All 250 extracted frames were rejected as blurry (blur_threshold=100.0).",
+            stage="preprocess",
+        )
+    ]
+    with (
+        patch("autosplat.webui.state._load_watcher_state", return_value=state),
+        TestClient(app) as client,
+    ):
+        response = client.get("/captures/2026-05-29_failed_blur")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "too blurry" in body.lower()  # headline
+    assert "blur_threshold" in body  # hint
+    assert "What to do" in body
+    assert "2026-05-29T14:17:48Z" in body  # when
+
+
+def test_capture_detail_done_has_no_failure_panel(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = tmp_path / "2026-05-29_ok"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-29_ok")
+
+    assert response.status_code == 200
+    assert "What to do" not in response.text
+
+
 # ── Native Finder file-picker (osascript) ────────────────────────────────────
 
 
