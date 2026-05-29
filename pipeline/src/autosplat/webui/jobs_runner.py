@@ -166,6 +166,15 @@ class JobRunner:
             self._reconcile(job)
         return list(self._history)
 
+    def last_run(self, capture_id: str) -> JobState | None:
+        """Most recent persisted run for a capture (from runs.jsonl history), or
+        None. Lets a failed capture keep its failed status + reason across a
+        restart, when the in-memory active job is gone."""
+        for job in reversed(self._history):
+            if job.capture_id == capture_id:
+                return job
+        return None
+
     async def start_job(self, capture_id: str, capture_path: Path, cfg: Config) -> JobState:
         async with self._lock:
             existing = self._jobs.get(capture_id)

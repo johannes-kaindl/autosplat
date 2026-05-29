@@ -395,6 +395,50 @@ def test_captures_list_shows_failure_headline(app: FastAPI, tmp_path: Path) -> N
     assert "align the frames" in response.text  # sfm headline
 
 
+# ── v1.8.0 — durable failed status from runs.jsonl (survives restart) ─────────
+
+
+def test_jobrunner_last_run_returns_latest_for_capture(tmp_path: Path) -> None:
+    from autosplat.webui.jobs_runner import JobRunner
+
+    cap = tmp_path / "2026-05-29_hist"
+    cap.mkdir()
+    (cap / "runs.jsonl").write_text(
+        '{"capture_id":"2026-05-29_hist","status":"failed","error":"first"}\n'
+        '{"capture_id":"2026-05-29_hist","status":"failed","error":"second"}\n'
+    )
+    jr = JobRunner(captures_dir=tmp_path)
+    jr.load_history()
+
+    last = jr.last_run("2026-05-29_hist")
+    assert last is not None
+    assert last.error == "second"  # most recent wins
+    assert jr.last_run("2026-05-29_nope") is None
+
+
+def test_list_captures_failed_from_runs_jsonl_after_restart(tmp_path: Path) -> None:
+    """After a restart the in-memory job is gone; a capture whose last persisted
+    run failed must still show as failed + reason — not revert to 'idle'."""
+    from autosplat.webui.jobs_runner import JobRunner
+    from autosplat.webui.state import list_captures
+
+    cap = tmp_path / "2026-05-29_oldfail"
+    cap.mkdir()
+    (cap / "runs.jsonl").write_text(
+        '{"capture_id":"2026-05-29_oldfail","status":"failed",'
+        '"started_at":"2026-05-29T11:00:00Z","finished_at":"2026-05-29T11:01:00Z",'
+        '"error":"No images with matches"}\n'
+    )
+    jr = JobRunner(captures_dir=tmp_path)
+    jr.load_history()
+
+    caps = list_captures(tmp_path, jr)
+    c = next(x for x in caps if x.id == "2026-05-29_oldfail")
+    assert c.status == "failed"
+    assert c.reason == "No images with matches"
+    assert c.finished_at == "2026-05-29T11:01:00Z"
+
+
 # ── Native Finder file-picker (osascript) ────────────────────────────────────
 
 

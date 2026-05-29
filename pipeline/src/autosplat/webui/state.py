@@ -92,6 +92,7 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
         # Determine status + metadata. JobRunner (in-memory, WebUI jobs) wins
         # over WatcherState — see SF-G2-9 in the docstring.
         job = job_runner.get_job(entry.name) if job_runner is not None else None
+        last_run = job_runner.last_run(entry.name) if job_runner is not None else None
         detail: str | None = None  # only the WatcherState.in_progress branch sets this
         if job is not None and job.status == "running":
             status: CaptureStatus = "running"
@@ -155,6 +156,15 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
             finished_at = failed.failed_at
             duration_s = None
             reason = failed.reason
+        elif last_run is not None and last_run.status == "failed" and ply is None:
+            # Durable failed status from runs.jsonl — a WebUI job that failed
+            # before a restart (in-memory job gone) must not revert to 'idle'.
+            status = "failed"
+            stage = None
+            started_at = last_run.started_at_walltime
+            finished_at = last_run.finished_at_walltime
+            duration_s = None
+            reason = last_run.error
         elif ply is not None:
             status = "done"
             stage = "export"
