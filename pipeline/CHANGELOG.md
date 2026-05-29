@@ -13,6 +13,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.9.1] — 2026-05-29 — Brand: marks, favicon, social card, app icon
+
+### Added
+
+- **Brand kit** (`docs/brand`) — generative point-cloud mark system (tokens,
+  marks.js, brand kit page) plus a reproducible asset pipeline:
+  `docs/brand/render_marks.mjs` ports the orb generator to emit static SVGs and
+  `scripts/build_brand_assets.sh` rasterizes them (rsvg-convert / iconutil).
+- **WebUI branding** — SVG + PNG favicon, apple-touch-icon, `theme-color`, and an
+  Open Graph / Twitter social card (`/static/brand/og.png`) in the page `<head>`.
+- **App icon** — `AutoSplat.app` now ships the orb icon (`packaging/AutoSplat.icns`),
+  so the Dock/Finder show the brand mark instead of the generic placeholder.
+
+### Changed
+
+- **mypy strict added to the pre-push hooks** (`.pre-commit-config.yaml`) so the
+  type-gate can't silently drift again; AGENTS.md updated to match.
+
+---
+
 ## [v1.9.0] — 2026-05-29 — Quality pass: actionable blur control + green type-check
 
 ### Added
