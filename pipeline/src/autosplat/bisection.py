@@ -17,6 +17,11 @@ This module is built up across multiple slices:
   Slice 4 — bisect_recursively (DFS halt-on-success)
   Slice 5 — rescue_via_bisection (orchestrator)
   Slice 6 — pipeline.py integration
+
+Multi-video extension (2026-05-29): `rescue_via_bisection_multi` probes each
+source video whole, keeps the passers, bisects the failures (namespaced per
+video), and recombines the pooled leaves. See
+docs/superpowers/specs/2026-05-29-multi-video-bisection-design.md.
 """
 
 from __future__ import annotations
@@ -166,7 +171,9 @@ def probe_clip(
     # pipeline default of 250 to 120 cuts a single probe's matcher cost
     # by ~4×. The threshold is high enough that legitimate sub-clips
     # still register past the 50 %-ratio quality-gate.
-    frames_cap = target_frames if target_frames is not None else cfg.retry.bisect_probe_target_frames
+    frames_cap = (
+        target_frames if target_frames is not None else cfg.retry.bisect_probe_target_frames
+    )
     probe_cfg = apply_override(
         cfg,
         {
@@ -551,6 +558,134 @@ def rescue_via_bisection(
     )
     return _run_pipeline_with_adaptive_retry(
         [leaf.path for leaf in leaves],
+        cfg,
+        capture_dir_override=capture_dir,
+        state=state,
+        _bisection_already_attempted=True,
+    )
+
+
+def rescue_via_bisection_multi(
+    videos: list[Path],
+    capture_dir: Path,
+    cfg: Config,
+    *,
+    state: WatcherState | None = None,
+) -> PipelineResult:
+    """Bisect a failed *multi-video* capture and re-run as multi-video.
+
+    Unlike the single-video path (which knows the whole video failed and goes
+    straight to bisecting), a multi-video capture failed on the *combined* SfM
+    model — any individual source video might still register fine alone. So for
+    each video we first probe it whole (exhaustive matcher, full
+    `preprocess.target_frames`):
+
+      • passes whole → keep the whole video as a pool leaf;
+      • fails whole and long enough → bisect it (namespaced `clip_id_prefix=vN`
+        so two videos' probe workspaces never collide);
+      • fails whole but shorter than `2 * min_clip_s` → drop it (a short flight
+        that fails alone can't be rescued by cutting it shorter).
+
+    Then recombine the pooled leaves through the multi-video pipeline with
+    `_bisection_already_attempted=True` (the existing recursion guard).
+
+    Raises QualityGateFailure when:
+      • no leaves survive anywhere (`bisection_exhausted`);
+      • the pool is identical to the input — every video passed whole, nothing
+        bisected or dropped (`bisection_no_culprit`). Re-running an unchanged,
+        just-failed set is pure waste; the combined failure is a cross-video
+        registration problem bisection cannot address.
+    """
+    t0 = time.monotonic()
+    logger.info(
+        "bisection.multi_start",
+        videos=[str(v) for v in videos],
+        capture_dir=str(capture_dir),
+    )
+    if state is not None:
+        state.update_stage("bisect", detail=f"multi-video rescue: {len(videos)} videos")
+
+    min_s = cfg.retry.bisect_min_clip_s
+    full_frames = cfg.preprocess.target_frames
+
+    for sub in ("frames", "colmap", "training"):
+        stale = capture_dir / sub
+        if stale.exists():
+            shutil.rmtree(stale)
+
+    pool: list[Path] = []
+    for i, video in enumerate(videos):
+        duration_s = _probe_duration_s(video)
+        whole_clip = BisectionClip(
+            source_video=video,
+            clip_id=f"v{i}_whole",
+            start_s=0.0,
+            duration_s=duration_s,
+            path=video,
+        )
+        whole_ws = capture_dir / "rescue" / "probes" / f"v{i}_whole"
+        if state is not None:
+            state.update_stage("bisect", detail=f"probing video {i + 1}/{len(videos)} whole")
+
+        if probe_clip(whole_clip, whole_ws, cfg, target_frames=full_frames):
+            logger.info("bisection.multi_whole_passed", video=str(video), clip_id=f"v{i}")
+            pool.append(video)
+            continue
+
+        if duration_s < 2 * min_s:
+            logger.warning(
+                "bisection.multi_video_too_short",
+                video=str(video),
+                duration_s=duration_s,
+                min_clip_s=min_s,
+            )
+            continue
+
+        leaves = bisect_recursively(
+            video,
+            duration_s=duration_s,
+            capture_dir=capture_dir,
+            cfg=cfg,
+            clip_id_prefix=f"v{i}",
+            state=state,
+        )
+        logger.info(
+            "bisection.multi_video_bisected",
+            video=str(video),
+            clip_id=f"v{i}",
+            leaf_count=len(leaves),
+        )
+        pool.extend(leaf.path for leaf in leaves)
+
+    if not pool:
+        logger.warning("bisection.multi_exhausted", video_count=len(videos))
+        raise QualityGateFailure(
+            reason="bisection_exhausted",
+            stage="bisection",
+            retry_hint=None,
+            metrics={"video_count": len(videos), "pool_size": 0},
+        )
+
+    if pool == list(videos):
+        # Nothing changed — every video registered whole, none bisected or
+        # dropped. The combined failure is a cross-video registration problem,
+        # not something shorter clips fix. Fail fast instead of re-running the
+        # identical set that just failed.
+        logger.warning("bisection.multi_no_culprit", video_count=len(videos))
+        raise QualityGateFailure(
+            reason="bisection_no_culprit",
+            stage="bisection",
+            retry_hint=None,
+            metrics={"video_count": len(videos)},
+        )
+
+    logger.info(
+        "bisection.multi_combine_start",
+        pool_size=len(pool),
+        duration_s=time.monotonic() - t0,
+    )
+    return _run_pipeline_with_adaptive_retry(
+        pool,
         cfg,
         capture_dir_override=capture_dir,
         state=state,

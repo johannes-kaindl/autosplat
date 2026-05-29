@@ -21,6 +21,7 @@ from autosplat.bisection import (
     cut_video,
     probe_clip,
     rescue_via_bisection,
+    rescue_via_bisection_multi,
 )
 from autosplat.config import load_config
 from autosplat.preprocess import PreprocessResult
@@ -848,6 +849,214 @@ def test_rescue_via_bisection_wipes_stale_stage_dirs(monkeypatch, tmp_path: Path
     monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", fake_run_pipeline)
 
     rescue_via_bisection(video, capture_dir, cfg)
+
+
+# ─── Multi-Video-Bisection: rescue_via_bisection_multi ──────────────────────
+
+
+def _fake_pipeline_result(capture_dir: Path):
+    from autosplat.pipeline import PipelineResult
+
+    return PipelineResult(
+        capture_name=capture_dir.name,
+        capture_dir=capture_dir,
+        output_ply=capture_dir / "output" / "scene.ply",
+        metadata_path=capture_dir / "output" / "metadata.json",
+        duration_s=1.0,
+    )
+
+
+def test_rescue_multi_keeps_whole_passers_and_bisects_failures(monkeypatch, tmp_path: Path) -> None:
+    """One video passes whole → kept as-is; one fails → bisected. Pool = whole
+    survivor + bisected leaves, recombined with the recursion guard set."""
+    cfg = load_config(include_xdg=False)
+
+    vid_a = tmp_path / "flight_a.mp4"
+    vid_b = tmp_path / "flight_b.mp4"
+    for v in (vid_a, vid_b):
+        v.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "2026-05-29_flight"
+    capture_dir.mkdir(parents=True)
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+
+    # flight_a registers whole; flight_b does not.
+    def fake_probe(clip, workspace, cfg, *, target_frames=None):
+        return clip.source_video == vid_a
+
+    monkeypatch.setattr(bm, "probe_clip", fake_probe)
+
+    b_leaves = [
+        BisectionClip(vid_b, "v1_0", 0.0, 120.0, tmp_path / "b0.mp4"),
+        BisectionClip(vid_b, "v1_1", 120.0, 120.0, tmp_path / "b1.mp4"),
+    ]
+    for leaf in b_leaves:
+        leaf.path.write_bytes(b"\x00")
+    monkeypatch.setattr(bm, "bisect_recursively", lambda *a, **kw: b_leaves)
+
+    called: dict[str, object] = {}
+
+    def fake_recombine(videos, config, **kwargs):
+        called["videos"] = list(videos)
+        called["kwargs"] = kwargs
+        return _fake_pipeline_result(capture_dir)
+
+    monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", fake_recombine)
+
+    result = rescue_via_bisection_multi([vid_a, vid_b], capture_dir, cfg)
+
+    assert called["videos"] == [vid_a, b_leaves[0].path, b_leaves[1].path]
+    assert called["kwargs"]["_bisection_already_attempted"] is True
+    assert result.capture_dir == capture_dir
+
+
+def test_rescue_multi_probes_whole_with_full_target_frames(monkeypatch, tmp_path: Path) -> None:
+    """Whole-video probes use the full pipeline frame budget, not the cap."""
+    cfg = load_config(include_xdg=False)
+    assert cfg.preprocess.target_frames == 250
+
+    vid = tmp_path / "flight.mp4"
+    vid.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "f"
+    capture_dir.mkdir(parents=True)
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+
+    seen_frames: list[int | None] = []
+
+    def fake_probe(clip, workspace, cfg, *, target_frames=None):
+        seen_frames.append(target_frames)
+        return True
+
+    monkeypatch.setattr(bm, "probe_clip", fake_probe)
+    monkeypatch.setattr(bm, "bisect_recursively", lambda *a, **kw: [])
+    # both pass whole → no_culprit guard fires, but probing happened first.
+    with pytest.raises(QualityGateFailure):
+        rescue_via_bisection_multi([vid, tmp_path / "f2.mp4"], capture_dir, cfg)
+
+    assert seen_frames and all(f == 250 for f in seen_frames)
+
+
+def test_rescue_multi_namespaces_bisect_per_video(monkeypatch, tmp_path: Path) -> None:
+    """Each failed video is bisected under its own clip_id_prefix so two videos'
+    probe workspaces (rescue/probes/0) don't collide."""
+    cfg = load_config(include_xdg=False)
+
+    vid_a = tmp_path / "a.mp4"
+    vid_b = tmp_path / "b.mp4"
+    for v in (vid_a, vid_b):
+        v.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "c"
+    capture_dir.mkdir(parents=True)
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+    monkeypatch.setattr(bm, "probe_clip", lambda *a, **kw: False)  # both fail whole
+
+    seen_prefixes: list[str] = []
+
+    def capture_bisect(source_video, **kw):
+        seen_prefixes.append(kw.get("clip_id_prefix"))
+        leaf = BisectionClip(
+            source_video, "x", 0.0, 120.0, tmp_path / f"{source_video.stem}_leaf.mp4"
+        )
+        leaf.path.write_bytes(b"\x00")
+        return [leaf]
+
+    monkeypatch.setattr(bm, "bisect_recursively", capture_bisect)
+    monkeypatch.setattr(
+        bm, "_run_pipeline_with_adaptive_retry", lambda *a, **kw: _fake_pipeline_result(capture_dir)
+    )
+
+    rescue_via_bisection_multi([vid_a, vid_b], capture_dir, cfg)
+
+    assert seen_prefixes == ["v0", "v1"]
+
+
+def test_rescue_multi_wipes_stale_stage_dirs(monkeypatch, tmp_path: Path) -> None:
+    """frames/, colmap/, training/ are wiped before the combined re-run."""
+    cfg = load_config(include_xdg=False)
+
+    vid_a = tmp_path / "a.mp4"
+    vid_b = tmp_path / "b.mp4"
+    for v in (vid_a, vid_b):
+        v.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "c"
+    capture_dir.mkdir(parents=True)
+    for sub in ("frames", "colmap", "training"):
+        d = capture_dir / sub
+        d.mkdir()
+        (d / "stale.txt").write_text("old", encoding="utf-8")
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+    monkeypatch.setattr(bm, "probe_clip", lambda *a, **kw: a[0].source_video == vid_a)
+    leaf = BisectionClip(vid_b, "v1_0", 0.0, 120.0, tmp_path / "b0.mp4")
+    leaf.path.write_bytes(b"\x00")
+    monkeypatch.setattr(bm, "bisect_recursively", lambda *a, **kw: [leaf])
+
+    def fake_recombine(videos, config, **kwargs):
+        assert not (capture_dir / "frames").exists()
+        assert not (capture_dir / "colmap").exists()
+        assert not (capture_dir / "training").exists()
+        return _fake_pipeline_result(capture_dir)
+
+    monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", fake_recombine)
+
+    rescue_via_bisection_multi([vid_a, vid_b], capture_dir, cfg)
+
+
+def test_rescue_multi_no_culprit_when_all_pass_whole(monkeypatch, tmp_path: Path) -> None:
+    """Every video registers whole → pool == input → bisection_no_culprit, no
+    recombine (re-running the identical just-failed set is pure waste)."""
+    cfg = load_config(include_xdg=False)
+    vids = [tmp_path / "a.mp4", tmp_path / "b.mp4"]
+    for v in vids:
+        v.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "c"
+    capture_dir.mkdir(parents=True)
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 240.0)
+    monkeypatch.setattr(bm, "probe_clip", lambda *a, **kw: True)
+
+    def must_not_run(*a, **kw):
+        raise AssertionError("recombine must not run when nothing changed")
+
+    monkeypatch.setattr(bm, "_run_pipeline_with_adaptive_retry", must_not_run)
+
+    with pytest.raises(QualityGateFailure) as excinfo:
+        rescue_via_bisection_multi(vids, capture_dir, cfg)
+    assert excinfo.value.reason == "bisection_no_culprit"
+    assert excinfo.value.retry_hint is None
+
+
+def test_rescue_multi_exhausted_when_pool_empty(monkeypatch, tmp_path: Path) -> None:
+    """All videos fail whole and are too short to bisect → empty pool →
+    bisection_exhausted."""
+    cfg = load_config(include_xdg=False)  # min_clip_s = 60 → 2*min = 120
+    vids = [tmp_path / "a.mp4", tmp_path / "b.mp4"]
+    for v in vids:
+        v.write_bytes(b"\x00")
+    capture_dir = tmp_path / "captures" / "c"
+    capture_dir.mkdir(parents=True)
+
+    import autosplat.bisection as bm
+
+    monkeypatch.setattr(bm, "_probe_duration_s", lambda v: 90.0)  # < 120 → too short
+    monkeypatch.setattr(bm, "probe_clip", lambda *a, **kw: False)
+
+    with pytest.raises(QualityGateFailure) as excinfo:
+        rescue_via_bisection_multi(vids, capture_dir, cfg)
+    assert excinfo.value.reason == "bisection_exhausted"
+    assert excinfo.value.retry_hint is None
 
 
 # ─── Slice 7: opt-in real-binary tests ──────────────────────────────────────
