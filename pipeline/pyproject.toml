@@ -1,6 +1,6 @@
 [project]
 name = "autosplat"
-version = "1.9.2"
+version = "1.10.0"
 description = "Automated local pipeline for drone-video → Gaussian Splat (Apple Silicon)"
 readme = "README.md"
 requires-python = ">=3.11"

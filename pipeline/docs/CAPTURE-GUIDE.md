@@ -84,6 +84,7 @@ The pipeline already does what it can on your behalf:
 3. **Adaptive retry** swaps in the `exhaustive` matcher (every frame against every frame — much slower, much more robust to loops).
 4. **Quality-gate again** — if exhaustive still produces <50% registered, the run escalates to auto-bisection (v1.4+).
 5. **Auto-bisection (v1.4+)** binary-subdivides the source video and probes each half with a cheap SfM-only run. Surviving halves get recombined through the multi-video pipeline path that proved out on `max_strasse` (4 hand-cut clips → 100 % registered).
+   - **Multi-video captures** (two independent flights, or footage added via `add-video`) bisect too: each source video is first probed *whole*; the ones that register are kept as-is, only the failing flights are bisected, and all survivors recombine. If every flight registers alone but the set still won't combine, the run stops with `bisection_no_culprit` — that's a cross-video overlap problem, not something shorter clips fix.
 6. **Quality-gate one last time** on the combined leaf set — if even that fails, the run aborts before Brush.
 
 What the user sees:
@@ -141,6 +142,8 @@ When bisection fires, it materialises three things on disk under the failing cap
 ```
 
 The `clip_id` (`0`, `0_1`, `0_1_0`) is a depth-encoded path through the bisection tree: a leading `0` is the first half of its parent, a `_1` step is a deeper-level second half, and so on. Probe artefacts stay on disk after a successful rescue so you can inspect *which* sub-clip carried the reconstruction — useful when you want to re-shoot just the broken segment.
+
+For **multi-video** rescue the clip-ids are namespaced per source video — `v0`, `v1`, … — so the first flight's sub-clips land under `probes/v0_0/`, the second's under `probes/v1_0/`, and a whole-video probe under `probes/v<N>_whole/`. That keeps two flights' forensic artefacts from colliding.
 
 Three knobs in `[retry]` of your config control the behaviour:
 

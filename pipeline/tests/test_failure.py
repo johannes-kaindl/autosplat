@@ -54,6 +54,14 @@ def test_classify_interrupted() -> None:
     assert "resume" in info.hint.lower()
 
 
+def test_classify_bisection_no_culprit() -> None:
+    """Multi-video rescue where every flight registers alone but the set won't
+    co-register → a cross-video problem, distinct from the generic SfM headline."""
+    info = classify_failure("bisection_no_culprit", stage="bisection")
+    assert info.category == "multi_video"
+    assert "co-register" in info.hint.lower() or "overlap between" in info.hint.lower()
+
+
 def test_classify_unknown_fallback() -> None:
     info = classify_failure("some totally novel explosion", stage="train")
     assert info.category == "unknown"

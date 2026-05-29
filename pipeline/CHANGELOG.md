@@ -9,10 +9,37 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-- **fix(failure):** corrected the SfM failure hint — auto-rescue
+---
+
+## [v1.10.0] — 2026-05-29 — Multi-video bisection-rescue
+
+### Added
+
+- **Auto-bisection now fires for multi-video captures.** Previously a
+  multi-video capture (two independent flights, or footage added via
+  `add-video`) that exhausted the matcher-swap retry just failed — bisection was
+  single-video only. Now each source video is first probed *whole* (exhaustive
+  matcher, full `target_frames`); flights that register are kept as-is, only the
+  failing ones are bisected, and all survivors recombine through the multi-video
+  pipeline. One bad flight poisoning the joint SfM model is now rescuable.
+- New failure diagnosis `bisection_no_culprit` — when every flight registers
+  alone but the set won't co-register, the run stops fast with a cross-video
+  overlap hint instead of pointlessly re-running the identical set.
+
+### Changed
+
+- `probe_clip` accepts a `target_frames` override (whole-video probes use the
+  full pipeline budget, not the cheap sub-clip cap, to avoid false-failing a
+  long flight). Single-video bisection behaviour is unchanged.
+- Multi-video rescue namespaces forensic probe artefacts per source video
+  (`rescue/probes/v0_…`, `v1_…`, `v<N>_whole`) so two flights never collide.
+
+### Fixed
+
+- Corrected the SfM failure hint — auto-rescue
   (sequential → exhaustive → bisection) already runs in the pipeline, so the
   hint no longer implies a manual `autosplat rescue` step; it points at the real
-  fix (footage overlap). Ships with the next release.
+  fix (footage overlap).
 
 ---
 

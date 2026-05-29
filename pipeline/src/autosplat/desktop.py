@@ -59,12 +59,7 @@ def build_setup_terminal_command(install_script: Path) -> str:
     can answer its password prompt; the app just polls doctor until tools appear.
     """
     quoted = shlex.quote(str(install_script))
-    return (
-        'tell application "Terminal"\n'
-        f"  do script \"bash {quoted}\"\n"
-        "  activate\n"
-        "end tell"
-    )
+    return f'tell application "Terminal"\n  do script "bash {quoted}"\n  activate\nend tell'
 
 
 # Homebrew bin dirs. A GUI-launched .app inherits launchd's minimal PATH

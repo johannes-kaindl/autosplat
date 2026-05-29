@@ -348,9 +348,7 @@ def _consume_brush_stream(lines: Iterable[str], tee_path: Path) -> list[str]:
     return output_tail
 
 
-def _drain_eval_history(
-    monitor: PlateauMonitor, cursor: int, eval_callback: EvalCallback
-) -> int:
+def _drain_eval_history(monitor: PlateauMonitor, cursor: int, eval_callback: EvalCallback) -> int:
     """Emit each (step, psnr) in `monitor.history` beyond `cursor` and return
     the new cursor. Lets the plateau loop forward fresh eval points to a
     progress sink without ever re-emitting old ones."""
@@ -474,9 +472,7 @@ def run_brush(
 
     heartbeat_thread: threading.Thread | None = None
     if progress_callback is not None:
-        heartbeat_thread = threading.Thread(
-            target=_heartbeat, name="brush-progress", daemon=True
-        )
+        heartbeat_thread = threading.Thread(target=_heartbeat, name="brush-progress", daemon=True)
         heartbeat_thread.start()
     steps_completed = 0
     assert proc.stdout is not None

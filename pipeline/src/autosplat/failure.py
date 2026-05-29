@@ -42,6 +42,15 @@ def classify_failure(reason: str | None, stage: str | None = None) -> FailureInf
             "Footage too soft — use sharper video (slower flight, check focus) "
             "or lower `blur_threshold`.",
         )
+    if "bisection_no_culprit" in r:
+        return FailureInfo(
+            "multi_video",
+            "The flights couldn't be combined",
+            "Each source video registers on its own, but they don't co-register "
+            "into one model — bisection can't fix that. Reshoot with more visual "
+            "overlap between the flights (shared landmarks, similar altitude), or "
+            "process the strongest flight on its own.",
+        )
     if (
         "no images with matches" in r
         or "failed to create any sparse model" in r
@@ -80,7 +89,11 @@ def failure_reason_from_log(capture_dir: Path) -> str | None:
     last `error`-level event in pipeline.log, else the last non-empty line."""
     log = capture_dir / "pipeline.log"
     try:
-        lines = [ln for ln in log.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+        lines = [
+            ln
+            for ln in log.read_text(encoding="utf-8", errors="replace").splitlines()
+            if ln.strip()
+        ]
     except OSError:
         return None
     if not lines:

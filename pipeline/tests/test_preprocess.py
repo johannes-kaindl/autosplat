@@ -226,7 +226,9 @@ def test_filter_blurry_frames_keeps_sharp_deletes_blurry(tmp_path: Path) -> None
     frames = _make_frames(tmp_path, 5)
     # scores vs threshold 100 → keep #2, #4, #5 (3 sharp ≥ MIN_USABLE_FRAMES)
     scores = iter([50.0, 150.0, 30.0, 200.0, 250.0])
-    kept, rejected = filter_blurry_frames(frames, blur_threshold=100.0, scorer=lambda _: next(scores))
+    kept, rejected = filter_blurry_frames(
+        frames, blur_threshold=100.0, scorer=lambda _: next(scores)
+    )
 
     assert (kept, rejected) == (3, 2)
     assert not frames[0].exists() and frames[1].exists()
