@@ -83,7 +83,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="AutoSplat.app",
-    icon=None,
+    icon=_p("packaging/AutoSplat.icns"),
     bundle_identifier="org.codeberg.jkaindl.autosplat",
     info_plist={
         "CFBundleDisplayName": "AutoSplat",

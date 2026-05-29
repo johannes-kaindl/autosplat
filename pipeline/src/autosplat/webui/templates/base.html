@@ -4,6 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}autosplat{% endblock %} — autosplat</title>
+  {# Brand icons + social card (generated from docs/brand via build_brand_assets.sh) #}
+  <link rel="icon" type="image/svg+xml" href="/static/brand/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/brand/favicon-32.png">
+  <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
+  <meta name="theme-color" content="#060709">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AutoSplat — drone video → 3D Gaussian Splat">
+  <meta property="og:description" content="Turn drone/handheld video into a trained 3D Gaussian Splat. Local, on Apple Silicon.">
+  <meta property="og:image" content="/static/brand/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="/static/brand/og.png">
   <link rel="stylesheet" href="/static/css/tokens.css">
   <link rel="stylesheet" href="/static/css/autosplat.css">
   {% block extra_css %}{% endblock %}

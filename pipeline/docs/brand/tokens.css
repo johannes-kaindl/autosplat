@@ -1,0 +1,245 @@
+/* ========================================================================
+   KURO SIGNAL PROTOCOL — Foundational Tokens
+   Colors + Type. Obey the Law of the Single Source:
+   this file is canonical. Every other surface references it.
+   ======================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
+
+:root {
+  /* ----- PRIMITIVES: The Twelve Signals ----- */
+  --signal-crimson:        #d4203a; /* Error · Deadline · Destructive */
+  --signal-phosphor:       #39ff7a; /* Success · Active · Healthy */
+  --signal-ember:          #ffb442; /* Warning · Momentum · Pending */
+  --signal-spectre:        #a878ff; /* Strategic · Deep work · Focus */
+  --signal-circuit:        #4ac8d8; /* Link · Graph edge · Live connection */
+  --signal-ghost:          #7ab8c4; /* Info · Meta · Background process */
+  --signal-biolink:        #8bbf87; /* Organic · Human · Calm */
+  --signal-neural-bleed:   #e8a5a5; /* Reflection · Emotional · Journal */
+  --signal-rust:           #e8b979; /* Decay · Ageing · Drift warning */
+  --signal-toxic:          #d9c566; /* Caution · Review needed */
+  --signal-voidwitch:      #b49bd1; /* Creative · Mystical · Deep archive */
+  --signal-pearl:          #e8e4d8; /* Neutral · Text · Default */
+
+  /* ----- PRIMITIVES: Void Scale (the chamber) ----- */
+  --void-000: #000000;  /* absolute — used sparingly */
+  --void-050: #060709;  /* app background */
+  --void-100: #0b0d11;  /* surface */
+  --void-150: #11141a;  /* surface raised */
+  --void-200: #181c24;  /* surface overlay */
+  --void-300: #22272f;  /* border subtle */
+  --void-400: #2e343d;  /* border default */
+  --void-500: #3d4450;  /* border strong */
+  --void-600: #5a6170;  /* fg tertiary */
+  --void-700: #828a97;  /* fg secondary */
+  --void-800: #c8cbd2;  /* fg primary alt */
+  --void-900: var(--signal-pearl); /* fg primary */
+
+  /* ----- SEMANTIC: Surfaces ----- */
+  --surface-vault:     var(--void-050);  /* outermost — the chamber */
+  --surface-primary:   var(--void-100);  /* panels */
+  --surface-raised:    var(--void-150);  /* cards */
+  --surface-overlay:   var(--void-200);  /* modals, menus */
+  --surface-inset:     #04050780;        /* inputs, code blocks */
+
+  /* ----- SEMANTIC: Foreground ----- */
+  --fg-primary:   var(--signal-pearl);
+  --fg-secondary: var(--void-700);
+  --fg-tertiary:  var(--void-600);
+  --fg-disabled:  var(--void-500);
+  --fg-on-accent: var(--void-050);
+
+  /* ----- SEMANTIC: Borders ----- */
+  --border-subtle:  var(--void-300);
+  --border-default: var(--void-400);
+  --border-strong:  var(--void-500);
+  --border-circuit: color-mix(in oklab, var(--signal-circuit) 40%, transparent);
+
+  /* ----- SEMANTIC: Signal Roles ----- */
+  --role-error:    var(--signal-crimson);
+  --role-success:  var(--signal-phosphor);
+  --role-warning:  var(--signal-ember);
+  --role-info:     var(--signal-ghost);
+  --role-link:     var(--signal-circuit);
+  --role-focus:    var(--signal-spectre);
+  --role-review:   var(--signal-toxic);
+  --role-drift:    var(--signal-rust);
+
+  /* ----- ACCENT SUBTHEME: Defaults to Guardian ----- */
+  --accent:         var(--signal-phosphor);
+  --accent-soft:    color-mix(in oklab, var(--signal-phosphor) 15%, transparent);
+  --accent-glow:    color-mix(in oklab, var(--signal-phosphor) 50%, transparent);
+
+  /* ----- TYPE FAMILIES ----- */
+  --font-display: 'EB Garamond', 'Garamond', 'Iowan Old Style', 'Times New Roman', serif;
+  --font-sans:    'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ----- TYPE SCALE ----- */
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-md:   17px;
+  --text-lg:   20px;
+  --text-xl:   24px;
+  --text-2xl:  32px;
+  --text-3xl:  44px;
+  --text-4xl:  60px;
+  --text-5xl:  80px;
+
+  --leading-tight:   1.1;
+  --leading-snug:    1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.7;
+
+  --tracking-tight:   -0.02em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-caps:    0.12em;
+
+  /* ----- SPACING ----- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  24px;
+  --space-6:  32px;
+  --space-7:  48px;
+  --space-8:  64px;
+  --space-9:  96px;
+
+  /* ----- RADII ----- */
+  --radius-none: 0;
+  --radius-sm:   3px;
+  --radius-md:   6px;
+  --radius-lg:   10px;
+  --radius-xl:   14px;
+  --radius-full: 999px;
+
+  /* ----- SHADOWS + GLOWS ----- */
+  --shadow-card: 0 1px 0 0 rgba(255,255,255,0.03) inset,
+                 0 8px 24px -12px rgba(0,0,0,0.6);
+  --shadow-modal: 0 24px 64px -24px rgba(0,0,0,0.8),
+                  0 0 0 1px var(--border-subtle);
+  --glow-accent: 0 0 0 1px var(--accent-glow),
+                 0 0 24px -4px var(--accent-glow);
+  --glow-focus:  0 0 0 2px color-mix(in oklab, var(--accent) 60%, transparent);
+
+  /* ----- MOTION ----- */
+  --ease-signal: cubic-bezier(0.2, 0.8, 0.2, 1);   /* default — decisive */
+  --ease-ghost:  cubic-bezier(0.4, 0, 0.2, 1);     /* fades, reveals */
+  --ease-pulse:  cubic-bezier(0.4, 0, 0.6, 1);     /* pulsing warnings */
+  --dur-fast:   120ms;
+  --dur-base:   200ms;
+  --dur-slow:   360ms;
+}
+
+/* ======================================================================
+   ACCENT SUBTHEMES — Kuro's four aspects
+   Apply via `data-aspect="shugo|gunshi|kantoku|sensei"` on any ancestor
+   ====================================================================== */
+
+[data-aspect="shugo"]    { /* Guardian */
+  --accent:      var(--signal-phosphor);
+  --accent-soft: color-mix(in oklab, var(--signal-phosphor) 15%, transparent);
+  --accent-glow: color-mix(in oklab, var(--signal-phosphor) 50%, transparent);
+}
+[data-aspect="gunshi"]   { /* Strategist */
+  --accent:      var(--signal-spectre);
+  --accent-soft: color-mix(in oklab, var(--signal-spectre) 18%, transparent);
+  --accent-glow: color-mix(in oklab, var(--signal-spectre) 55%, transparent);
+}
+[data-aspect="kantoku"]  { /* Taskmaster */
+  --accent:      var(--signal-crimson);
+  --accent-soft: color-mix(in oklab, var(--signal-crimson) 15%, transparent);
+  --accent-glow: color-mix(in oklab, var(--signal-crimson) 50%, transparent);
+}
+[data-aspect="sensei"]   { /* Mentor */
+  --accent:      var(--signal-ember);
+  --accent-soft: color-mix(in oklab, var(--signal-ember) 15%, transparent);
+  --accent-glow: color-mix(in oklab, var(--signal-ember) 50%, transparent);
+}
+
+/* ======================================================================
+   SEMANTIC TYPE TOKENS
+   ====================================================================== */
+
+.ksp-display-1 {
+  font-family: var(--font-display);
+  font-size: var(--text-5xl);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-primary);
+}
+.ksp-display-2 {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-primary);
+}
+.ksp-h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-primary);
+}
+.ksp-h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-primary);
+}
+.ksp-h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 500;
+  line-height: var(--leading-snug);
+  color: var(--fg-primary);
+}
+.ksp-body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: var(--leading-relaxed);
+  color: var(--fg-primary);
+}
+.ksp-body-sm {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: var(--leading-normal);
+  color: var(--fg-secondary);
+}
+.ksp-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-tertiary);
+}
+.ksp-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--signal-circuit);
+  background: var(--surface-inset);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+.ksp-caps {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
