@@ -11,10 +11,22 @@ from __future__ import annotations
 
 import shlex
 import socket
+import subprocess
+import threading
+import time
+import webbrowser
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .config import Config
 from .doctor import run_doctor
+from .logging import get_logger
+
+if TYPE_CHECKING:
+    import uvicorn
+
+logger = get_logger(__name__)
 
 # External tools the first-run setup can install via Homebrew + fetch_brush.sh.
 # A missing one of these (and only these) triggers the setup flow — a failing
@@ -59,3 +71,101 @@ def pick_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return int(s.getsockname()[1])
+
+
+def run_first_run_setup(
+    install_script: Path,
+    runner: Callable[..., Any] = subprocess.run,
+) -> None:
+    """Open Terminal and run the dependency installer (via osascript)."""
+    script = build_setup_terminal_command(install_script)
+    runner(["osascript", "-e", script], check=False)
+
+
+# ─── launcher orchestration ────────────────────────────────────────────────
+
+_HOST = "127.0.0.1"
+
+
+def serve_url(port: int) -> str:
+    return f"http://{_HOST}:{port}"
+
+
+def make_server(app: Any, host: str, port: int) -> uvicorn.Server:
+    """Build a uvicorn Server for `app` (log_level warning — the menubar is the UI)."""
+    import uvicorn
+
+    return uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
+
+
+def open_browser(url: str, opener: Callable[[str], Any] = webbrowser.open) -> None:
+    opener(url)
+
+
+def main() -> None:  # pragma: no cover - integration entry (rumps UI + real server)
+    """Frozen-app / `autosplat app` entry point.
+
+    Runs first-run setup if tools are missing, serves the WebUI in a background
+    thread, opens the browser, and shows a rumps menubar item to open/quit.
+    """
+    from .config import load_config
+    from .webui import create_app
+
+    cfg = load_config()
+
+    if needs_first_run_setup(cfg):
+        script = _bundled_install_script()
+        if script is not None:
+            run_first_run_setup(script)
+        # Poll until the required tools appear (user-driven; cancellable by quit).
+        while needs_first_run_setup(cfg):
+            time.sleep(3)
+
+    port = pick_free_port()
+    server = make_server(create_app(cfg), _HOST, port)
+    threading.Thread(target=server.run, name="autosplat-webui", daemon=True).start()
+    url = serve_url(port)
+
+    # Give uvicorn a moment to bind before opening the browser.
+    time.sleep(1.0)
+    open_browser(url)
+
+    _run_menubar(url, server)
+
+
+def _bundled_install_script() -> Path | None:
+    """Locate install_deps.sh in the bundle (Resources/) or the dev checkout."""
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "scripts" / "install_deps.sh",
+        Path(__file__).resolve().parent / "scripts" / "install_deps.sh",
+    ]
+    return next((c for c in candidates if c.is_file()), None)
+
+
+def _run_menubar(url: str, server: uvicorn.Server) -> None:  # pragma: no cover - rumps UI
+    """Show a menubar item. Falls back to blocking on the server if rumps is absent."""
+    try:
+        import rumps
+    except ImportError:
+        logger.warning("desktop.rumps_missing", detail="menubar unavailable; serving headless")
+        while not getattr(server, "should_exit", False):
+            time.sleep(1)
+        return
+
+    class AutoSplatApp(rumps.App):  # type: ignore[misc]
+        def __init__(self) -> None:
+            super().__init__("AutoSplat", title="◆ AutoSplat")
+            self.menu = ["Open AutoSplat"]
+
+        @rumps.clicked("Open AutoSplat")
+        def open_app(self, _: object) -> None:
+            open_browser(url)
+
+    app = AutoSplatApp()
+
+    @rumps.clicked("Quit")  # type: ignore[misc]
+    def _quit(_: object) -> None:
+        server.should_exit = True
+        rumps.quit_application()
+
+    app.run()

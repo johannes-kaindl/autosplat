@@ -86,3 +86,50 @@ def test_pick_free_port_returns_a_bindable_port() -> None:
     # The port the helper picked must actually be bindable right after.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", port))
+
+
+# ─── launcher orchestration (slice 2) ──────────────────────────────────────
+
+
+def test_serve_url_formats_localhost_url() -> None:
+    from autosplat.desktop import serve_url
+
+    assert serve_url(8080) == "http://127.0.0.1:8080"
+
+
+def test_make_server_binds_configured_host_and_port() -> None:
+    from autosplat.desktop import make_server
+
+    async def _app(scope, receive, send):  # minimal ASGI callable
+        pass
+
+    server = make_server(_app, "127.0.0.1", 8137)
+    assert server.config.host == "127.0.0.1"
+    assert server.config.port == 8137
+
+
+def test_open_browser_calls_opener_with_url() -> None:
+    from autosplat.desktop import open_browser
+
+    calls: list[str] = []
+    open_browser("http://127.0.0.1:9999", opener=calls.append)
+    assert calls == ["http://127.0.0.1:9999"]
+
+
+def test_run_first_run_setup_invokes_osascript_with_command(tmp_path: Path) -> None:
+    from autosplat.desktop import run_first_run_setup
+
+    script = tmp_path / "install_deps.sh"
+    captured: list[list[str]] = []
+
+    def _runner(args, **kw):  # stand-in for subprocess.run
+        captured.append(args)
+
+    run_first_run_setup(script, runner=_runner)
+
+    assert len(captured) == 1
+    args = captured[0]
+    assert args[0] == "osascript"
+    assert "-e" in args
+    # The AppleScript handed to osascript must reference the install script.
+    assert any(str(script) in part for part in args)

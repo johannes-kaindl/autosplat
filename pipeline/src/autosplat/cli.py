@@ -752,6 +752,18 @@ def webui(
     uvicorn.run(app_instance, host=host, port=port, reload=reload)
 
 
+@app.command(name="app")
+def app_launcher() -> None:
+    """Launch the AutoSplat desktop app (menubar + browser WebUI).
+
+    Same entry the bundled AutoSplat.app uses: runs first-run setup if external
+    tools are missing, serves the WebUI, opens the browser, and shows a menubar.
+    """
+    from .desktop import main as desktop_main
+
+    desktop_main()
+
+
 @app.command()
 def version() -> None:
     """Print the autosplat version."""
