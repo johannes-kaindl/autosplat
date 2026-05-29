@@ -13,6 +13,48 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.7.0] — 2026-05-29 — AutoSplat.app (DMG)
+
+autosplat now ships as a double-clickable macOS app in a `.dmg`. The Python
+CLI + WebUI (cv2/uvicorn/FastAPI) are frozen into `AutoSplat.app` with
+PyInstaller; the heavy external tools (ffmpeg, COLMAP, Brush) are installed at
+first run via the existing Homebrew scripts rather than bundled. Signing and
+notarization are optional, env-gated build steps — the app runs unsigned via
+right-click → Open, and notarization can be added later once a Developer ID
+exists.
+
+### Added
+
+- **`src/autosplat/desktop.py`** — the app launcher. Pure, tested helpers:
+  `missing_required_tools` / `needs_first_run_setup` (filter `run_doctor` for
+  installable gaps), `build_setup_terminal_command` (osascript that runs
+  `install_deps.sh` in Terminal), `pick_free_port`, `serve_url`, `make_server`,
+  `open_browser`, `run_first_run_setup`. `main()` serves the WebUI in a thread,
+  opens the browser, and shows a `rumps` menubar item (optional import; falls
+  back to headless serve). `AUTOSPLAT_APP_HEADLESS` enables curl-able smoke runs.
+- **`autosplat app`** CLI command — same launcher from a dev checkout.
+- **`packaging/AutoSplat.spec` + `autosplat_app.py`** — PyInstaller bundle
+  (templates/static/config/scripts as data; uvicorn/route hidden imports;
+  `LSUIElement` menubar agent).
+- **`scripts/build_app.sh`** — freeze → `create-dmg` → `dist/AutoSplat.dmg`.
+  Signing (`CODESIGN_IDENTITY`) + notarization (`AC_NOTARY_PROFILE`) are
+  env-gated; ad-hoc signature otherwise.
+- Build deps `pyinstaller` + `rumps` in `[dependency-groups].build` and an
+  `[app]` extra.
+
+### Changed
+
+- `config.py` and `webui/app.py` resolve packaged data (default.toml,
+  templates, static) via `sys._MEIPASS` when frozen, repo-relative otherwise.
+
+### Verification
+
+Frozen binary serves the WebUI end-to-end (healthz / dashboard / static /
+templates all 200). The menubar rendering, Gatekeeper right-click→Open, and the
+fresh-Mac first-run setup are human-verified (not automatable).
+
+---
+
 ## [v1.6.0] — 2026-05-29 — Live Progress / Mission-Control
 
 The WebUI no longer sits frozen during the long, silent stages. A capture's

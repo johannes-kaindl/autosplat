@@ -121,6 +121,14 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 ## Quick start
 
+### Option A — the app (DMG)
+
+Grab `AutoSplat.dmg` from the [latest release](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases), drag **AutoSplat** to Applications, and launch it. On first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window, then opens the WebUI; a menubar item keeps it running. The app is unsigned — the first launch is **right-click → Open** to clear Gatekeeper.
+
+Build it yourself with `./scripts/build_app.sh` (needs `brew install create-dmg` + `uv sync --group build`).
+
+### Option B — from source (CLI + WebUI)
+
 ```bash
 # 1. System deps
 brew install ffmpeg colmap python@3.11 uv
