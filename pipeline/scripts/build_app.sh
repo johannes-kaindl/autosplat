@@ -48,16 +48,27 @@ else
 fi
 
 log "Building DMG…"
-rm -f "${DMG}"
-create-dmg \
-  --volname "AutoSplat" \
-  --window-size 540 360 \
-  --icon-size 100 \
-  --icon "AutoSplat.app" 140 180 \
-  --app-drop-link 400 180 \
-  --no-internet-enable \
-  "${DMG}" "${APP}" \
-  || fail "create-dmg failed"
+# create-dmg intermittently fails to eject its temp volume (Spotlight race:
+# "volume in use"). Retry a couple of times, detaching any stragglers first.
+make_dmg() {
+  rm -f "${DMG}"
+  create-dmg \
+    --volname "AutoSplat" \
+    --window-size 540 360 \
+    --icon-size 100 \
+    --icon "AutoSplat.app" 140 180 \
+    --app-drop-link 400 180 \
+    --no-internet-enable \
+    "${DMG}" "${APP}"
+}
+dmg_ok=""
+for attempt in 1 2 3; do
+  if make_dmg; then dmg_ok=1; break; fi
+  log "create-dmg attempt ${attempt} failed — detaching stray volume and retrying…"
+  hdiutil detach "/Volumes/AutoSplat" -force >/dev/null 2>&1 || true
+  sleep 2
+done
+[[ -n "${dmg_ok}" ]] || fail "create-dmg failed after 3 attempts"
 
 if [[ -n "${CODESIGN_IDENTITY:-}" && -n "${AC_NOTARY_PROFILE:-}" ]]; then
   log "Notarizing DMG (profile: ${AC_NOTARY_PROFILE})…"

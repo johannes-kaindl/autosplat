@@ -13,6 +13,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.9.2] — 2026-05-29 — Fix: app launch hang (Homebrew PATH)
+
+### Fixed
+
+- **`AutoSplat.app` hung on launch** (Dock bounced, no window, force-quit needed)
+  on a clean machine. A Finder/Dock launch inherits launchd's minimal PATH
+  (`/usr/bin:/bin:/usr/sbin:/sbin`), not the shell PATH, so `ffmpeg`/`colmap`
+  installed via Homebrew were invisible — `needs_first_run_setup` stayed True and
+  `main()` looped forever waiting for tools that detection could never see.
+  Startup now prepends `/opt/homebrew/bin` + `/usr/local/bin` to PATH
+  (`ensure_homebrew_path`), fixing both detection and the pipeline subprocesses'
+  tool lookup.
+- `scripts/build_app.sh` retries `create-dmg` (its temp-volume eject loses an
+  intermittent Spotlight race).
+
+---
+
 ## [v1.9.1] — 2026-05-29 — Brand: marks, favicon, social card, app icon
 
 ### Added
