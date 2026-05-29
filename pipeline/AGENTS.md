@@ -68,8 +68,9 @@ If a change materially alters the surface, update the spec or call out the diver
 - **HTTP code needs real request tests.** WebUI / server changes must be covered with
   actual HTTP requests (httpx), not just mocked units — past CORS bugs slipped through
   mock-only coverage.
-- Pre-commit hooks run ruff + ruff-format on commit and `pytest` on push. Install once
-  with `pre-commit install`. Do not use `--no-verify` to bypass a failing hook — fix it.
+- Pre-commit hooks run ruff + ruff-format on commit and `mypy src/` + `pytest` on push.
+  Install once with `pre-commit install`. Do not use `--no-verify` to bypass a failing
+  hook — fix it.
 
 ## Commits
 
