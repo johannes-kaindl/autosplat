@@ -197,3 +197,52 @@ def test_extract_frames_from_many_single_video_matches_legacy_layout(tmp_path: P
 
     assert (frames_dir / "frame_00001.jpg").exists()
     assert not (frames_dir / "only_frame_00001.jpg").exists()
+
+
+# ─── v1.7.2: blur filter fast-fail ─────────────────────────────────────────
+
+
+def _make_frames(frames_dir: Path, n: int) -> list[Path]:
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(1, n + 1):
+        p = frames_dir / f"frame_{i:05d}.jpg"
+        p.write_bytes(b"\xff\xd8")
+        paths.append(p)
+    return paths
+
+
+def test_filter_blurry_frames_keeps_sharp_deletes_blurry(tmp_path: Path) -> None:
+    from autosplat.preprocess import filter_blurry_frames
+
+    frames = _make_frames(tmp_path, 4)
+    # scores: 50, 150, 30, 200 — threshold 100 → keep #2 and #4
+    scores = iter([50.0, 150.0, 30.0, 200.0])
+    kept, rejected = filter_blurry_frames(frames, blur_threshold=100.0, scorer=lambda _: next(scores))
+
+    assert (kept, rejected) == (2, 2)
+    assert not frames[0].exists() and frames[1].exists()
+    assert not frames[2].exists() and frames[3].exists()
+
+
+def test_filter_blurry_frames_raises_when_all_rejected(tmp_path: Path) -> None:
+    """The observed Albarella failure: every frame below threshold → fail fast
+    with an actionable error instead of letting COLMAP die on an empty set."""
+    from autosplat.preprocess import AllFramesRejectedError, filter_blurry_frames
+
+    frames = _make_frames(tmp_path, 5)
+    with pytest.raises(AllFramesRejectedError) as exc:
+        filter_blurry_frames(frames, blur_threshold=100.0, scorer=lambda _: 10.0)
+
+    msg = str(exc.value)
+    assert "5" in msg  # extracted count
+    assert "blur_threshold" in msg
+    assert exc.value.extracted == 5
+
+
+def test_filter_blurry_frames_empty_list_no_raise(tmp_path: Path) -> None:
+    """No extracted frames is a different failure (bad video), not 'all blurry'."""
+    from autosplat.preprocess import filter_blurry_frames
+
+    kept, rejected = filter_blurry_frames([], blur_threshold=100.0, scorer=lambda _: 0.0)
+    assert (kept, rejected) == (0, 0)

@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +29,22 @@ from .config import PreprocessConfig
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class AllFramesRejectedError(RuntimeError):
+    """Every extracted frame scored below `blur_threshold`, leaving nothing for
+    COLMAP. Raised to fail fast with an actionable message instead of letting
+    SfM die later with a cryptic 'No images with matches'."""
+
+    def __init__(self, extracted: int, blur_threshold: float) -> None:
+        self.extracted = extracted
+        self.blur_threshold = blur_threshold
+        super().__init__(
+            f"All {extracted} extracted frames were rejected as blurry "
+            f"(Laplacian variance below blur_threshold={blur_threshold}). "
+            f"The footage is too soft for SfM — use sharper video (slower "
+            f"flight, check focus) or lower blur_threshold in your config."
+        )
 
 
 @dataclass
@@ -158,6 +175,36 @@ def laplacian_blur_score(image_path: Path) -> float:
     return float(cv2.Laplacian(img, cv2.CV_64F).var())
 
 
+def filter_blurry_frames(
+    frames: list[Path],
+    blur_threshold: float,
+    scorer: Callable[[Path], float] | None = None,
+) -> tuple[int, int]:
+    """Delete frames scoring below `blur_threshold`; return (kept, rejected).
+
+    Raises `AllFramesRejectedError` when frames existed but every one was
+    rejected — the deterministic, actionable failure for too-soft footage.
+
+    `scorer` defaults to `laplacian_blur_score`, resolved at call time so tests
+    (and callers) can monkeypatch the module function.
+    """
+    score = scorer if scorer is not None else laplacian_blur_score
+    rejected = 0
+    for frame in frames:
+        if score(frame) < blur_threshold:
+            frame.unlink()
+            rejected += 1
+    kept = len(frames) - rejected
+    if frames and kept == 0:
+        logger.error(
+            "preprocess.all_frames_rejected",
+            extracted=len(frames),
+            blur_threshold=blur_threshold,
+        )
+        raise AllFramesRejectedError(len(frames), blur_threshold)
+    return kept, rejected
+
+
 def extract_frames(
     video: Path,
     frames_dir: Path,
@@ -204,13 +251,7 @@ def extract_frames(
             logger.info("preprocess.skipped_frames_minor", skipped=skipped_frames)
 
     extracted = sorted(frames_dir.glob("frame_*.jpg"))
-    rejected = 0
-    for frame in extracted:
-        if laplacian_blur_score(frame) < cfg.blur_threshold:
-            frame.unlink()
-            rejected += 1
-
-    kept = len(list(frames_dir.glob("frame_*.jpg")))
+    kept, rejected = filter_blurry_frames(extracted, cfg.blur_threshold)
 
     result = PreprocessResult(
         frames_dir=frames_dir,
@@ -285,13 +326,7 @@ def extract_frames_from_many(
     extracted = sorted(frames_dir.glob("*frame_*.jpg"))
     total_extracted = len(extracted)
 
-    rejected = 0
-    for frame in extracted:
-        if laplacian_blur_score(frame) < cfg.blur_threshold:
-            frame.unlink()
-            rejected += 1
-
-    kept = len(list(frames_dir.glob("*frame_*.jpg")))
+    kept, rejected = filter_blurry_frames(extracted, cfg.blur_threshold)
 
     result = PreprocessResult(
         frames_dir=frames_dir,
