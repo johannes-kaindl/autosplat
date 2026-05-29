@@ -26,7 +26,10 @@ def test_classify_sfm_no_matches() -> None:
         stage="sfm",
     )
     assert info.category == "sfm"
-    assert "rescue" in info.hint.lower()
+    # Auto-rescue already ran in the pipeline — the hint must not imply a manual
+    # `autosplat rescue` step; it points at the real fix (footage overlap).
+    assert "already ran" in info.hint.lower()
+    assert "overlap" in info.hint.lower()
 
 
 def test_classify_sfm_no_images_phrase() -> None:

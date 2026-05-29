@@ -50,8 +50,9 @@ def classify_failure(reason: str | None, stage: str | None = None) -> FailureInf
         return FailureInfo(
             "sfm",
             "COLMAP couldn't align the frames",
-            "Rotation-heavy or low-overlap footage — try `autosplat rescue` "
-            "(auto-bisection) or shoot with more overlap and slower motion.",
+            "Automatic rescue (sequential → exhaustive → bisection) already ran "
+            "and couldn't solve it. The footage is likely rotation-heavy or "
+            "low-overlap — reshoot with more overlap and slower, steadier motion.",
         )
     if "out of memory" in r or "oom" in r or "resolution_cap" in r:
         return FailureInfo(
