@@ -923,23 +923,30 @@ def test_adaptive_retry_skips_bisection_when_disabled(tmp_path: Path) -> None:
     rescue.assert_not_called()
 
 
-def test_adaptive_retry_skips_bisection_on_multi_video(tmp_path: Path) -> None:
+def test_adaptive_retry_calls_multi_bisection_on_exhausted_hint(tmp_path: Path) -> None:
+    """A multi-video capture routes an exhausted retry_hint to the multi-video
+    rescue (not the single-video one), passing the full video list."""
     cfg = load_config(include_xdg=False)
     v1 = _touch(tmp_path / "a.mp4")
     v2 = _touch(tmp_path / "b.mp4")
     capture_dir = tmp_path / "capture"
     capture_dir.mkdir()
+    success = _success_result(capture_dir)
 
     with (
         patch(
             "autosplat.pipeline.run_pipeline",
             side_effect=QualityGateFailure(reason="structural", retry_hint=None),
         ),
-        patch("autosplat.bisection.rescue_via_bisection") as rescue,
-        pytest.raises(QualityGateFailure),
+        patch("autosplat.bisection.rescue_via_bisection") as single,
+        patch("autosplat.bisection.rescue_via_bisection_multi", return_value=success) as multi,
     ):
-        run_pipeline_with_adaptive_retry([v1, v2], cfg, capture_dir_override=capture_dir)
-    rescue.assert_not_called()
+        result = run_pipeline_with_adaptive_retry([v1, v2], cfg, capture_dir_override=capture_dir)
+
+    assert result is success
+    single.assert_not_called()
+    multi.assert_called_once()
+    assert multi.call_args.args[0] == [v1, v2]
 
 
 def test_adaptive_retry_does_not_re_enter_bisection(tmp_path: Path) -> None:

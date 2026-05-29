@@ -625,22 +625,36 @@ def run_pipeline_with_adaptive_retry(
         except QualityGateFailure as e:
             if e.retry_hint is None:
                 # Matcher-swap path exhausted. v1.4: try bisection if eligible.
-                if (
-                    config.retry.bisect_enabled
-                    and not bisection_attempted
-                    and (isinstance(video, Path) or len(video) == 1)
-                ):
+                if config.retry.bisect_enabled and not bisection_attempted:
                     bisection_attempted = True
-                    src = video if isinstance(video, Path) else video[0]
                     from . import bisection as _bisection_mod
 
+                    if isinstance(video, Path) or len(video) == 1:
+                        src = video if isinstance(video, Path) else video[0]
+                        logger.warning(
+                            "pipeline.bisection_escalation",
+                            reason=e.reason,
+                            capture_dir=str(capture_dir),
+                        )
+                        return _bisection_mod.rescue_via_bisection(
+                            src,
+                            capture_dir,
+                            config,
+                            state=state,
+                        )
+                    # Multi-video: probe each source whole, bisect the failures,
+                    # recombine the survivors (the user's "cuts" may really be
+                    # independent flights — one bad flight can poison the joint
+                    # model). The recursion guard in rescue_via_bisection_multi's
+                    # recombine prevents re-entry.
                     logger.warning(
-                        "pipeline.bisection_escalation",
+                        "pipeline.bisection_escalation_multi",
                         reason=e.reason,
+                        video_count=len(video),
                         capture_dir=str(capture_dir),
                     )
-                    return _bisection_mod.rescue_via_bisection(
-                        src,
+                    return _bisection_mod.rescue_via_bisection_multi(
+                        list(video),
                         capture_dir,
                         config,
                         state=state,
