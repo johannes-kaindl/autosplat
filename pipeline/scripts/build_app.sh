@@ -65,7 +65,7 @@ if [[ -n "${CODESIGN_IDENTITY:-}" && -n "${AC_NOTARY_PROFILE:-}" ]]; then
   xcrun stapler staple "${DMG}"
 else
   log "Skipping notarization (need CODESIGN_IDENTITY + AC_NOTARY_PROFILE)."
-  log "Recipients open the unsigned app via right-click → Open (once)."
+  log "Recipients clear quarantine once: xattr -dr com.apple.quarantine /Applications/AutoSplat.app"
 fi
 
 log "Done → ${DMG}"
