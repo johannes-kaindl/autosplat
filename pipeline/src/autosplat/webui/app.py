@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import datetime
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,7 +20,16 @@ from autosplat.config import Config
 
 from .routes import captures, dashboard, health, jobs, partials, source
 
-_WEBUI_DIR = Path(__file__).parent
+
+def _webui_dir() -> Path:
+    """templates/static location — frozen-aware (build_app.sh stages them under
+    `autosplat/webui/` in the PyInstaller bundle)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "autosplat" / "webui"  # type: ignore[attr-defined]
+    return Path(__file__).parent
+
+
+_WEBUI_DIR = _webui_dir()
 _TEMPLATES_DIR = _WEBUI_DIR / "templates"
 _STATIC_DIR = _WEBUI_DIR / "static"
 

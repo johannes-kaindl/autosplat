@@ -36,6 +36,9 @@ dependencies = [
 obsidian = [
     "python-frontmatter>=1.1",
 ]
+app = [
+    "rumps>=0.4",
+]
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.12",
@@ -98,4 +101,8 @@ dev = [
     "pytest-mock>=3.15.1",
     "ruff>=0.15.12",
     "httpx>=0.27",
+]
+build = [
+    "pyinstaller>=6.6",
+    "rumps>=0.4",
 ]

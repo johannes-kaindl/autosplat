@@ -14,14 +14,28 @@ Each later layer wins.
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-# Repo-relative default-config path
-PACKAGED_DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "default.toml"
+
+def _packaged_default_config() -> Path:
+    """Locate the packaged default.toml — frozen-aware.
+
+    In a PyInstaller bundle the repo layout is gone, so resolve against
+    `sys._MEIPASS` (where build_app.sh stages `config/`); otherwise use the
+    repo-relative path (config.py → autosplat → src → repo root).
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "config" / "default.toml"  # type: ignore[attr-defined]
+    return Path(__file__).resolve().parents[2] / "config" / "default.toml"
+
+
+# Default-config path (repo-relative, or bundle-relative when frozen)
+PACKAGED_DEFAULT_CONFIG = _packaged_default_config()
 
 XDG_CONFIG_PATH = Path("~/.config/autosplat/config.toml").expanduser()
 

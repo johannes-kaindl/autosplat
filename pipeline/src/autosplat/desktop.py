@@ -9,6 +9,7 @@ added in slice 2. The frozen `.app` entry point is `main`.
 
 from __future__ import annotations
 
+import os
 import shlex
 import socket
 import subprocess
@@ -121,10 +122,18 @@ def main() -> None:  # pragma: no cover - integration entry (rumps UI + real ser
         while needs_first_run_setup(cfg):
             time.sleep(3)
 
-    port = pick_free_port()
+    port = int(os.environ.get("AUTOSPLAT_APP_PORT", "0")) or pick_free_port()
     server = make_server(create_app(cfg), _HOST, port)
     threading.Thread(target=server.run, name="autosplat-webui", daemon=True).start()
     url = serve_url(port)
+    logger.info("desktop.serving", url=url)
+
+    # Headless smoke mode (build verification / CI): serve without browser or
+    # menubar so the frozen bundle can be curl-checked end-to-end.
+    if os.environ.get("AUTOSPLAT_APP_HEADLESS"):
+        while not getattr(server, "should_exit", False):
+            time.sleep(1)
+        return
 
     # Give uvicorn a moment to bind before opening the browser.
     time.sleep(1.0)
