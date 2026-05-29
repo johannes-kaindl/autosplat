@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -220,3 +221,18 @@ def read_log_tail(capture_dir: Path, max_lines: int = 50) -> list[str]:
         return lines[-max_lines:]
     except OSError:
         return []
+
+
+def last_activity_age_s(capture_dir: Path, now: float | None = None) -> int | None:
+    """Seconds since pipeline.log was last written, or None if there is no log.
+
+    A stage-agnostic liveness signal: the log is appended throughout every
+    stage, so its mtime tells us whether *anything* is still happening — useful
+    for the silent stretches (COLMAP mapper) where there's no percent to show.
+    """
+    log_path = capture_dir / "pipeline.log"
+    try:
+        mtime = log_path.stat().st_mtime
+    except OSError:
+        return None
+    return max(0, int((now if now is not None else time.time()) - mtime))

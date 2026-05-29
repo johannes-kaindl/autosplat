@@ -1,0 +1,19 @@
+{#- Stage-agnostic liveness pulse, polled every 3 s. Driven by pipeline.log
+    mtime so it works for any running stage (notably the silent COLMAP mapper)
+    where there's no percent to show. -#}
+<div class="as-poll-region"
+     hx-get="/partials/capture/{{ capture.id }}/liveness"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     style="display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;margin:var(--space-2) 0">
+  {% if age_s is not none %}
+    {% if age_s > 120 %}
+    <span style="color:var(--stage-failed);font-weight:600">⚠ quiet for {{ age_s }}s — still running, but no new log activity</span>
+    {% else %}
+    <span class="as-pulse-dot" style="width:7px;height:7px;border-radius:50%;background:var(--signal-circuit);display:inline-block"></span>
+    <span style="color:var(--fg-tertiary)">active · last activity {{ age_s }}s ago</span>
+    {% endif %}
+  {% else %}
+    <span style="color:var(--fg-disabled)">waiting for first activity…</span>
+  {% endif %}
+</div>

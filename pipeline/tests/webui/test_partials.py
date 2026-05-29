@@ -189,3 +189,63 @@ def test_brush_partial_warming_up_without_progress_file(app: FastAPI, tmp_path: 
     assert response.status_code == 200
     assert "warming up" in response.text.lower()
     assert "/partials/capture/2026-05-29_warm/brush" in response.text  # still polling
+
+
+# ─── all-stages liveness (log mtime) ───────────────────────────────────────
+
+
+def test_last_activity_age_s_from_log_mtime(tmp_path: Path) -> None:
+    import os
+
+    from autosplat.webui.state import last_activity_age_s
+
+    log = tmp_path / "pipeline.log"
+    log.write_text("x\n")
+    os.utime(log, (1000.0, 1000.0))  # mtime = 1000
+
+    assert last_activity_age_s(tmp_path, now=1042.0) == 42
+
+
+def test_last_activity_age_s_none_without_log(tmp_path: Path) -> None:
+    from autosplat.webui.state import last_activity_age_s
+
+    assert last_activity_age_s(tmp_path, now=1042.0) is None
+
+
+def test_liveness_partial_shows_activity_pulse(app: FastAPI, tmp_path: Path) -> None:
+    """Any running capture (e.g. COLMAP, which has no brush card) gets a generic
+    'last activity Xs ago' pulse so a silent-but-healthy stage isn't a dead screen."""
+    _running_capture(app, tmp_path, "2026-05-29_colmap")
+
+    with TestClient(app) as client:
+        response = client.get("/partials/capture/2026-05-29_colmap/liveness")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "activity" in body.lower()
+    assert "/partials/capture/2026-05-29_colmap/liveness" in body  # keeps polling
+
+
+def test_brush_card_gated_to_train_stage(app: FastAPI, tmp_path: Path) -> None:
+    """During COLMAP (stage=sfm) the detail page must NOT show the brush card —
+    that would read as 'brush warming up' while SfM is actually running."""
+    capture_dir = tmp_path / "2026-05-29_sfm_stage"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "colmap").mkdir()
+    (capture_dir / "pipeline.log").write_text('{"event": "sfm.mapper.start"}\n')
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    from unittest.mock import patch
+
+    from autosplat.watcher import InProgress, WatcherState
+
+    state = WatcherState()
+    state.in_progress = InProgress(path=str(capture_dir), started_at="t", stage="sfm", detail=None)
+    with (
+        patch("autosplat.webui.state._load_watcher_state", return_value=state),
+        TestClient(app) as client,
+    ):
+        response = client.get("/captures/2026-05-29_sfm_stage")
+
+    assert response.status_code == 200
+    assert "gaussian training" not in response.text.lower()

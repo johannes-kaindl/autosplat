@@ -53,12 +53,16 @@
 
   {{ stage_timeline(capture.stage, capture.status) }}
 
+  {% if capture.status == 'running' %}
+  {% include "partials/liveness.html" %}
+  {% endif %}
+
   <div class="as-two-col">
 
     {# ── Left column ─────────────────────────────────────────────────────── #}
     <div style="display:flex;flex-direction:column;gap:var(--space-5)">
 
-      {% if capture.status == 'running' %}
+      {% if capture.status == 'running' and capture.stage == 'train' %}
       {%- from "_icons.html" import icon -%}
       {# v1.6.0 — collapsible live-progress card. The <details> wrapper is static
          (rendered once here); only the inner region polls, so collapse state

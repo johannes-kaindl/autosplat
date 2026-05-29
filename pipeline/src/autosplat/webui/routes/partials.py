@@ -7,7 +7,12 @@ from fastapi.responses import HTMLResponse
 
 from autosplat.progress import read_progress
 from autosplat.webui.progress_view import build_progress_view
-from autosplat.webui.state import get_capture, list_captures, read_log_tail
+from autosplat.webui.state import (
+    get_capture,
+    last_activity_age_s,
+    list_captures,
+    read_log_tail,
+)
 
 router = APIRouter(prefix="/partials")
 
@@ -117,4 +122,17 @@ async def capture_brush_partial(request: Request, capture_id: str) -> HTMLRespon
         request,
         "partials/brush_metrics.html",
         {"capture": capture, "progress": progress},
+    )
+
+
+@router.get("/capture/{capture_id}/liveness", response_class=HTMLResponse)
+async def capture_liveness_partial(request: Request, capture_id: str) -> HTMLResponse:
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id)
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    return _templates(request).TemplateResponse(
+        request,
+        "partials/liveness.html",
+        {"capture": capture, "age_s": last_activity_age_s(capture.path)},
     )

@@ -8,7 +8,12 @@ from fastapi import APIRouter, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from autosplat import __version__
-from autosplat.webui.state import get_capture, list_captures, read_log_tail
+from autosplat.webui.state import (
+    get_capture,
+    last_activity_age_s,
+    list_captures,
+    read_log_tail,
+)
 
 router = APIRouter(prefix="/captures")
 
@@ -177,7 +182,12 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     return _templates(request).TemplateResponse(
         request,
         "capture/detail.html",
-        {"version": __version__, "capture": capture, "log_lines": log_lines},
+        {
+            "version": __version__,
+            "capture": capture,
+            "log_lines": log_lines,
+            "age_s": last_activity_age_s(capture.path),
+        },
     )
 
 
