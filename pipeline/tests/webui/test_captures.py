@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -315,3 +316,75 @@ def test_capture_detail_done_hides_resume_button(app: FastAPI, tmp_path: Path) -
 
     assert response.status_code == 200
     assert "/resume" not in response.text
+
+
+# ── Native Finder file-picker (osascript) ────────────────────────────────────
+
+
+def test_pick_files_via_finder_parses_osascript_paths() -> None:
+    """The helper shells out to `osascript` and turns its newline-separated
+    POSIX-path output into a list of Path objects (one per chosen file)."""
+    from autosplat.webui.routes.captures import _pick_files_via_finder
+
+    fake = SimpleNamespace(
+        returncode=0,
+        stdout="/Users/me/a.mov\n/Users/me/b.mp4\n",
+        stderr="",
+    )
+    with patch("autosplat.webui.routes.captures.subprocess.run", return_value=fake):
+        paths = _pick_files_via_finder()
+
+    assert paths == [Path("/Users/me/a.mov"), Path("/Users/me/b.mp4")]
+
+
+def test_pick_files_via_finder_returns_empty_on_cancel() -> None:
+    """When the user cancels the dialog, osascript exits non-zero; the helper
+    swallows that and returns an empty list rather than raising."""
+    from autosplat.webui.routes.captures import _pick_files_via_finder
+
+    fake = SimpleNamespace(returncode=1, stdout="", stderr="User canceled.")
+    with patch("autosplat.webui.routes.captures.subprocess.run", return_value=fake):
+        paths = _pick_files_via_finder()
+
+    assert paths == []
+
+
+def test_pick_file_route_returns_json_paths(app: FastAPI) -> None:
+    """POST /captures/pick-file opens the native picker (mocked) and returns
+    the chosen absolute paths as JSON for the New-capture form to consume."""
+    with (
+        patch(
+            "autosplat.webui.routes.captures._pick_files_via_finder",
+            return_value=[Path("/Users/me/clip.mov")],
+        ),
+        TestClient(app) as client,
+    ):
+        response = client.post("/captures/pick-file")
+
+    assert response.status_code == 200
+    assert response.json() == {"paths": ["/Users/me/clip.mov"]}
+
+
+def test_pick_file_route_empty_when_cancelled(app: FastAPI) -> None:
+    """A cancelled picker yields an empty paths list, not an error."""
+    with (
+        patch(
+            "autosplat.webui.routes.captures._pick_files_via_finder",
+            return_value=[],
+        ),
+        TestClient(app) as client,
+    ):
+        response = client.post("/captures/pick-file")
+
+    assert response.status_code == 200
+    assert response.json() == {"paths": []}
+
+
+def test_new_form_has_browse_button(app: FastAPI) -> None:
+    """The New-capture form exposes a Browse control wired to the pick-file
+    endpoint so users aren't forced to hand-type absolute paths."""
+    with TestClient(app) as client:
+        response = client.get("/captures/new")
+
+    assert response.status_code == 200
+    assert "/captures/pick-file" in response.text

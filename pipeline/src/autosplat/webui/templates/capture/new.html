@@ -37,8 +37,36 @@
     </p>
     <div style="display:flex;gap:var(--space-2)">
       <button type="submit" class="as-btn primary">Start pipeline</button>
+      <button type="button" class="as-btn" id="as-browse-btn">Browse…</button>
       <a href="/captures/" class="as-btn">Cancel</a>
     </div>
   </form>
 </div>
+
+<script>
+(function () {
+  var btn = document.getElementById('as-browse-btn');
+  var ta = document.querySelector('textarea[name="video_paths"]');
+  if (!btn || !ta) return;
+  btn.addEventListener('click', async function () {
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Opening Finder…';
+    try {
+      var res = await fetch('/captures/pick-file', { method: 'POST' });
+      var data = await res.json();
+      if (data.paths && data.paths.length) {
+        var existing = ta.value.trim();
+        ta.value = (existing ? existing + '\n' : '') + data.paths.join('\n');
+        ta.focus();
+      }
+    } catch (e) {
+      // Picker unavailable — leave the field untouched; user can type a path.
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+})();
+</script>
 {% endblock %}

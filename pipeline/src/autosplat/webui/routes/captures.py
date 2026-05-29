@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import shutil
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
@@ -75,6 +76,56 @@ def _validate_video_paths(raw_paths: list[str]) -> tuple[list[Path], str | None]
             return [], f"Unsupported file type '{v.suffix}' — use .mp4, .mov or .m4v."
         videos.append(v)
     return videos, None
+
+
+# AppleScript: open a native Finder picker filtered to video files, allow
+# multiple selections, and emit one POSIX path per line. `activate` pulls the
+# dialog to the foreground so it doesn't open behind the browser window.
+_PICK_FILE_SCRIPT = (
+    'tell application "System Events" to activate\n'
+    "set chosenFiles to choose file "
+    'with prompt "Choose video(s) for autosplat" '
+    'of type {"mp4", "mov", "m4v"} '
+    "with multiple selections allowed\n"
+    'set out to ""\n'
+    "repeat with f in chosenFiles\n"
+    "    set out to out & POSIX path of f & linefeed\n"
+    "end repeat\n"
+    "return out"
+)
+
+
+def _pick_files_via_finder() -> list[Path]:
+    """Open the native macOS Finder file picker and return the chosen paths.
+
+    Returns an empty list if the user cancels (osascript exits non-zero) or if
+    osascript is unavailable. The WebUI is Mac-Silicon-only by design, so the
+    server always runs on the same Mac whose Finder dialog this opens.
+    """
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", _PICK_FILE_SCRIPT],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [Path(line) for line in result.stdout.splitlines() if line.strip()]
+
+
+@router.post("/pick-file")
+async def capture_pick_file(request: Request) -> JSONResponse:
+    """Open a native Finder picker and return the chosen absolute path(s).
+
+    A browser `<input type="file">` only yields the bare filename, never the
+    absolute path the pipeline needs, so the New-capture form calls this local
+    endpoint instead. Returns ``{"paths": [...]}`` (empty list if cancelled).
+    """
+    paths = _pick_files_via_finder()
+    return JSONResponse({"paths": [str(p) for p in paths]})
 
 
 @router.post("/new")
