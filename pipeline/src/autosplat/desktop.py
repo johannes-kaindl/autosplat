@@ -67,6 +67,19 @@ def build_setup_terminal_command(install_script: Path) -> str:
     )
 
 
+# Homebrew bin dirs. A GUI-launched .app inherits launchd's minimal PATH
+# (/usr/bin:/bin:/usr/sbin:/sbin) — NOT the user's shell PATH — so ffmpeg/colmap
+# installed via Homebrew are invisible unless we add these explicitly.
+_HOMEBREW_BINS = ("/opt/homebrew/bin", "/usr/local/bin")
+
+
+def ensure_homebrew_path(path: str) -> str:
+    """Return `path` with the Homebrew bin dirs prepended if missing (no dups)."""
+    parts = [p for p in path.split(":") if p]
+    prefix = [b for b in _HOMEBREW_BINS if b not in parts]
+    return ":".join(prefix + parts)
+
+
 def pick_free_port() -> int:
     """Ask the OS for a currently-free localhost TCP port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -127,6 +140,11 @@ def main() -> None:  # pragma: no cover - integration entry (rumps UI + real ser
     """
     from .config import load_config
     from .webui import create_app
+
+    # A Finder/Dock launch inherits launchd's minimal PATH, hiding Homebrew
+    # tools (ffmpeg/colmap) from both doctor and the pipeline subprocesses.
+    # Fix it before anything reads PATH, or the run hangs in first-run setup.
+    os.environ["PATH"] = ensure_homebrew_path(os.environ.get("PATH", ""))
 
     cfg = load_config()
 

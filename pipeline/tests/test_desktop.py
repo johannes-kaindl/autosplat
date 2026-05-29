@@ -116,6 +116,33 @@ def test_open_browser_calls_opener_with_url() -> None:
     assert calls == ["http://127.0.0.1:9999"]
 
 
+def test_ensure_homebrew_path_prepends_missing_dirs() -> None:
+    from autosplat.desktop import ensure_homebrew_path
+
+    # A GUI/launchd PATH has no Homebrew bin dirs.
+    out = ensure_homebrew_path("/usr/bin:/bin")
+    parts = out.split(":")
+    assert "/opt/homebrew/bin" in parts
+    assert "/usr/local/bin" in parts
+    # Original entries are preserved.
+    assert "/usr/bin" in parts and "/bin" in parts
+
+
+def test_ensure_homebrew_path_idempotent_no_duplicates() -> None:
+    from autosplat.desktop import ensure_homebrew_path
+
+    base = "/opt/homebrew/bin:/usr/bin"
+    out = ensure_homebrew_path(base)
+    assert out.split(":").count("/opt/homebrew/bin") == 1
+
+
+def test_ensure_homebrew_path_empty() -> None:
+    from autosplat.desktop import ensure_homebrew_path
+
+    out = ensure_homebrew_path("")
+    assert "/opt/homebrew/bin" in out.split(":")
+
+
 def test_wait_until_serving_true_when_port_listens() -> None:
     from autosplat.desktop import wait_until_serving
 
