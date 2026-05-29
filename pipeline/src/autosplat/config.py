@@ -17,7 +17,7 @@ import os
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -163,7 +163,7 @@ class BrushConfig(BaseModel):
         # — otherwise a user lowering max_steps for a quick CI run gets
         # rejected for no reason. info.data carries already-validated fields;
         # `plateau_enabled` and `max_steps` are declared before this field.
-        data = info.data if hasattr(info, "data") else {}  # type: ignore[attr-defined]
+        data = info.data if hasattr(info, "data") else {}
         if data.get("plateau_enabled") and v > data.get("max_steps", v):
             raise ValueError(
                 f"plateau_min_steps ({v}) must be ≤ max_steps ({data['max_steps']}) "
@@ -351,7 +351,7 @@ class CompressConfig(BaseModel):
         description="Opt-in. Produces web-optimal splats next to the PLY.",
     )
     formats: list[Literal["sog", "spz", "ksplat"]] = Field(
-        default_factory=lambda: ["sog"],
+        default_factory=lambda: cast("list[Literal['sog', 'spz', 'ksplat']]", ["sog"]),
         description="Output formats. sog = SuperSplat-native; spz = smallest.",
     )
     quality: Literal["low", "medium", "high"] = Field(

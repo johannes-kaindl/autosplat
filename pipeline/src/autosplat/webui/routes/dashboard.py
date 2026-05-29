@@ -11,7 +11,8 @@ _templates: Jinja2Templates | None = None
 
 
 def _get_templates(request: Request) -> Jinja2Templates:
-    return request.app.state.templates
+    templates: Jinja2Templates = request.app.state.templates
+    return templates
 
 
 @router.get("/", response_class=HTMLResponse)

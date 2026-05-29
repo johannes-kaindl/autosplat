@@ -6,9 +6,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 
 from autosplat import __version__
 from autosplat.failure import classify_failure, failure_reason_from_log
+from autosplat.webui.jobs_runner import JobRunner
 from autosplat.webui.state import (
     get_capture,
     last_activity_age_s,
@@ -19,19 +21,22 @@ from autosplat.webui.state import (
 router = APIRouter(prefix="/captures")
 
 
-def _templates(request: Request):  # type: ignore[return]
-    return request.app.state.templates
+def _templates(request: Request) -> Jinja2Templates:
+    templates: Jinja2Templates = request.app.state.templates
+    return templates
 
 
-def _captures_dir(request: Request):
+def _captures_dir(request: Request) -> Path:
     cfg = request.app.state.cfg
     if cfg is None:
         raise HTTPException(status_code=503, detail="Config not loaded")
-    return cfg.paths.captures_dir
+    captures_dir: Path = cfg.paths.captures_dir
+    return captures_dir
 
 
-def _job_runner(request: Request):
-    return getattr(request.app.state, "job_runner", None)
+def _job_runner(request: Request) -> JobRunner | None:
+    runner: JobRunner | None = getattr(request.app.state, "job_runner", None)
+    return runner
 
 
 @router.get("/", response_class=HTMLResponse)

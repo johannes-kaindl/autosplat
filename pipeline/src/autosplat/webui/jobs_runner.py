@@ -360,7 +360,7 @@ def _run_resume_thread(job: JobState, capture_path: Path, cfg: Config, runner: J
         original_popen = subprocess.Popen
 
         class _TrackingPopen(original_popen):  # type: ignore[valid-type,misc]
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 super().__init__(*args, **kwargs)
                 job._proc = self
 
@@ -413,7 +413,7 @@ def _run_add_video_thread(
         original_popen = subprocess.Popen
 
         class _TrackingPopen(original_popen):  # type: ignore[valid-type,misc]
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 super().__init__(*args, **kwargs)
                 job._proc = self
 
@@ -461,7 +461,7 @@ def _run_pipeline_thread(
         original_popen = subprocess.Popen
 
         class _TrackingPopen(original_popen):  # type: ignore[valid-type,misc]
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 super().__init__(*args, **kwargs)
                 job._proc = self
 

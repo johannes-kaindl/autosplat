@@ -10,6 +10,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from .config import ExportConfig
 from .logging import get_logger
@@ -40,7 +41,7 @@ class CaptureMetadata:
     training_duration_s: float
     output_ply_size_bytes: int
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 

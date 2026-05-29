@@ -146,7 +146,7 @@ class CaptureNoteData(BaseModel):
         return v
 
 
-def read_ply_header(ply: Path) -> dict:
+def read_ply_header(ply: Path) -> dict[str, int]:
     """Pull `vertex count` + `SH degree` out of a Brush-exported PLY header.
 
     Falls back to inferring SH degree from the `f_rest_*` property count if the

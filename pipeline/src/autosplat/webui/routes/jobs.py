@@ -2,17 +2,20 @@
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from autosplat import __version__
+from autosplat.webui.jobs_runner import JobState
 
 router = APIRouter(prefix="/jobs")
 
 
-def _templates(request: Request):  # type: ignore[return]
-    return request.app.state.templates
+def _templates(request: Request) -> Jinja2Templates:
+    templates: Jinja2Templates = request.app.state.templates
+    return templates
 
 
-def _split_jobs(request: Request) -> tuple[list, list]:
+def _split_jobs(request: Request) -> tuple[list[JobState], list[JobState]]:
     runner = getattr(request.app.state, "job_runner", None)
     if runner is None:
         return [], []

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import MutableMapping
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,9 @@ from rich.logging import RichHandler
 _console = Console(stderr=True)
 
 
-def _add_iso_timestamp(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _add_iso_timestamp(
+    _: Any, __: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     """structlog processor adding ISO-8601 UTC timestamp under `ts`."""
     from datetime import datetime
 
@@ -88,4 +91,5 @@ def configure_logging(
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name or __name__)
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger(name or __name__)
+    return logger

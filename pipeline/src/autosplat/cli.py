@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import webbrowser
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -25,7 +26,7 @@ from . import __version__
 from . import viewer as viewer_mod
 from .bisection import rescue_via_bisection
 from .compress import CompressorNotAvailable, compress_ply, install_hint_for
-from .config import XDG_CONFIG_PATH, apply_override, dump_default_config, load_config
+from .config import XDG_CONFIG_PATH, Config, apply_override, dump_default_config, load_config
 from .doctor import all_required_passed, run_doctor
 from .logging import configure_logging, get_logger
 from .pipeline import (
@@ -62,7 +63,7 @@ EXIT_PIPELINE_FAILURE = 2
 EXIT_DEP_MISSING = 3
 
 
-def _load_or_die(config_path: Path | None) -> object:
+def _load_or_die(config_path: Path | None) -> Config:
     try:
         return load_config(config_path)
     except FileNotFoundError as e:
@@ -87,7 +88,7 @@ def _remote_supersplat_url_for(ply_url: str) -> str:
     return f"{viewer_mod.SUPERSPLAT_URL}?load={urllib.parse.quote(ply_url, safe='')}"
 
 
-def _warn_if_viewer_misconfigured(cfg: object) -> None:
+def _warn_if_viewer_misconfigured(cfg: Config) -> None:
     """v1.4.6 — fail loudly at the *start* of a pipeline run if the viewer
     is configured for supersplat-local but the dist isn't built. Otherwise
     the user only finds out after the ~5 h run finishes and the auto-open
@@ -95,11 +96,11 @@ def _warn_if_viewer_misconfigured(cfg: object) -> None:
     user might want to set up the dist during the run, or accept the
     fallback. `autosplat doctor` covers the same check independently.
     """
-    if not cfg.viewer.auto_open:  # type: ignore[attr-defined]
+    if not cfg.viewer.auto_open:
         return
-    if cfg.viewer.target != "supersplat-local":  # type: ignore[attr-defined]
+    if cfg.viewer.target != "supersplat-local":
         return
-    dist = cfg.viewer.supersplat_dist_path  # type: ignore[attr-defined]
+    dist = cfg.viewer.supersplat_dist_path
     if not dist.is_absolute():
         dist = Path.cwd() / dist
     if (dist / "index.html").is_file():
@@ -113,7 +114,7 @@ def _warn_if_viewer_misconfigured(cfg: object) -> None:
     )
 
 
-def _open_viewer_if_configured(output_ply: Path, cfg: object) -> None:
+def _open_viewer_if_configured(output_ply: Path, cfg: Config) -> None:
     """Open the result in the configured viewer, blocking on a local PLY
     server until Ctrl-C. Called by process/resume/add-video/rescue *after*
     the Done summary so the user sees the result first.
@@ -122,11 +123,9 @@ def _open_viewer_if_configured(output_ply: Path, cfg: object) -> None:
     blocking-server behaviour would stall the watch-folder daemon and the
     WebUI's JobRunner between captures. Only CLI commands open the viewer.
     """
-    # cfg is typed as `object` because _load_or_die returns object — viewer
-    # access is field-by-field so mypy can resolve it via runtime attrs.
-    if not cfg.viewer.auto_open or cfg.viewer.target == "none":  # type: ignore[attr-defined]
+    if not cfg.viewer.auto_open or cfg.viewer.target == "none":
         return
-    viewer_mod.open_in_viewer(output_ply, cfg.viewer)  # type: ignore[attr-defined]
+    viewer_mod.open_in_viewer(output_ply, cfg.viewer)
 
 
 def _find_ply(capture_dir: Path) -> Path | None:
@@ -494,7 +493,7 @@ def watch(
             f"[yellow]Recovered {recovered} in-progress entry from previous run.[/yellow]"
         )
 
-    def _process(video: Path, *, config_override: dict | None = None) -> dict:
+    def _process(video: Path, *, config_override: dict[str, Any] | None = None) -> dict[str, Any]:
         if config_override:
             console.print(f"[blue]Processing (retry, override={config_override}):[/blue] {video}")
         else:
@@ -561,8 +560,10 @@ def status() -> None:
         table.add_column("Stage")
         table.add_column("Reason", overflow="fold")
         table.add_column("Failed at")
-        for run in state.failed[-10:]:
-            table.add_row(run.path, run.stage or "—", run.reason, run.failed_at)
+        for failed_run in state.failed[-10:]:
+            table.add_row(
+                failed_run.path, failed_run.stage or "—", failed_run.reason, failed_run.failed_at
+            )
         console.print(table)
 
 

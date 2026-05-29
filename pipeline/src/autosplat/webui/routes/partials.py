@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from autosplat.progress import read_progress
+from autosplat.webui.jobs_runner import JobRunner
 from autosplat.webui.progress_view import build_progress_view
 from autosplat.webui.state import (
     get_capture,
@@ -17,19 +20,22 @@ from autosplat.webui.state import (
 router = APIRouter(prefix="/partials")
 
 
-def _templates(request: Request):  # type: ignore[return]
-    return request.app.state.templates
+def _templates(request: Request) -> Jinja2Templates:
+    templates: Jinja2Templates = request.app.state.templates
+    return templates
 
 
-def _captures_dir(request: Request):
+def _captures_dir(request: Request) -> Path:
     cfg = request.app.state.cfg
     if cfg is None:
         raise HTTPException(status_code=503, detail="Config not loaded")
-    return cfg.paths.captures_dir
+    captures_dir: Path = cfg.paths.captures_dir
+    return captures_dir
 
 
-def _job_runner(request: Request):
-    return getattr(request.app.state, "job_runner", None)
+def _job_runner(request: Request) -> JobRunner | None:
+    runner: JobRunner | None = getattr(request.app.state, "job_runner", None)
+    return runner
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
