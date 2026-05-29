@@ -13,7 +13,7 @@ import shutil
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +27,7 @@ from . import sfm as sfm_mod
 from . import train as train_mod
 from .config import Config, apply_override
 from .logging import configure_logging, get_logger
+from .progress import ProgressState, write_progress
 from .quality import QualityGateFailure
 
 if TYPE_CHECKING:
@@ -47,9 +48,11 @@ class PipelineResult:
 SKIPPABLE_STAGES = {"preprocess", "sfm", "train", "export"}
 
 # v1.4.5 — Brush training takes ~1-2 h with no pipeline.log activity between
-# train.brush.start and train.done. Emit a structured heartbeat every 5 min
-# so non-interactive runs (daemon, WebUI, ssh) are observable.
-TRAIN_HEARTBEAT_INTERVAL_S = 300.0
+# train.brush.start and train.done. Emit a structured heartbeat into the log so
+# non-interactive runs (daemon, WebUI, ssh) are observable.
+# v1.6.0 — tightened 300 → 30 s. The live WebUI reads progress.json (written
+# unthrottled on every 2 s heartbeat), so the log just needs a fresher trail.
+TRAIN_HEARTBEAT_INTERVAL_S = 30.0
 
 
 def _make_train_heartbeat_emitter(
@@ -72,6 +75,38 @@ def _make_train_heartbeat_emitter(
             )
 
     return _emit, last_emit
+
+
+def _utc_now_iso() -> str:
+    """Match the `ts` format the structlog processor stamps on log events."""
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _make_progress_persister(
+    capture_dir: Path, stage: str, eta_s: float, total_steps: int
+) -> Callable[[float, float], None]:
+    """Return a heartbeat callback that writes `progress.json` on every tick.
+
+    Unlike the log emitter this is unthrottled: it persists the latest
+    (elapsed_s, est_pct) every ~2 s so the WebUI always has a fresh, atomically
+    written snapshot. `step`/`psnr` stay None here — slice 3 merges real eval
+    metrics in via a separate hook when the plateau monitor is active.
+    """
+
+    def _persist(elapsed_s: float, est_pct: float) -> None:
+        write_progress(
+            capture_dir,
+            ProgressState(
+                stage=stage,
+                elapsed_s=round(elapsed_s, 1),
+                est_pct=round(est_pct, 4),
+                eta_s=round(eta_s, 1),
+                updated_at=_utc_now_iso(),
+                total_steps=total_steps,
+            ),
+        )
+
+    return _persist
 
 
 def _make_capture_name(video: Path) -> str:
@@ -343,6 +378,19 @@ def run_pipeline(
         # the ~1-2 h Brush stage. Shared across both branches below.
         _emit_heartbeat, _ = _make_train_heartbeat_emitter()
 
+        # v1.6.0 — also persist progress.json (unthrottled) so the WebUI shows a
+        # moving bar + elapsed/ETA + liveness instead of a frozen screen.
+        _persist_progress = _make_progress_persister(
+            capture_dir,
+            "train",
+            eta_s=train_mod.estimate_wall_time_s(config.brush),
+            total_steps=config.brush.max_steps,
+        )
+
+        def _heartbeat(elapsed_s: float, est_pct: float) -> None:
+            _emit_heartbeat(elapsed_s, est_pct)
+            _persist_progress(elapsed_s, est_pct)
+
         progress_console = Console(stderr=True)
         if progress_console.is_terminal:
             with Progress(
@@ -359,7 +407,7 @@ def run_pipeline(
 
                 def _cb(elapsed_s: float, est_pct: float) -> None:
                     progress.update(task_id, completed=est_pct * 100)
-                    _emit_heartbeat(elapsed_s, est_pct)
+                    _heartbeat(elapsed_s, est_pct)
 
                 tr = train_mod.run_brush(
                     config.paths.brush_binary,
@@ -376,7 +424,7 @@ def run_pipeline(
                 colmap_dir / "sparse",
                 training_dir,
                 config.brush,
-                progress_callback=_emit_heartbeat,
+                progress_callback=_heartbeat,
             )
         if tr.final_ply is None:
             raise RuntimeError("Brush completed but produced no .ply")

@@ -1008,3 +1008,35 @@ def test_train_heartbeat_fires_again_after_interval() -> None:
     assert mock_log.call_count == 3
     timestamps = [call.kwargs["elapsed_s"] for call in mock_log.call_args_list]
     assert timestamps == [0.0, 300.0, 600.0]
+
+
+# ─── v1.6.0: progress.json persister + tighter log throttle ────────────────
+
+
+def test_train_heartbeat_default_interval_tightened_to_30s() -> None:
+    """v1.6.0 lowers the log-emit throttle from 300 s → 30 s so non-interactive
+    runs leave a fresher trail (the progress.json write itself is unthrottled)."""
+    from autosplat.pipeline import TRAIN_HEARTBEAT_INTERVAL_S
+
+    assert TRAIN_HEARTBEAT_INTERVAL_S == 30.0
+
+
+def test_progress_persister_writes_time_fields(tmp_path: Path) -> None:
+    """The persister turns a (elapsed_s, est_pct) heartbeat into a progress.json
+    the WebUI can read, carrying the known eta + total_steps but no step/psnr."""
+    from autosplat.pipeline import _make_progress_persister
+    from autosplat.progress import read_progress
+
+    persist = _make_progress_persister(tmp_path, "train", eta_s=2400.0, total_steps=30000)
+    persist(1204.0, 0.5017)
+
+    state = read_progress(tmp_path)
+    assert state is not None
+    assert state.stage == "train"
+    assert state.elapsed_s == 1204.0
+    assert state.est_pct == 0.5017
+    assert state.eta_s == 2400.0
+    assert state.total_steps == 30000
+    assert state.step is None
+    assert state.psnr is None
+    assert state.updated_at.endswith("Z")
