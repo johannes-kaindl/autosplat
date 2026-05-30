@@ -1,7 +1,8 @@
-const SHELL = 'autosplat-shell-v6';
-const RUNTIME = 'autosplat-runtime-v6';
+const SHELL = 'autosplat-shell-v7';
+const RUNTIME = 'autosplat-runtime-v7';
 const SHELL_FILES = [
-  './', './index.html', './css/style.css',
+  './', './index.html', './viewer.html',
+  './css/landing.css', './css/style.css', './js/landing.js',
   './js/app.js', './js/viewer.js', './js/dropzone.js',
   './js/hud.js', './js/heightmap.js', './js/controls.js', './js/walking.js',
   './js/collision/voxelize.js', './js/collision/mc-tables.js',
@@ -9,6 +10,10 @@ const SHELL_FILES = [
   './js/collision/editor.js', './js/collision/persist.js',
   './js/collision/collision-mode.js',
   './manifest.webmanifest', './assets/og-image.jpg',
+  './assets/max_strasse_autobisect_hero.mp4',
+  './assets/max_strasse_autobisect_hero.webm',
+  './assets/max_strasse_autobisect_hero_poster.jpg',
+  './assets/max_strasse_autobisect_scene.jpg',
   './icons/icon-192.png', './icons/icon-512.png'
 ];
 
