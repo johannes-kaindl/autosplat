@@ -13,7 +13,8 @@ for the [autosplat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
 pipeline and a general-purpose splat viewer. Vanilla HTML/CSS/JS, no
 build step, no upload — everything renders locally in the browser.
 
-**▶ Live: <https://jkaindl.codeberg.page/autosplat-viewer/>**
+**▶ Live viewer: <https://jkaindl.codeberg.page/autosplat-viewer/viewer.html>**
+· **Service landing: <https://jkaindl.codeberg.page/autosplat-viewer/>**
 
 > **Status: v1.1.1 — Mobile + Walking-mode.** First-person walk-through
 > with in-browser heightmap collision, full iPhone Safari support
@@ -23,12 +24,12 @@ build step, no upload — everything renders locally in the browser.
 ---
 
 <p align="center">
-  <a href="https://jkaindl.codeberg.page/autosplat-viewer/" title="Open the live viewer">
+  <a href="https://jkaindl.codeberg.page/autosplat-viewer/viewer.html" title="Open the live viewer">
     <img src="assets/og-image.jpg" alt="autosplat viewer — 3D Gaussian Splat rendered live in the browser" width="720" />
   </a>
 </p>
 
-<p align="center"><strong><a href="https://jkaindl.codeberg.page/autosplat-viewer/">▶ Open the live viewer</a></strong></p>
+<p align="center"><strong><a href="https://jkaindl.codeberg.page/autosplat-viewer/viewer.html">▶ Open the live viewer</a></strong></p>
 
 ---
 
@@ -191,8 +192,9 @@ for the manual walking-mode smoke checklist and
 ## Deployment — Codeberg Pages
 
 Codeberg Pages serves the `pages` branch at
-`https://jkaindl.codeberg.page/autosplat-viewer/`. The site is fully
-static — update the live site with:
+`https://jkaindl.codeberg.page/autosplat-viewer/`. The root (`index.html`)
+is the bilingual **service landing**; the splat viewer itself lives at
+`viewer.html`. Both are fully static — update the live site with:
 
 ```bash
 git push origin main         # development branch
