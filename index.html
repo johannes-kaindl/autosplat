@@ -1,133 +1,212 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de" data-lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>autosplat viewer — 3D Gaussian Splats in the browser</title>
-  <meta name="description" content="View trained 3D Gaussian Splats directly in your browser. A showcase for the autosplat pipeline.">
+  <title>autosplat — 3D-Captures, die andere Tools aufgeben, gerettet</title>
+  <meta name="description" content="Fotorealistische, begehbare 3D-Gaussian-Splats aus Drohnen- oder Handheld-Video. Lokal gerechnet, nichts wird hochgeladen — auch schwieriges Material, an dem Cloud-Apps scheitern.">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0e0f13">
-  <!-- iOS PWA: required so "Add to Home Screen" opens standalone, not in a mini-browser -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="autosplat">
+  <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
-  <meta property="og:title" content="autosplat viewer">
-  <meta property="og:description" content="View 3D Gaussian Splats in the browser">
-  <meta property="og:image" content="assets/og-image.jpg">
+  <meta property="og:title" content="autosplat — 3D captures, rescued">
+  <meta property="og:description" content="Walkable 3D Gaussian Splats from drone or handheld video. Computed locally, nothing uploaded.">
+  <meta property="og:image" content="assets/max_strasse_autobisect_scene.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="css/style.css">
-  <script type="importmap">
-  {
-    "imports": {
-      "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2.18.1/+esm"
-    }
-  }
-  </script>
+  <link rel="stylesheet" href="css/landing.css">
 </head>
 <body>
+  <header class="topbar">
+    <a class="wordmark" href="./" aria-label="autosplat">
+      <span class="dot"></span> autosplat
+    </a>
+    <nav class="topnav">
+      <a href="viewer.html" class="nav-link">
+        <span lang="de">Begehbare Demo</span><span lang="en">Live demo</span>
+      </a>
+      <a href="#kontakt" class="nav-link">
+        <span lang="de">Kontakt</span><span lang="en">Contact</span>
+      </a>
+      <div class="lang-toggle" role="group" aria-label="Sprache / Language">
+        <button type="button" data-set-lang="de" aria-pressed="true">DE</button>
+        <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </nav>
+  </header>
+
   <main>
-    <section id="stage">
-      <div id="canvas-host"></div>
-      <div id="hero-overlay">
-        <h1>Drone video → 3D Gaussian Splat</h1>
-        <p>Trained splats, right in your browser. Rendered locally — nothing is uploaded.</p>
+    <!-- HERO -->
+    <section class="hero">
+      <video class="hero-video" autoplay muted loop playsinline
+             poster="assets/max_strasse_autobisect_hero_poster.jpg">
+        <source src="assets/max_strasse_autobisect_hero.webm" type="video/webm">
+        <source src="assets/max_strasse_autobisect_hero.mp4" type="video/mp4">
+      </video>
+      <div class="hero-scrim"></div>
+      <div class="hero-content">
+        <p class="eyebrow">
+          <span lang="de">3D-Gaussian-Splatting · lokal · Apple&nbsp;Silicon</span>
+          <span lang="en">3D Gaussian Splatting · local · Apple&nbsp;Silicon</span>
+        </p>
+        <h1>
+          <span lang="de">3D-Captures, die andere Tools aufgeben&nbsp;— gerettet.</span>
+          <span lang="en">The 3D captures other tools give up on&nbsp;— rescued.</span>
+        </h1>
+        <p class="hero-sub">
+          <span lang="de">Aus Drohnen- oder Handheld-Video werden fotorealistische, <strong>begehbare</strong> 3D-Gaussian-Splats. Vollständig lokal gerechnet — nichts wird hochgeladen. Auch rotationslastiges Material, an dem Cloud-Apps scheitern.</span>
+          <span lang="en">Drone or handheld video becomes photorealistic, <strong>walkable</strong> 3D Gaussian Splats. Computed entirely locally — nothing is uploaded. Even the rotation-heavy footage that cloud apps fail on.</span>
+        </p>
         <div class="cta-row">
-          <button id="btn-load" type="button">Load your own splat</button>
-          <a class="btn-secondary" href="#about">What is autosplat?</a>
-        </div>
-      </div>
-      <div id="stage-controls">
-        <button id="btn-orbit" type="button" aria-pressed="true"
-                aria-label="Pause auto-orbit">⏸ Auto-orbit</button>
-        <button id="btn-reset" type="button">↺ Demo</button>
-        <button id="btn-collision" type="button" aria-pressed="false"
-                aria-label="Toggle collision editor">⬛ Collider</button>
-        <button id="btn-fullscreen" type="button" aria-label="Fullscreen">⛶ Fullscreen</button>
-      </div>
-
-      <aside id="collision-toolbar" hidden aria-label="Collision editor">
-        <h3>Collision editor</h3>
-        <button id="coll-build" type="button">Build from splats</button>
-        <fieldset>
-          <legend>Tool</legend>
-          <label><input type="radio" name="coll-tool" value="view" checked> View</label>
-          <label><input type="radio" name="coll-tool" value="add"> Add</label>
-          <label><input type="radio" name="coll-tool" value="remove"> Remove</label>
-        </fieldset>
-        <label>Brush <input id="coll-brush" type="range" min="0.05" max="2" step="0.05" value="0.3"></label>
-        <label>Iso <input id="coll-iso" type="range" min="0.5" max="8" step="0.1" value="1.5"></label>
-        <label class="coll-checkbox">
-          <input id="coll-use-collider" type="checkbox">
-          Use as walking collider
-        </label>
-        <div class="coll-row">
-          <button id="coll-undo" type="button">Undo</button>
-          <button id="coll-reset" type="button">Reset</button>
-        </div>
-        <div class="coll-row">
-          <button id="coll-export-obj" type="button">Export .obj</button>
-          <button id="coll-save" type="button">Save .json</button>
-        </div>
-        <p id="coll-status" aria-live="polite">No mesh.</p>
-      </aside>
-      <div id="drop-hint" hidden>Drop a splat file here</div>
-      <div id="viewer-error" role="alert" hidden></div>
-      <div id="viewer-spinner" hidden>Loading…</div>
-      <input id="file-input" type="file" accept=".ply" hidden>
-
-      <button id="cta-walk" type="button" hidden
-              aria-label="Walk through this scene in first person">
-        ▶ Walk through this scene
-      </button>
-
-      <div id="walk-hud" hidden role="region" aria-label="Walking mode">
-        <div id="walk-mode-indicator" data-mode="walk">🚶 Walk</div>
-        <button id="walk-exit" type="button" aria-label="Exit walking mode">✕</button>
-        <div id="walk-crosshair" aria-hidden="true">+</div>
-        <div id="walk-controls-hint">WASD · Mouse · Space (jump) · Shift (sprint) · F (fly) · Wheel (eye) · Esc</div>
-        <div id="walk-eye-overlay"></div>
-        <div id="walk-touch-buttons" aria-hidden="false">
-          <button id="walk-btn-jump" type="button" aria-label="Jump">↑</button>
-          <button id="walk-btn-fly"  type="button" aria-label="Toggle fly mode">✈</button>
+          <a class="btn btn-primary" href="#kontakt">
+            <span lang="de">Projekt anfragen</span><span lang="en">Request a project</span>
+          </a>
+          <a class="btn btn-ghost" href="viewer.html">
+            <span lang="de">▶ Begehbare Szene ansehen</span><span lang="en">▶ Walk through a scene</span>
+          </a>
         </div>
       </div>
     </section>
 
-    <section id="about">
-      <h2>What is autosplat?</h2>
-      <p>
-        autosplat is a local pipeline that turns drone or handheld video into
-        trained 3D Gaussian Splats: frame extraction, COLMAP structure-from-motion,
-        quality gating, Brush training, compression. Everything runs locally on
-        Apple Silicon — no cloud.
-      </p>
-      <ol id="pipeline-flow">
-        <li>Video</li><li>Frames</li><li>COLMAP SfM</li>
-        <li>Brush training</li><li>Gaussian Splat</li>
+    <!-- PROOF / RESCUE STORY -->
+    <section class="band proof" id="rescue">
+      <div class="proof-grid">
+        <figure class="proof-media">
+          <img src="assets/max_strasse_autobisect_scene.jpg"
+               alt="Rekonstruierter Gaussian Splat der Basilika St. Ulrich und Afra, Augsburg" loading="lazy">
+        </figure>
+        <div class="proof-text">
+          <h2>
+            <span lang="de">Der Beweis: ein Capture, den niemand sonst löst</span>
+            <span lang="en">The proof: a capture no one else could solve</span>
+          </h2>
+          <p>
+            <span lang="de">St.&nbsp;Ulrich und Afra, Augsburg — ein 5:35-Drohnenflug. Standard-Tools gaben bei <strong>5 von 244 Kameras</strong> auf. Die Auto-Bisection-Pipeline rettete den Flug <strong>vollautomatisch</strong>, ohne manuelles Zuschneiden.</span>
+            <span lang="en">St.&nbsp;Ulrich und Afra, Augsburg — a 5:35 drone pass. Standard tools gave up at <strong>5 of 244 cameras</strong>. The auto-bisection pipeline rescued it <strong>fully automatically</strong>, with no manual cutting.</span>
+          </p>
+          <ul class="stat-row">
+            <li><b>490/493</b><span lang="de">Kameras (99,4 %)</span><span lang="en">cameras (99.4 %)</span></li>
+            <li><b>2,0 GB</b><span lang="de">trainierter Splat</span><span lang="en">trained splat</span></li>
+            <li><b>0×</b><span lang="de">manueller Schnitt</span><span lang="en">manual cuts</span></li>
+          </ul>
+          <p class="muted">
+            <span lang="de">Genau dort liegt der Unterschied: nicht im Erzeugen eines Splats — das können viele — sondern im <strong>Retten</strong> von Material, das sonst im Papierkorb landet.</span>
+            <span lang="en">That is the whole difference: not in producing a splat — many tools do — but in <strong>rescuing</strong> footage that would otherwise be thrown away.</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVICE OFFER -->
+    <section class="band" id="leistung">
+      <div class="section-head">
+        <h2><span lang="de">Was du bekommst</span><span lang="en">What you get</span></h2>
+        <p class="muted">
+          <span lang="de">Ein fertiges, begehbares 3D-Modell deines Objekts — als Web-Link zum Teilen und in offenen Formaten.</span>
+          <span lang="en">A finished, walkable 3D model of your subject — as a shareable web link and in open formats.</span>
+        </p>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <div class="card-ico">🛰️</div>
+          <h3><span lang="de">Drohnen- & Outdoor-Captures</span><span lang="en">Drone & outdoor captures</span></h3>
+          <p><span lang="de">Gebäude, Gelände, große Szenen aus langem Flugmaterial — nicht nur kleine Objekte.</span><span lang="en">Buildings, terrain, large scenes from long flight footage — not just small objects.</span></p>
+        </article>
+        <article class="card">
+          <div class="card-ico">🔒</div>
+          <h3><span lang="de">Lokal & vertraulich</span><span lang="en">Local & confidential</span></h3>
+          <p><span lang="de">Alles wird auf der eigenen Maschine gerechnet. Kein Cloud-Upload — NDA- und DSGVO-freundlich.</span><span lang="en">Everything is computed on local hardware. No cloud upload — NDA- and GDPR-friendly.</span></p>
+        </article>
+        <article class="card">
+          <div class="card-ico">🧩</div>
+          <h3><span lang="de">Rescue schwieriger Aufnahmen</span><span lang="en">Rescue of difficult footage</span></h3>
+          <p><span lang="de">Rotationslastig, Multi-Pass, abgebrochene Flüge — Auto-Bisection holt heraus, was andere aufgeben.</span><span lang="en">Rotation-heavy, multi-pass, broken-off flights — auto-bisection recovers what others abandon.</span></p>
+        </article>
+        <article class="card">
+          <div class="card-ico">🚶</div>
+          <h3><span lang="de">Begehbar & einbettbar</span><span lang="en">Walkable & embeddable</span></h3>
+          <p><span lang="de">Ein Web-Viewer-Link zum Durchlaufen der Szene, plus offene Formate (PLY, SuperSplat).</span><span lang="en">A web-viewer link to walk the scene, plus open formats (PLY, SuperSplat).</span></p>
+        </article>
+      </div>
+
+      <div class="verticals">
+        <span lang="de">Passt für:</span><span lang="en">A fit for:</span>
+        <ul>
+          <li><span lang="de">Architektur & Bau</span><span lang="en">Architecture & construction</span></li>
+          <li><span lang="de">Premium-Immobilien</span><span lang="en">Premium real estate</span></li>
+          <li><span lang="de">VFX & Werbung</span><span lang="en">VFX & advertising</span></li>
+          <li><span lang="de">Denkmalpflege & Museen</span><span lang="en">Heritage & museums</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="band alt" id="ablauf">
+      <div class="section-head">
+        <h2><span lang="de">So läuft's</span><span lang="en">How it works</span></h2>
+      </div>
+      <ol class="steps">
+        <li>
+          <span class="step-n">1</span>
+          <h3><span lang="de">Video</span><span lang="en">Video</span></h3>
+          <p><span lang="de">Du lieferst Drohnen-/Handheld-Material — oder ich fliege das Objekt vor Ort ab.</span><span lang="en">You provide drone/handheld footage — or I capture the subject on site.</span></p>
+        </li>
+        <li>
+          <span class="step-n">2</span>
+          <h3><span lang="de">SfM & Rescue</span><span lang="en">SfM & rescue</span></h3>
+          <p><span lang="de">Kamera-Rekonstruktion mit Auto-Bisection — auch schwieriges Material wird registriert.</span><span lang="en">Camera reconstruction with auto-bisection — even difficult footage gets registered.</span></p>
+        </li>
+        <li>
+          <span class="step-n">3</span>
+          <h3><span lang="de">Training</span><span lang="en">Training</span></h3>
+          <p><span lang="de">Gaussian-Splat-Training bis zur Konvergenz, lokal auf Apple Silicon.</span><span lang="en">Gaussian splat training to convergence, locally on Apple Silicon.</span></p>
+        </li>
+        <li>
+          <span class="step-n">4</span>
+          <h3><span lang="de">Begehbarer Splat</span><span lang="en">Walkable splat</span></h3>
+          <p><span lang="de">Du bekommst einen Web-Link zum Durchlaufen plus die Dateien.</span><span lang="en">You get a web link to walk through, plus the files.</span></p>
+        </li>
       </ol>
-      <p>
-        <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat">
-          autosplat on Codeberg →</a>
+    </section>
+
+    <!-- CONTACT / CTA -->
+    <section class="band cta-band" id="kontakt">
+      <h2><span lang="de">Ein Objekt im Kopf?</span><span lang="en">Have a subject in mind?</span></h2>
+      <p class="muted">
+        <span lang="de">Schreib mir kurz, worum es geht — Gebäude, Gelände, Produkt, Denkmal. Ich melde mich mit Einschätzung und Preis.</span>
+        <span lang="en">Tell me briefly what it is — a building, terrain, product, monument. I'll come back with an assessment and a price.</span>
       </p>
+      <a class="btn btn-primary btn-lg"
+         href="mailto:code.jkaindl@mailbox.org?subject=3D-Capture-Anfrage">
+        <span lang="de">Projekt anfragen</span><span lang="en">Request a project</span>
+      </a>
+      <p class="contact-mail">code.jkaindl@mailbox.org</p>
     </section>
   </main>
 
-  <footer>
-    <a href="https://codeberg.org/jkaindl/autosplat-viewer">Source</a>
-    <span>·</span>
-    <a href="LICENSE">AGPL-3.0</a>
-    <span>·</span>
-    <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat">autosplat pipeline</a>
-    <span>·</span>
-    <span>powered by PlayCanvas</span>
+  <footer class="site-footer">
+    <p class="oss-note">
+      <span lang="de">Gebaut mit der quelloffenen <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat">autosplat-Pipeline</a> (AGPL-3.0) — du kannst nachvollziehen, wie deine Captures entstehen.</span>
+      <span lang="en">Built with the open-source <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat">autosplat pipeline</a> (AGPL-3.0) — you can see exactly how your captures are made.</span>
+    </p>
+    <nav class="footer-links">
+      <a href="viewer.html"><span lang="de">Viewer</span><span lang="en">Viewer</span></a>
+      <span>·</span>
+      <a href="https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"><span lang="de">Pipeline (Codeberg)</span><span lang="en">Pipeline (Codeberg)</span></a>
+      <span>·</span>
+      <a href="https://codeberg.org/jkaindl/autosplat-viewer">Viewer-Source</a>
+      <span>·</span>
+      <a href="LICENSE">AGPL-3.0</a>
+    </nav>
   </footer>
 
-  <script type="module" src="js/app.js"></script>
+  <script src="js/landing.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () =>
