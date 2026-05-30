@@ -25,6 +25,22 @@ uv run pre-commit install        # install pre-commit hooks (ruff + ruff-format 
 uv run autosplat doctor          # check ffmpeg / colmap / brush / compress
 ```
 
+## Contributor License Agreement (CLA)
+
+Contributions are accepted under a lightweight [Contributor License Agreement](CLA.md). In short:
+
+- **You keep your copyright** — the CLA is not an assignment.
+- You grant the maintainer a relicensing right, so the project can stay AGPL for the commons **and** be offered under a separate commercial license to parties who can't comply with AGPL §13.
+- Your contribution stays in the commons under AGPL-3.0-or-later (inbound = outbound).
+
+By opening a pull request you accept the CLA. For any non-trivial change, make it explicit with a sign-off (`git commit -s`):
+
+```
+Signed-off-by: Your Name <your-email@example.com>
+```
+
+This exists for one reason: accepting even a single non-trivial PR *without* a relicensing grant would permanently remove the option to dual-license. The CLA is the insurance against that one irreversible mistake — see [`CLA.md`](CLA.md) for the full text.
+
 ## Pull requests
 
 1. **Tests first.** TDD with a failing test, then the implementation. New features land with tests. The bar for "unit-tested" is intentionally low — match what's in `tests/`.
