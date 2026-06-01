@@ -105,4 +105,4 @@ lightweight insurance against that one irreversible mistake. It costs contributo
 nothing and takes nothing away.
 
 Questions about this Agreement or about a commercial license:
-**code.jkaindl@mailbox.org**.
+**code@jkaindl.de**.
