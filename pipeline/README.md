@@ -392,7 +392,9 @@ AGPL is the right default for the commons, but it isn't workable for everyone �
 
 This is possible because the code is single-authored: Johannes Kaindl holds the full copyright and can therefore offer the project under AGPL **and** under commercial terms. External contributions are accepted under a lightweight [Contributor License Agreement](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CLA.md) that preserves this option — you keep your copyright; the project keeps the ability to dual-license.
 
-If you need to use `auto-splat-pipeline` under terms other than AGPL — or you want a commissioned 3D capture rather than the tool — get in touch: **code.jkaindl@mailbox.org**.
+If you need to use `auto-splat-pipeline` under terms other than AGPL — for example a **proprietary/closed-source product or an Apple App Store build**, which are incompatible with the AGPL — or you want a commissioned 3D capture rather than the tool — get in touch: **code.jkaindl@mailbox.org**.
+
+- **Commercial license:** how the open-source and commercial licenses fit together — see [LICENSING.md](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/LICENSING.md) and the [Contributor License Agreement](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CLA.md).
 
 **Dependency licenses:** All Python dependencies (typer, pydantic, numpy, opencv-python, rich, structlog, watchdog, etc.) are MIT/BSD/Apache-2.0 — AGPL-3.0-compatible. External tool invocations (COLMAP BSD-3, FFmpeg LGPL, Brush Apache-2.0, SuperSplat MIT) are via subprocess aggregation, conforming with FSF GPL FAQ aggregation rules.
 

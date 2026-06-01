@@ -39,7 +39,7 @@ By opening a pull request you accept the CLA. For any non-trivial change, make i
 Signed-off-by: Your Name <your-email@example.com>
 ```
 
-This exists for one reason: accepting even a single non-trivial PR *without* a relicensing grant would permanently remove the option to dual-license. The CLA is the insurance against that one irreversible mistake — see [`CLA.md`](CLA.md) for the full text.
+This exists for one reason: accepting even a single non-trivial PR *without* a relicensing grant would permanently remove the option to dual-license. The CLA is the insurance against that one irreversible mistake — see [`CLA.md`](CLA.md) for the full text, and [`LICENSING.md`](LICENSING.md) for how the open-source and commercial licenses fit together.
 
 ## Pull requests
 
