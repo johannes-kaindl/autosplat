@@ -9,6 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **The release app + DMG are now Developer ID-signed and Apple-notarized.**
+  `build_app.sh` gates the full sign → notarize → staple chain on
+  `CODESIGN_IDENTITY` + `AC_NOTARY_PROFILE` (ad-hoc otherwise). It now signs
+  with the Hardened Runtime **and a secure timestamp** plus a
+  `packaging/AutoSplat.entitlements` file (`disable-library-validation` +
+  `allow-unsigned-executable-memory`, so the frozen Python app still launches
+  under the Hardened Runtime), notarizes **both** the `.app` and the `.dmg`
+  (with an upload retry — notarytool's multipart upload can time out on the
+  large bundle), staples both, and verifies with `spctl`/`stapler`. The old
+  `xattr -dr com.apple.quarantine` workaround is no longer needed.
+
 ---
 
 ## [v1.10.0] — 2026-05-29 — Multi-video bisection-rescue
