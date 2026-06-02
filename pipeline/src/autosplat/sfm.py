@@ -12,6 +12,7 @@ Quality presets control feature counts and matcher parameters.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -175,6 +176,24 @@ def _read_uint64_header(path: Path) -> int:
         return 0
 
 
+def _reset_workspace(workspace: Path) -> None:
+    """Delete stale COLMAP artefacts so a fresh run starts from a clean slate.
+
+    Re-running `process` on the same capture (the documented quick-iter →
+    quality-run workflow) re-extracts frames that share filenames with the
+    previous run but have different content/resolution. COLMAP keys images by
+    name, so an existing `database.db` makes the feature extractor reuse the old
+    features and the mapper register phantom images — mixing two runs (observed:
+    397 cameras from 351 on-disk frames). `resume` never calls run_colmap (it
+    re-parses the existing sparse model instead), so wiping here is safe.
+    """
+    for db in workspace.glob("database.db*"):  # .db plus -wal / -shm side files
+        db.unlink()
+    sparse = workspace / "sparse"
+    if sparse.exists():
+        shutil.rmtree(sparse)
+
+
 def run_colmap(
     frames_dir: Path,
     workspace: Path,
@@ -183,6 +202,7 @@ def run_colmap(
     """Full SfM pipeline. Workspace must already exist; will be populated in place."""
     t0 = time.monotonic()
     workspace.mkdir(parents=True, exist_ok=True)
+    _reset_workspace(workspace)
 
     database = workspace / "database.db"
     sparse_dir = workspace / "sparse"

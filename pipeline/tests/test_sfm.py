@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import struct
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -15,12 +16,51 @@ from autosplat.sfm import (
     build_feature_extractor_command,
     build_mapper_command,
     build_matcher_command,
+    run_colmap,
 )
 
 
 @pytest.fixture
 def cfg() -> ColmapConfig:
     return ColmapConfig(matcher="sequential", quality="medium", single_camera=True)
+
+
+def test_run_colmap_wipes_stale_workspace(tmp_path: Path, cfg: ColmapConfig) -> None:
+    """A fresh SfM run must NOT inherit a previous run's database.db / sparse.
+
+    Re-running `process` on the same capture (e.g. quick-iter → quality-run)
+    re-extracts frames with the same names but different content; COLMAP would
+    otherwise append to the stale DB and reuse old features, mixing the two
+    runs (observed: 397 cameras registered from 351 on-disk frames). run_colmap
+    must reset the workspace first. Resume never calls run_colmap, so this is
+    safe for the resume path.
+    """
+    workspace = tmp_path / "colmap"
+    workspace.mkdir()
+    (workspace / "database.db").write_bytes(b"STALE-DB")
+    (workspace / "database.db-wal").write_bytes(b"WAL")  # SQLite side files too
+    stale_sparse = workspace / "sparse" / "0"
+    stale_sparse.mkdir(parents=True)
+    (stale_sparse / "images.bin").write_bytes(b"OLD-MODEL")
+
+    frames = tmp_path / "frames"
+    frames.mkdir()
+
+    # Mock out the actual COLMAP subprocess calls + stats parse.
+    with (
+        patch("autosplat.sfm._run_logged") as run,
+        patch("autosplat.sfm._parse_mapper_stats", return_value=(10, 1000)),
+    ):
+        result = run_colmap(frames, workspace, cfg)
+
+    # Stale artefacts gone (the mocked COLMAP doesn't recreate them).
+    assert not (workspace / "database.db").exists()
+    assert not (workspace / "database.db-wal").exists()
+    assert not (stale_sparse / "images.bin").exists()
+    # …but the workspace + a fresh empty sparse/ dir are ready for COLMAP.
+    assert (workspace / "sparse").is_dir()
+    assert run.call_count == 3  # feature_extractor, matcher, mapper
+    assert result.cameras_registered == 10
 
 
 def test_feature_extractor_command(tmp_path: Path, cfg: ColmapConfig) -> None:
