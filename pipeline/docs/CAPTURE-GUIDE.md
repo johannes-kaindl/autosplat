@@ -37,6 +37,27 @@ The 180° turn case is especially nasty: even though the "going back" segment ph
 
 Sky, water, fresh snow, painted walls, smooth asphalt — anything where SIFT can't find distinctive corners. The `ice_bird` case in [`PHASE-0-CALIBRATION.md`](PHASE-0-CALIBRATION.md) (4/106 cameras over a snowfield) is the canonical example. Asphalt streets are nearly as bad in practice.
 
+### HDR footage (DJI Osmo Pocket / Action) — *now auto-handled*
+
+DJI Osmo Pocket 3/4 and Action cameras record **HLG** (`color_transfer=arib-std-b67`), and the DJI Mimo app's one-tap "HDR" export wraps it in **Dolby Vision profile 8**. Decoded straight to 8-bit those frames are flat and grey — every frame scores ~3–20 on the Laplacian blur metric (vs 100–500 for normal SDR), so the old blur gate rejected the **entire clip** with `all_frames_rejected`. That looks like "bad footage" but isn't: the footage is fine, the colour pipeline was wrong.
+
+Since v1.x the pipeline detects HDR via ffprobe and tone-maps it to SDR Rec.709 during extraction (`preprocess.hdr_tonemap` in the log). No action needed — but **recording in SDR is still better** (see shoot rules): tone-mapping can't add per-pixel sharpness that a re-encoded HDR export already lost.
+
+> The `..._compose_0.MOV` filename is a DJI **Mimo composed/re-encoded export**, not the original — it's softer and carries the added HDR metadata. Pull the **original clip off the microSD card** instead.
+
+### Living subjects (people, animals)
+
+SfM and 3DGS assume a **static scene**. A person breathing, blinking, or swaying during a walk-around shows up as ghosting and floaters — Agisoft's own guidance warns "even small movements like blinking or breathing can cause reconstruction errors." A single slow 60–80 s helix around a standing person is a **high-risk borderline case**: the drift accumulates over the whole take.
+
+If you must scan a person with one handheld camera:
+
+- **Several fast rings, not one slow helix** — 3 rings (eye level / ~45° down / slightly overhead), each **< ~20–25 s**, so the subject only has to hold still briefly per ring.
+- **Fast shutter** (1/125–1/250 s) to kill both camera-shake and breathing blur — this needs bright, diffuse light.
+- **Stabilise the subject**: fix their gaze on a far point, arms slightly away from the body, neutral expression, feet marked, hold a shallow breath per ring. Tie back loose hair; avoid glossy clothing/glasses.
+- **Textured static background** (not empty sky / blank wall) so COLMAP can fix the camera trajectory even if the subject drifts a little.
+
+The real gold standard for living subjects is **simultaneous multi-camera** capture (even 2–3 phones triggered together) — it freezes one instant and the movement problem disappears. The single-camera helix that works for buildings (`max_strasse`, `wasserturm`) is structurally unreliable for humans.
+
 ---
 
 ## Shoot rules
@@ -66,6 +87,10 @@ The subject needs feature corners — brick walls, foliage, stones, patterned ti
 ### ✅ Even, consistent lighting
 
 Sharp shadow boundaries that move between frames look like feature changes to SIFT and confuse matching. Overcast days outperform sunny days for SfM. Avoid mixed sun/shade panning.
+
+### ✅ Record in SDR (Rec.709 / "Normal"), not HLG / Dolby Vision
+
+On a DJI Osmo Pocket 3/4 set **Colors → Normal** (Mimo: Video settings → Color; on-device: Camera Settings → Color). That gives 8-bit SDR Rec.709 with normal contrast — exactly what SfM wants, and 8-bit is no disadvantage for photogrammetry. Avoid the **HLG** and **D-Log M** profiles and the Mimo one-tap HDR/Dolby-Vision export for capture work; export the **microSD originals**, not `*_compose_0` files. HDR sources still run (auto-tone-mapped), but SDR-at-source is sharper and avoids a re-encode generation.
 
 ### ❌ Don't: 360° spin from a fixed point
 ### ❌ Don't: abrupt 90°+ turns
