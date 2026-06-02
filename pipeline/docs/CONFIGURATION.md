@@ -37,8 +37,11 @@ autosplat config show
 | Key                     | Default | Notes                                                                                                   |
 | ----------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
 | `target_frames`         | `250`   | Target keyframe count. Actual count may be slightly higher; blur filter drops some.                     |
-| `blur_threshold`        | `100.0` | Laplacian-variance floor. Frames below this are discarded. **High-fps drone footage may need 25–50** — see `PHASE-0-CALIBRATION.md` (ice_bird @ 60 fps loses 88 % of frames at default 100). |
+| `blur_threshold`        | `100.0` | Laplacian-variance floor. Frames below this are discarded. **High-fps drone footage may need 25–50** — see `PHASE-0-CALIBRATION.md` (ice_bird @ 60 fps loses 88 % of frames at default 100). If the threshold is too strict, `blur_rescue` keeps the relatively-sharpest frames rather than failing the run. |
 | `min_frame_distance_sec`| `0.2`   | Minimum temporal spacing between extracted frames — prevents near-duplicates in slow-motion sections.   |
+| `hdr_tonemap`           | `true`  | Auto-detect HDR (`probe_video` reads `color_transfer`: `arib-std-b67` = HLG, `smpte2084` = PQ) and tone-map HLG / Dolby-Vision footage to SDR Rec.709 during frame extraction. Stock-ffmpeg only — no `zscale`/`libplacebo`. Lets DJI Osmo Pocket / Action footage through. |
+| `blur_rescue`           | `true`  | If `blur_threshold` would leave fewer than 3 usable frames, keep the frames that are sharp *relative to the batch* instead of aborting the run — the absolute floor is calibrated for sharp SDR and is meaningless for soft/HDR footage. |
+| `blur_rescue_rel_factor`| `0.6`   | Rescue keeps frames scoring ≥ this fraction of the batch median Laplacian variance.                     |
 
 ## `[colmap]`
 

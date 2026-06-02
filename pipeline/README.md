@@ -1,7 +1,7 @@
 # video-to-3d-gaussian-splat
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.10.0-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
+[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.11.0-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
 [![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS%2015%2B%20%C2%B7%20Apple%20Silicon-lightgrey)](https://www.apple.com/macos/)
@@ -11,7 +11,7 @@ Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running loca
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.10.0 — Multi-video bisection-rescue.** Auto-bisection now fires for multi-video captures: each source flight is probed whole, the failing ones are bisected, and the survivors recombine — so one bad flight poisoning the joint SfM model is rescuable. Plus the full stack — single-video auto-bisection-rescue, train-till-plateau, live-progress mission control, failure diagnostics, and the `AutoSplat.app` DMG. Mac Silicon, AGPL-3.0.
+> **Status: v1.11.0 — DJI HDR footage support.** HLG / Dolby Vision footage (DJI Osmo Pocket / Action) is auto-detected and tone-mapped to SDR Rec.709 during extraction, plus an adaptive blur rescue keeps the relatively-sharpest frames instead of aborting a soft clip. Built on the full stack — multi-video bisection-rescue, single-video auto-bisection-rescue, train-till-plateau, live-progress mission control, failure diagnostics, and the `AutoSplat.app` DMG. Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -32,7 +32,7 @@ See <a href="#expected-behavior">Expected Behavior</a> for the full rescue story
 
 ## About
 
-Video footage — drone, handheld, anything with enough motion parallax — goes in as `.mp4` or `.mov`. A trained 3D Gaussian Splat comes out — ready to open directly in SuperSplat for trimming, camera animation, and publishing.
+Video footage — drone, handheld, anything with enough motion parallax — goes in as `.mp4` or `.mov`. HDR footage (DJI Osmo Pocket / Action, HLG / Dolby Vision) is auto-detected and tone-mapped to SDR during extraction, so it works out of the box. A trained 3D Gaussian Splat comes out — ready to open directly in SuperSplat for trimming, camera animation, and publishing.
 
 No cloud. No GPU server. No CUDA stack. Everything runs locally on a Mac with Apple Silicon using WebGPU-native tooling. The pipeline handles preprocessing, Structure-from-Motion via COLMAP, quality gating with adaptive retry, Gaussian Splat training via Brush, compression, Obsidian capture-note generation, and automatic SuperSplat launch.
 
@@ -79,6 +79,7 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 | Version  | Date       | Headline                                                                                  |
 | -------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v1.11.0  | 2026-06-02 | **DJI HDR (HLG/Dolby Vision) footage support** — auto tone-map to SDR + adaptive blur rescue |
 | v1.5.0   | 2026-05-27 | **Train-till-Plateau** — opt-in patience-stop for Brush. New `PlateauMonitor` thread polls `eval_<step>/` dirs, computes PSNR via cv2, SIGTERMs Brush when Δ-PSNR flattens over `plateau_patience` consecutive evals past `plateau_min_steps`. Six new `[brush]` config fields, 13 new tests. |
 | v1.4.6   | 2026-05-27 | **Final Polish** — pre-flight viewer-config check at the start of `process`/`resume`/`add-video`/`rescue`; deprecation-warning test coverage; orphaned v1.3 hero assets removed. Closes the v1.4 line. |
 | v1.4.5   | 2026-05-27 | **Quality Sweep** — `autosplat cleanup-rescue` reclaims ~1-3 GB per capture after a successful rescue; `train.heartbeat` events make non-TTY Brush runs observable; `cli.serve --with-supersplat` shares `_serve_local_and_block` (DRY); remote-target deprecation warning; remaining mypy noise in `watcher.py` + `viewer.py` cleared; docs refreshed for the v1.4.4 local-viewer default. |

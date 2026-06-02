@@ -19,8 +19,10 @@ linter-yaml-title-alias: Architecture
 cli.py            Typer entry point. Parses args, loads config, dispatches.
 ├── pipeline.py   Orchestrator. Glues stages, owns capture-dir layout, runs gate.
 │   ├── preflight.py     Phase-6 ffprobe-validate + duration/resolution/fps plausibility
-│   ├── preprocess.py    FFmpeg + Laplacian-blur filter + skipped-frames detection
-│   ├── sfm.py           COLMAP feature_extractor → matcher → mapper (binary stats)
+│   ├── preprocess.py    FFmpeg + HDR-tonemap (HLG/PQ→SDR Rec.709) + Laplacian-blur filter
+│   │                    (+ adaptive rescue) + skipped-frames detection
+│   ├── sfm.py           COLMAP feature_extractor → matcher → mapper (binary stats);
+│   │                    run_colmap wipes a stale database.db + sparse/ before a fresh run
 │   ├── quality.py       Phase-3 gate + Phase-6 Brush-OOM retry-hint policy
 │   ├── train.py         Brush wrapper + dataset staging + OOM detection +
 │   │                    Phase-7 wall-time-based progress heartbeat
@@ -108,8 +110,8 @@ captures/2026-05-14_neo2_garden/
 | Stage         | Input                                | Output                                       | Idempotent? |
 | ------------- | ------------------------------------ | -------------------------------------------- | ----------- |
 | Preflight     | `source/<video>`                     | ffprobe metadata or `PreflightFailure`       | n/a — pure function (Phase 6) |
-| Preprocess    | `source/<video>`                     | `frames/frame_*.jpg` + skipped-frames count  | yes (wipes + redoes) |
-| SfM           | `frames/`                            | `colmap/database.db`, `colmap/sparse/0/*.bin`| yes (overwrites)     |
+| Preprocess    | `source/<video>`                     | `frames/frame_*.jpg` + skipped-frames count  | yes (wipes + redoes); HDR (HLG/PQ) auto-tone-mapped to SDR Rec.709 during extraction; blur filter has an adaptive rescue when <3 frames would survive |
+| SfM           | `frames/`                            | `colmap/database.db`, `colmap/sparse/0/*.bin`| yes — `run_colmap` wipes a stale `database.db` + `sparse/` before a fresh run (`resume` re-parses the existing model, never calls `run_colmap`) |
 | Quality-Gate  | `colmap/sparse/0/*.bin`, `frames/`   | (raises QualityGateFailure or no-op)         | n/a — pure function (Phase 3) |
 | Train         | `colmap/sparse/0/`                   | `training/scene.ply` or `BrushOOMError`      | yes (Brush handles); progress heartbeat (Phase 7) |
 | Export        | `training/scene.ply`                 | `output/scene.ply` (≥1 MB), `output/metadata.json` | yes (overwrites) |

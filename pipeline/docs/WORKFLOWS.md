@@ -209,6 +209,8 @@ autosplat process video.mp4 --config /tmp/no-gate.toml
 
 (Don't do this in the daemon's TOML — you'll burn Brush time on every bad capture.)
 
+Re-running `autosplat process` on the same capture directory (e.g. a quick-iter run followed by a quality run with different settings) is safe: `run_colmap` wipes the stale COLMAP `database.db` + `sparse/` before a fresh run, so old and new features can't mix. `autosplat resume` re-uses the existing sparse model and never re-runs COLMAP, so it's unaffected.
+
 ---
 
 ## 10. Web-UI control (v1.0.0+)

@@ -9,8 +9,9 @@ Guidance for AI coding agents working in this repository. Human-facing docs live
 3D Gaussian Splat. Apple-Silicon-only by design (macOS 15+, M-series). Single maintainer,
 AGPL-3.0 code / CC BY-SA 4.0 docs.
 
-Pipeline stages: preprocess (FFmpeg) → SfM (COLMAP) → quality gate → train (Brush) →
-export PLY → compress → Obsidian capture-note → SuperSplat auto-open.
+Pipeline stages: preprocess (FFmpeg; auto-tone-maps HDR HLG/PQ → SDR) → SfM (COLMAP) →
+quality gate → train (Brush) → export PLY → compress → Obsidian capture-note →
+SuperSplat auto-open.
 
 ## Setup & commands
 

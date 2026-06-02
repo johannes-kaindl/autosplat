@@ -39,6 +39,24 @@ You'll see one of these in the log:
 
 Thresholds live in `src/autosplat/preflight.py` as module constants. If your use-case needs different bounds, edit there.
 
+## All frames rejected as blurry / pipeline aborts immediately (Phase 6)
+
+Typical with DJI Osmo Pocket / Action HDR footage. You'll see one of:
+
+```
+{"event":"preprocess.all_frames_rejected", …}
+{"event":"preprocess.too_few_frames", …}
+```
+
+Two mechanisms now handle the common causes automatically:
+
+- **HDR is auto-tone-mapped.** HLG (`color_transfer=arib-std-b67`) or PQ (`smpte2084`) footage — including DJI Mimo's one-tap "HDR" / Dolby-Vision exports — decodes flat and grey, scoring ~3–20 on the Laplacian blur metric (vs 100–500 for normal SDR), so the whole clip used to be rejected. `probe_video` now detects HDR via ffprobe and `extract_hdr_frames` tone-maps each frame to SDR Rec.709 during extraction (`preprocess.hdr_tonemap`, default `true`). Stock ffmpeg only — no `zscale`/`libplacebo` needed.
+- **Adaptive blur rescue.** When `blur_threshold` would leave fewer than 3 usable frames, the pipeline keeps the frames that are sharp *relative to the batch* (≥ `blur_rescue_rel_factor` of the median) instead of failing — the absolute threshold is calibrated for sharp SDR and is meaningless for soft footage. Toggle via `preprocess.blur_rescue` (default `true`) and `preprocess.blur_rescue_rel_factor` (default `0.6`).
+
+If it still fails with both enabled, the footage is genuinely too soft (out of focus, motion-blurred, or a heavily re-compressed export). Prefer the microSD originals over Mimo `*_compose_0` files, and see [`CAPTURE-GUIDE.md`](CAPTURE-GUIDE.md) — recording in SDR ("Normal") at source is sharper than any tone-mapped HDR re-encode.
+
+Re-running `autosplat process` on the same capture-dir after fixing footage/config is safe — `run_colmap` wipes the stale COLMAP database + `sparse/` before a fresh run, so old and new features no longer mix. (`autosplat resume` is unaffected — it never re-runs COLMAP.)
+
 ## Brush ran out of memory (Phase 6 — auto-retry)
 
 You'll see in the log:

@@ -52,6 +52,8 @@ A few things that look like good drone footage but reliably break SfM:
 - **Abrupt 180°+ turns mid-flight** — even with the exhaustive matcher, loop closure rarely fires.
 - **Low-texture surfaces** (snow, sky, water, fresh asphalt, painted walls) — no features for SIFT to lock onto.
 
+HDR footage (DJI HLG / Dolby Vision) is auto-detected and tone-mapped to SDR during extraction, so it just works — but recording in SDR ("Normal") is still sharper and avoids a re-encode generation. See [`CAPTURE-GUIDE.md`](CAPTURE-GUIDE.md) for why.
+
 If you're not sure, read [`CAPTURE-GUIDE.md`](CAPTURE-GUIDE.md) before you go fly — it's a 5-minute read that saves hours of failed pipeline runs.
 
 ### 2. Run the pipeline

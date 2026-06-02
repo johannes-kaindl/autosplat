@@ -13,7 +13,7 @@
 
 ### 1.1 Vision
 
-A fully automated local pipeline that takes drone videos (DJI Neo 2 and any other `.mp4`/`.mov`) and, without any further manual intervention, produces trained 3D Gaussian Splats that open directly in SuperSplat for trimming and camera animations.
+A fully automated local pipeline that takes drone videos (DJI Neo 2 and any other `.mp4`/`.mov`, including HDR/HLG · Dolby Vision footage from DJI Osmo Pocket/Action) and, without any further manual intervention, produces trained 3D Gaussian Splats that open directly in SuperSplat for trimming and camera animations.
 
 ### 1.2 In Scope
 
@@ -85,7 +85,7 @@ A fully automated local pipeline that takes drone videos (DJI Neo 2 and any othe
 ### 3.2 Component Responsibilities
 
 - **`watcher.py`**: watches the input folder, deduplicates, triggers the pipeline per video
-- **`preprocess.py`**: FFmpeg wrapper, keyframe extraction with blur filter (Laplacian variance)
+- **`preprocess.py`**: FFmpeg wrapper, keyframe extraction with blur filter (Laplacian variance). Detects HDR (HLG/PQ) sources via ffprobe and tone-maps them to SDR Rec.709 during extraction (stock-ffmpeg, no zscale/libplacebo); falls back to a relative-sharpness blur rescue when the absolute threshold would leave too few frames
 - **`sfm.py`**: COLMAP wrapper (feature extraction → matching → mapper)
 - **`train.py`**: Brush subprocess wrapper, parses training progress
 - **`export.py`**: PLY validation, copy to outputs, metadata JSON
@@ -222,6 +222,9 @@ brush_binary = "~/AutoSplat/bin/brush"
 target_frames = 250
 blur_threshold = 100.0         # Laplacian variance; lower = blurrier filtered out
 min_frame_distance_sec = 0.2   # avoid duplicate frames
+hdr_tonemap = true             # auto-detect HLG/PQ (e.g. DJI Osmo) and tone-map to SDR Rec.709
+blur_rescue = true             # if blur_threshold leaves <3 frames, keep the sharpest instead of failing
+blur_rescue_rel_factor = 0.6   # rescue keeps frames >= this fraction of the batch median
 
 [colmap]
 matcher = "sequential"         # for video-derived frames; "exhaustive" for unordered

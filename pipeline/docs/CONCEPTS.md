@@ -67,9 +67,13 @@ Thresholds are intentionally wide. They catch obviously-wrong inputs (misclick: 
 
 FFmpeg extracts ~250 keyframes from the video, spread evenly across its duration. Then a Laplacian-variance filter throws away frames that look too blurry — moving cameras at high shutter speeds produce motion blur, and blurry photos confuse SfM.
 
+**HDR footage is tone-mapped first.** HLG / Dolby-Vision sources (e.g. DJI Osmo Pocket / Action — `color_transfer=arib-std-b67` or `smpte2084`) decode flat and grey in 8-bit, scoring ~3-20 on the blur metric (vs 100-500 for SDR) and tripping the gate on the whole clip. When `[preprocess].hdr_tonemap` is set, the pipeline detects HDR via ffprobe and tone-maps each extracted frame to SDR Rec.709 *before* blur-scoring, so the metric sees comparable values. See `CAPTURE-GUIDE.md`.
+
 **Knobs:** `[preprocess].target_frames`, `min_frame_distance_sec`, `blur_threshold`.
 
 **The blur_threshold trap:** the default of 100 works on slow-pass captures (Phase-0 `bench_chill`: 0 % blur-rejected). On fast 60 fps fly-throughs and continuous orbits, it can reject 88-100 % of frames, leaving the pipeline with nothing. Lower to 25 or 50 for high-motion captures. See `PHASE-0-CALIBRATION.md`.
+
+**Adaptive blur rescue:** if `blur_threshold` would leave fewer than 3 usable frames, `[preprocess].blur_rescue` keeps the frames that are sharpest *relative to the batch* (≥ `blur_rescue_rel_factor` of the median) instead of aborting the run — the absolute threshold is meaningless for uniformly soft/HDR footage.
 
 **Phase 6 — skipped-frames detection:** ffmpeg sometimes drops near-duplicate frames during extraction. Preprocess scans stderr for `skipped: N` / `skipped N frames` patterns and logs WARN when the count exceeds 5 % of `target_frames` — usually harmless, but a flag for stationary "drone hovers" sections.
 
