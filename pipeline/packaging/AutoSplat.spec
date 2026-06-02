@@ -2,6 +2,7 @@
 # PyInstaller spec for AutoSplat.app. Run via scripts/build_app.sh (from repo root).
 
 import os
+import re
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -12,6 +13,18 @@ ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 
 def _p(*parts):
     return os.path.join(ROOT, *parts)
+
+
+def _app_version():
+    """Read __version__ from the package (regex, no import — keeps the spec
+    dependency-free) so the bundle's Info.plist carries the real version
+    instead of PyInstaller's 0.0.0 default."""
+    with open(_p("src/autosplat/__init__.py"), encoding="utf-8") as f:
+        match = re.search(r'__version__\s*=\s*"([^"]+)"', f.read())
+    return match.group(1) if match else "0.0.0"
+
+
+APP_VERSION = _app_version()
 
 
 # Data files: (source, dest-in-bundle). The webui resolves templates/static via
@@ -88,6 +101,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleDisplayName": "AutoSplat",
         "CFBundleName": "AutoSplat",
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": APP_VERSION,
         # Classic app: Dock icon + a real WebView window (no LSUIElement).
         "NSHighResolutionCapable": True,
     },
