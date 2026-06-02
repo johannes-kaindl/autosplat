@@ -9,6 +9,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [v1.11.0] — 2026-06-02 — DJI HDR footage support
+
+### Added
+
+- **HDR footage (HLG / Dolby Vision) is now auto-tone-mapped to SDR.** DJI Osmo
+  Pocket / Action cameras record HLG (`color_transfer=arib-std-b67`), often
+  wrapped in Dolby Vision profile 8; decoded naively, those frames are flat and
+  grey, so every frame scored ~3–20 on the Laplacian blur metric (vs 100–500 for
+  normal SDR) and the gate rejected the whole clip. `probe_video` now detects HDR
+  via ffprobe, and `extract_hdr_frames` streams raw 16-bit RGB over an ffmpeg
+  pipe and tone-maps each frame to SDR Rec.709 in NumPy (inverse HLG OETF →
+  BT.2020→709 → exposure + Reinhard roll-off → gamma). Stock-ffmpeg-only — no
+  `zscale`/`libplacebo` needed. Toggle via `preprocess.hdr_tonemap`.
+- **Adaptive blur rescue.** When `blur_threshold` would leave fewer than 3 usable
+  frames, the pipeline keeps the frames that are sharp *relative to the batch*
+  (≥ `blur_rescue_rel_factor` of the median) instead of failing the run — the
+  absolute threshold is calibrated for sharp SDR and is meaningless for soft/HDR
+  footage. Toggle via `preprocess.blur_rescue` (+ `blur_rescue_rel_factor`).
+
+### Fixed
+
+- **`run_colmap` now wipes a stale COLMAP database/sparse before a fresh run.**
+  Re-running `process` on the same capture (the documented quick-iter →
+  quality-run workflow) re-extracts frames that share filenames with the previous
+  run but have different content; COLMAP keyed on the names, reused the old
+  features, and the mapper registered phantom images — mixing both runs (observed:
+  397 cameras registered from 351 on-disk frames, DB doubling 283 MB → 677 MB).
+  `resume` re-parses the existing sparse model and never calls `run_colmap`, so it
+  is unaffected.
+
 ### Changed
 
 - **The release app + DMG are now Developer ID-signed and Apple-notarized.**
@@ -21,6 +53,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   (with an upload retry — notarytool's multipart upload can time out on the
   large bundle), staples both, and verifies with `spctl`/`stapler`. The old
   `xattr -dr com.apple.quarantine` workaround is no longer needed.
+
+### Docs
+
+- **CAPTURE-GUIDE:** HDR (DJI HLG / Dolby Vision) handling and living-subject
+  (people) scanning guidance — record in SDR ("Normal"), use microSD originals
+  over Mimo `*_compose_0` exports, and prefer several fast rings over one slow
+  helix for people.
 
 ---
 
