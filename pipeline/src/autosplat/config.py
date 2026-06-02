@@ -74,6 +74,28 @@ class PreprocessConfig(BaseModel):
         ge=0.0,
         description="Minimum seconds between extracted frames. 0.2 = max 5 fps.",
     )
+    # HDR handling — DJI Osmo Pocket / Action cameras record HLG (and Mimo wraps
+    # it in Dolby Vision). Decoded naively those frames are flat and grey and the
+    # blur gate rejects the whole clip; tone-mapping restores SDR contrast.
+    hdr_tonemap: bool = Field(
+        default=True,
+        description="Auto-detect HDR (HLG / PQ) footage via ffprobe and tone-map "
+        "it to SDR Rec.709 during frame extraction. Stock-ffmpeg-only (no "
+        "zscale/libplacebo needed). Turn off only if your source is already SDR.",
+    )
+    blur_rescue: bool = Field(
+        default=True,
+        description="If blur_threshold would leave fewer than 3 usable frames, "
+        "keep the sharpest frames relative to the batch instead of failing the "
+        "run. Rescues HDR / genuinely-soft footage. False = strict fail-fast.",
+    )
+    blur_rescue_rel_factor: float = Field(
+        default=0.6,
+        gt=0.0,
+        le=2.0,
+        description="When rescuing, keep frames scoring at least this fraction "
+        "of the batch median. 0.6 drops the soft tail, keeps the consistent bulk.",
+    )
 
 
 class ColmapConfig(BaseModel):

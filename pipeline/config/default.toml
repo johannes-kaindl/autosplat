@@ -13,6 +13,9 @@ brush_binary = "~/AutoSplat/bin/brush"
 target_frames = 250
 blur_threshold = 100.0          # Laplacian variance; lower = blurrier filtered out
 min_frame_distance_sec = 0.2    # avoid duplicate frames
+hdr_tonemap = true              # auto-detect HLG/PQ (e.g. DJI Osmo) and tone-map to SDR Rec.709
+blur_rescue = true              # if blur_threshold leaves <3 frames, keep the sharpest instead of failing
+blur_rescue_rel_factor = 0.6    # rescue keeps frames >= this fraction of the batch median
 
 [colmap]
 matcher = "sequential"          # "sequential" for video-derived frames; "exhaustive" for unordered
