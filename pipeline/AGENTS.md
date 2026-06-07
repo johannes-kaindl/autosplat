@@ -1,7 +1,19 @@
 # AGENTS.md
 
+> **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
+> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain. Offene Punkte fuer
+> dieses Repo siehe Abschnitt "Offene Konventions-Punkte".
+
 Guidance for AI coding agents working in this repository. Human-facing docs live in
 `README.md`, `CONTRIBUTING.md`, and `docs/`.
+
+## Offene Konventions-Punkte
+
+- [ ] CORE-GIT-01 — GitHub-Mirror-Remote (`github`) zusaetzlich zu Codeberg-`origin` anlegen.
+- [ ] CORE-AGENT-01 — Abschnitt "Abweichungen von der Leitkonvention" in dieser AGENTS.md ergaenzen.
+- [ ] CORE-AGENT-04 — `docs/superpowers/plans/` fuer Implementierungsplaene anlegen (nur `specs/` vorhanden).
+- [ ] PROF-NAT-02 — version-bump-Script ergaenzen, das `pyproject.toml`-Version + `Info.plist`/`AutoSplat.spec` (CFBundleShortVersionString) synct.
+- [ ] PROF-NAT-03 — `docs/MACOS-APP.md`/`MACOS-INSTALL.md` (Signing, Notarization, "Trotzdem oeffnen") anlegen; Install-Doku liegt bisher nur im README.
 
 ## Project
 
