@@ -1,5 +1,9 @@
 # AGENTS.md
 
+> **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
+> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain. Offene Punkte fuer
+> dieses Repo siehe Abschnitt "Offene Konventions-Punkte".
+
 Conventions for AI assistants working in this repo.
 
 ## What this is
@@ -72,3 +76,11 @@ runtime from the jsDelivr CDN.
   padding on stage controls and walking-mode HUD; `viewport-fit=cover`
   in the viewport meta. See `CHANGELOG.md` v1.1.0/v1.1.1 for the
   full mobile-polish surface.
+
+## Offene Konventions-Punkte
+
+- [ ] CORE-AGENT-01 — AGENTS.md auf das kanonische Sektions-Skelett umstellen (Project character · Architecture principles · Commands · Conventions · Gotchas · Memory · Abweichungen von der Leitkonvention).
+- [ ] CORE-META-04 — User-Manual/Guides nach Diátaxis in `docs/` anlegen und aus dem README verlinken.
+- [ ] CORE-META-08 — `LICENSE-DOCS` (CC BY-SA 4.0) für Doku/Texte ergänzen.
+- [ ] CORE-GIT-01 — GitHub-Mirror-Remote (`github`) für das öffentliche Repo einrichten.
+- [ ] PROF-WEB-03 — `node --check`-Syntax-Gate ergänzen, das `<script>`-Blöcke aus den HTML-Dateien extrahiert und prüft.
