@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kaindl
+# SPDX-License-Identifier: CC-BY-SA-4.0
+name: Feature request
+about: Idea for an improvement or new feature
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you type — autosplat-viewer is deliberately **lean** with clear
+        guardrails (see [`AGENTS.md`](https://codeberg.org/jkaindl/autosplat-viewer/src/branch/main/AGENTS.md)):
+
+        - **no** framework (React / Vue / Svelte)
+        - **no** build step (Webpack / Vite / esbuild)
+        - **no** backend service
+        - **no** server-side rendering, no upload
+
+        If your proposal needs any of these it will likely be declined —
+        still, open it honestly and we can talk.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What's awkward or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you implement it? UI sketch, code snippet, JSON config — whatever helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Which other paths did you consider?
+  - type: dropdown
+    id: scope
+    attributes:
+      label: What's affected?
+      multiple: true
+      options:
+        - Viewer / render loop
+        - Walking-mode (collision, controls)
+        - File loading (.ply / .sog)
+        - UI (HTML / CSS)
+        - PWA / service worker
+        - Mobile / iOS-specific
+        - Documentation
+        - Other
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I checked [existing issues](https://codeberg.org/jkaindl/autosplat-viewer/issues) for duplicates.
+          required: true
+        - label: I understand the architecture guardrails from AGENTS.md.
+          required: true

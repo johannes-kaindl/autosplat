@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HUD isolated (test fixture, not shipped)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <main>
+    <!-- Same DOM the viewer ships, but no app.js / viewer.js / dropzone.
+         Test code injects HUD manually. -->
+    <section id="stage" style="background:#0e0f13">
+      <div id="canvas-host"></div>
+      <div id="hero-overlay" hidden></div>
+      <div id="stage-controls">
+        <button id="btn-orbit">⏸ Auto-orbit</button>
+        <button id="btn-reset">↺ Demo</button>
+        <button id="btn-fullscreen">⛶ Fullscreen</button>
+      </div>
+
+      <button id="cta-walk" type="button" hidden>▶ Walk through this scene</button>
+
+      <div id="walk-hud" hidden>
+        <div id="walk-mode-indicator" data-mode="walk">🚶 Walk</div>
+        <button id="walk-exit" type="button" aria-label="Exit walking mode">✕</button>
+        <div id="walk-crosshair">+</div>
+        <div id="walk-controls-hint">WASD · Mouse · Space (jump) · Shift (sprint) · F (fly) · Wheel (eye) · Esc</div>
+        <div id="walk-eye-overlay"></div>
+        <div id="walk-touch-buttons">
+          <button id="walk-btn-jump" aria-label="Jump">↑</button>
+          <button id="walk-btn-fly"  aria-label="Toggle fly mode">✈</button>
+        </div>
+      </div>
+
+      <aside id="collision-toolbar" hidden aria-label="Collision editor">
+        <h3>Collision editor</h3>
+        <button id="coll-build" type="button">Build from splats</button>
+        <fieldset>
+          <legend>Tool</legend>
+          <label><input type="radio" name="coll-tool" value="view" checked> View</label>
+          <label><input type="radio" name="coll-tool" value="add"> Add</label>
+          <label><input type="radio" name="coll-tool" value="remove"> Remove</label>
+        </fieldset>
+        <label>Brush <input id="coll-brush" type="range" min="0.05" max="2" step="0.05" value="0.3"></label>
+        <label>Iso <input id="coll-iso" type="range" min="0.5" max="8" step="0.1" value="1.5"></label>
+        <label class="coll-checkbox">
+          <input id="coll-use-collider" type="checkbox">
+          Use as walking collider
+        </label>
+        <div class="coll-row">
+          <button id="coll-undo" type="button">Undo</button>
+          <button id="coll-reset" type="button">Reset</button>
+        </div>
+        <div class="coll-row">
+          <button id="coll-export-obj" type="button">Export .obj</button>
+          <button id="coll-save" type="button">Save .json</button>
+        </div>
+        <p id="coll-status" aria-live="polite">No mesh.</p>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
