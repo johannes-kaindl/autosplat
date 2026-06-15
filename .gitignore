@@ -1,0 +1,8 @@
+# Root-level ignores only — pipeline/ and viewer/ keep their own .gitignore
+# for their respective subtrees.
+
+.DS_Store
+**/.DS_Store
+
+# Session-handoff working buffer (kurobot/Claude Code) — not source.
+.remember/
