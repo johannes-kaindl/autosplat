@@ -1,35 +1,37 @@
-# autosplat-viewer
+# autosplat · viewer
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.1.1-green)](https://codeberg.org/jkaindl/autosplat-viewer/releases)
-[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/autosplat-viewer)
-[![Live demo](https://img.shields.io/badge/live-jkaindl.codeberg.page-brightgreen)](https://jkaindl.codeberg.page/autosplat-viewer/)
-[![PWA: installable](https://img.shields.io/badge/PWA-installable-5A0FC8.svg)](https://jkaindl.codeberg.page/autosplat-viewer/)
-[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](https://codeberg.org/jkaindl/autosplat-viewer/src/branch/main/tests)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fcodeberg.org&sort=semver&label=release&color=2ecc71)](https://codeberg.org/jkaindl/autosplat/releases)
+[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/autosplat)
+[![Live demo](https://img.shields.io/badge/live-jkaindl.codeberg.page-brightgreen)](https://jkaindl.codeberg.page/autosplat/)
+[![PWA: installable](https://img.shields.io/badge/PWA-installable-5A0FC8.svg)](https://jkaindl.codeberg.page/autosplat/)
 [![No build step](https://img.shields.io/badge/build-vanilla%20HTML%2FCSS%2FJS-lightgrey)](#tech)
 
+> Part of the **[autosplat](../README.md)** monorepo — the browser half. The [pipeline](../pipeline/README.md) produces the splats this viewer renders.
+
 Static viewer Progressive Web App for 3D Gaussian Splats — a showcase
-for the [autosplat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
-pipeline and a general-purpose splat viewer. Vanilla HTML/CSS/JS, no
-build step, no upload — everything renders locally in the browser.
+for the [autosplat pipeline](../pipeline/README.md) and a general-purpose
+splat viewer. Vanilla HTML/CSS/JS, no build step, no upload — everything
+renders locally in the browser.
 
-**▶ Live viewer: <https://jkaindl.codeberg.page/autosplat-viewer/viewer.html>**
-· **Service landing: <https://jkaindl.codeberg.page/autosplat-viewer/>**
+**▶ Live viewer: <https://jkaindl.codeberg.page/autosplat/viewer.html>**
+· **Service landing: <https://jkaindl.codeberg.page/autosplat/>**
 
-> **Status: v1.1.1 — Mobile + Walking-mode.** First-person walk-through
-> with in-browser heightmap collision, full iPhone Safari support
+> **Status: v1.12.0 — Mobile + Walking-mode + Collision editor.**
+> First-person walk-through with in-browser heightmap collision (and an
+> optional editable triangle-mesh collider), full iPhone Safari support
 > (safe-area, pseudo-fullscreen, virtual joystick), `prefers-reduced-motion`
 > respected. PWA-installable, offline-capable shell.
 
 ---
 
 <p align="center">
-  <a href="https://jkaindl.codeberg.page/autosplat-viewer/viewer.html" title="Open the live viewer">
+  <a href="https://jkaindl.codeberg.page/autosplat/viewer.html" title="Open the live viewer">
     <img src="assets/og-image.jpg" alt="autosplat viewer — 3D Gaussian Splat rendered live in the browser" width="720" />
   </a>
 </p>
 
-<p align="center"><strong><a href="https://jkaindl.codeberg.page/autosplat-viewer/viewer.html">▶ Open the live viewer</a></strong></p>
+<p align="center"><strong><a href="https://jkaindl.codeberg.page/autosplat/viewer.html">▶ Open the live viewer</a></strong></p>
 
 ---
 
@@ -58,11 +60,13 @@ Pages.
 
 ## Companion: the autosplat pipeline
 
-This viewer is the browser-facing companion to
-**[autosplat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)** —
-a local pipeline that turns drone or handheld video into trained 3D
-Gaussian Splats on Apple Silicon. autosplat produces the splats; this
-viewer shows them off and lets anyone inspect their own.
+This viewer is the browser-facing half of the
+**[autosplat](../README.md)** monorepo. Its sibling, the
+**[pipeline](../pipeline/README.md)**, is a local tool that turns drone or
+handheld video into trained 3D Gaussian Splats on Apple Silicon. The
+pipeline produces the splats; this viewer shows them off and lets anyone
+inspect their own. Both live in one repo:
+<https://codeberg.org/jkaindl/autosplat>.
 
 ---
 
@@ -70,8 +74,12 @@ viewer shows them off and lets anyone inspect their own.
 
 For full per-release notes see [`CHANGELOG.md`](CHANGELOG.md).
 
+Version numbers are now **unified across the monorepo** — the viewer and the
+pipeline ship together under one product version (currently **v1.12.0**).
+
 | Version | Date       | Headline                                                                                                                                              |
 | ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v1.12.0 | 2026-06-15 | **Monorepo + Collision editor** — viewer and pipeline merged into one repo under a unified version; editable marching-cubes triangle-mesh collider can replace the heightmap as the walking-mode collider. |
 | v1.1.1  | 2026-05-26 | **Reduced-motion + social-card polish** — `prefers-reduced-motion` honoured (auto-orbit doesn't auto-start); `og:image:width/height` for Mastodon, Discord. |
 | v1.1.0  | 2026-05-26 | **Walking-mode + Mobile / iOS** — first-person walk-through with heightmap collision, virtual joystick, full iPhone Safari support (safe-area, pseudo-fullscreen). |
 | v1.0.0  | 2026-05-22 | **Initial release** — static viewer PWA on Codeberg Pages, drag-and-drop `.ply`, auto-orbit, installable, offline shell, AGPL §13 source link. |
@@ -168,19 +176,22 @@ offline once the shell has been seen.
 ## Quick start (local development)
 
 ```bash
-git clone https://codeberg.org/jkaindl/autosplat-viewer.git
-cd autosplat-viewer
+git clone https://codeberg.org/jkaindl/autosplat.git
+cd autosplat/viewer
 
 ./serve.sh                       # → http://localhost:8123/
+./tests/run.sh unit              # 77 unit tests, zero deps (default-safe)
+./tests/run.sh e2e               # opt-in browser smoke (auto-installs puppeteer-core)
 ./tests/run.sh                   # unit + e2e
-./tests/run.sh unit              # unit only (no deps)
-./tests/run.sh e2e               # browser smoke (auto-installs puppeteer-core)
 ```
 
 A real HTTP origin is required — Service Workers do not run on
 `file://`. The shipped viewer has **zero npm runtime dependencies**;
 `tests/node_modules/` is gitignored and only populated on the first
-e2e run.
+e2e run. Unit tests (**77, all green**) cover heightmap, marching-cubes,
+voxelization, mesh-BVH, the collision editor and persistence. The e2e
+smoke suite (`collision-smoke`, `walking-smoke`) is opt-in via
+`./tests/run.sh e2e` and is not part of the default CI gate.
 
 See
 [`docs/superpowers/specs/2026-05-25-walkable-checklist.md`](docs/superpowers/specs/2026-05-25-walkable-checklist.md)
@@ -192,20 +203,25 @@ for the manual walking-mode smoke checklist and
 ## Deployment — Codeberg Pages
 
 Codeberg Pages serves the `pages` branch at
-`https://jkaindl.codeberg.page/autosplat-viewer/`. The root (`index.html`)
+`https://jkaindl.codeberg.page/autosplat/`. The root (`index.html`)
 is the bilingual **service landing**; the splat viewer itself lives at
-`viewer.html`. Both are fully static — update the live site with:
+`viewer.html`. Both are fully static.
+
+Because the viewer is now a subdirectory of the monorepo, the live site
+is published with the repo-root deploy script, which performs a
+`git subtree split` of `viewer/` and force-pushes the result to the
+`pages` branch:
 
 ```bash
-git push origin main         # development branch
-git push origin main:pages   # publish to the pages branch
+git push origin main                 # push development branch
+../scripts/deploy-pages.sh           # subtree-split viewer/ → pages branch
 ```
 
-All asset paths are relative, so the site works under the
-`/autosplat-viewer/` sub-path. The service worker's `SHELL` /
-`RUNTIME` cache constants in
-[`service-worker.js`](service-worker.js) must be bumped whenever a file
-is added to or removed from `SHELL_FILES` so installed clients re-fetch.
+All asset paths are relative, so the site works unchanged under the
+`/autosplat/` sub-path. The service worker's `SHELL` / `RUNTIME` cache
+constants in [`service-worker.js`](service-worker.js) must be bumped
+whenever a file is added to or removed from `SHELL_FILES` so installed
+clients re-fetch.
 
 ---
 
@@ -219,8 +235,8 @@ is added to or removed from `SHELL_FILES` so installed clients re-fetch.
   service worker
 - **iOS-first mobile** — `viewport-fit=cover`, safe-area-inset padding,
   CSS pseudo-fullscreen fallback, `100dvh` stage
-- **Tests** — `node:test` unit (zero deps) + `puppeteer-core` e2e
-  (auto-installed into `tests/node_modules/`)
+- **Tests** — 77 `node:test` unit tests (zero deps) + opt-in
+  `puppeteer-core` e2e smoke (auto-installed into `tests/node_modules/`)
 
 ---
 
@@ -246,15 +262,15 @@ Academic / research use — see [`CITATION.cff`](CITATION.cff) or click
 GNU Affero General Public License v3.0 or later
 (**AGPL-3.0-or-later**) — see [`LICENSE`](LICENSE).
 
-This is the same license autosplat uses: contributions to the commons
-stay in the commons, even when the software is served over a network.
-Because this viewer runs as a network-served application, the footer
-links to its own source — as required by AGPL §13.
+This is the same license the rest of autosplat uses: contributions to the
+commons stay in the commons, even when the software is served over a
+network. Because this viewer runs as a network-served application, the
+footer links to its own source — as required by AGPL §13.
 
 The PlayCanvas Engine is MIT-licensed and loaded as a separate
 component from a CDN.
 
-- **Commercial license** — autosplat-viewer is **dual-licensed**. If the
+- **Commercial license** — the autosplat viewer is **dual-licensed**. If the
   AGPL's copyleft and network-use obligations don't fit your use case — e.g.
   a **proprietary / closed-source product** or an **Apple App Store build**
   (App Store terms are incompatible with the AGPL) — a separate commercial
