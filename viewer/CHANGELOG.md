@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New stage-controls button `⬛ Collider` toggles the editor; right-rail
   toolbar on desktop, bottom-sheet on mobile.
 
+## [1.12.0] — 2026-06-15
+
+### Changed — Joined the autosplat monorepo
+- The viewer now lives in the unified repo
+  [jkaindl/autosplat](https://codeberg.org/jkaindl/autosplat) under `viewer/`,
+  alongside the pipeline, sharing one product version line from v1.12.0. The
+  old standalone repo `autosplat-viewer` is archived.
+- Live viewer now served at
+  <https://jkaindl.codeberg.page/autosplat/> (was the `/autosplat-viewer/`
+  sub-path).
+
 ## [1.1.1] — 2026-05-26
 
 ### Added
@@ -102,6 +113,7 @@ Initial public release on Codeberg Pages.
 - AGPL-3.0-or-later license with source link in the footer
   (network-served compliance per AGPL §13).
 
+[1.12.0]: https://codeberg.org/jkaindl/autosplat/compare/v1.1.1...v1.12.0
 [1.1.1]: https://codeberg.org/jkaindl/autosplat-viewer/compare/v1.1.0...v1.1.1
 [1.1.0]: https://codeberg.org/jkaindl/autosplat-viewer/compare/v1.0.0...v1.1.0
 [1.0.0]: https://codeberg.org/jkaindl/autosplat-viewer/releases/tag/v1.0.0

@@ -11,6 +11,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.12.0] — 2026-06-15 — Joined the autosplat monorepo
+
+The pipeline now lives in the unified repo
+[jkaindl/autosplat](https://codeberg.org/jkaindl/autosplat) under `pipeline/`,
+alongside the viewer, sharing one product version line from v1.12.0. No
+functional pipeline changes vs v1.11.0 — this release is the merge itself.
+
+### Changed
+
+- **Repository moved into the `autosplat` monorepo** (`pipeline/`). The old
+  standalone repo `video-to-3d-gaussian-splat` is archived; `[project.urls]`
+  and version metadata now point at `jkaindl/autosplat`.
+
+---
+
 ## [v1.11.0] — 2026-06-02 — DJI HDR footage support
 
 ### Added

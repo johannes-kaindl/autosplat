@@ -1,17 +1,18 @@
-# video-to-3d-gaussian-splat
+# autosplat · pipeline
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Codeberg Release](https://img.shields.io/badge/codeberg-v1.11.0-green)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases)
-[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fcodeberg.org&sort=semver&label=release&color=2ecc71)](https://codeberg.org/jkaindl/autosplat/releases)
+[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/autosplat)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS%2015%2B%20%C2%B7%20Apple%20Silicon-lightgrey)](https://www.apple.com/macos/)
-[![Tests](https://img.shields.io/badge/tests-426%20passing-brightgreen)](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/tests)
+
+> Part of the **[autosplat](../README.md)** monorepo — the capture→splat half. The [viewer](../viewer/README.md) is the other half.
 
 Automated end-to-end pipeline: video → trained 3D Gaussian Splat, running locally on Apple Silicon.
 
 **Target platform:** Apple Silicon (M5, 32 GB RAM), macOS 15+. Mac-only by design.
 
-> **Status: v1.11.0 — DJI HDR footage support.** HLG / Dolby Vision footage (DJI Osmo Pocket / Action) is auto-detected and tone-mapped to SDR Rec.709 during extraction, plus an adaptive blur rescue keeps the relatively-sharpest frames instead of aborting a soft clip. Built on the full stack — multi-video bisection-rescue, single-video auto-bisection-rescue, train-till-plateau, live-progress mission control, failure diagnostics, and the `AutoSplat.app` DMG. Mac Silicon, AGPL-3.0.
+> **Status: v1.12.0 (monorepo).** The pipeline and the [viewer](../viewer/README.md) now live in one repo, versioned together. The last *feature* release on the pipeline side was **v1.11.0 — DJI HDR footage support**: HLG / Dolby Vision footage (DJI Osmo Pocket / Action) is auto-detected and tone-mapped to SDR Rec.709 during extraction, plus an adaptive blur rescue keeps the relatively-sharpest frames instead of aborting a soft clip. Built on the full stack — multi-video bisection-rescue, single-video auto-bisection-rescue, train-till-plateau, live-progress mission control, failure diagnostics, and the `AutoSplat.app` DMG. Mac Silicon, AGPL-3.0.
 
 ---
 
@@ -56,7 +57,7 @@ flowchart TD
     F --> G[PLY export + compress]
     G --> H[Obsidian capture-note]
     G --> I[SuperSplat: cleanup + publish]
-    G --> V[autosplat-viewer<br/>browser PWA]
+    G --> V[autosplat viewer<br/>browser PWA]
 ```
 
 The pipeline is **resumable** (sleep / crash / Ctrl-C → `autosplat resume <capture>`), accepts **multiple video passes** for one scene (`autosplat process v1.mp4 v2.mp4 …` or `autosplat add-video <capture> <video>`), and — in v1.4 — escalates a structurally-failing single-video capture to **auto-bisection-rescue**: the source is binary-subdivided, each leaf clip probed with a cheap SfM-only run, and the surviving leaves recombined through the same multi-video path that proved out on `max_strasse`. See [`CAPTURE-GUIDE.md`](docs/CAPTURE-GUIDE.md#auto-bisection-internals-v14) for the on-disk layout and config knobs.
@@ -65,29 +66,40 @@ The pipeline is **resumable** (sleep / crash / Ctrl-C → `autosplat resume <cap
 
 ## View your splats in the browser
 
-The companion project **[autosplat-viewer](https://codeberg.org/jkaindl/autosplat-viewer)**
-is a static PWA that renders Gaussian Splats right in the browser — drop
-in a `.ply`, orbit around it, install it as an app. No setup required.
+The companion **[viewer](../viewer/README.md)** — the other half of this
+monorepo — is a static PWA that renders Gaussian Splats right in the browser —
+drop in a `.ply`, orbit around it, install it as an app. No setup required.
 
-**▶ Try it live: <https://jkaindl.codeberg.page/autosplat-viewer/>**
+**▶ Try it live: <https://jkaindl.codeberg.page/autosplat/viewer.html>**
 
 ---
 
 ## Release status
 
-For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CHANGELOG.md).
+For full per-release notes see [`CHANGELOG.md`](CHANGELOG.md). The full product
+is currently **v1.12.0** (the monorepo merge of pipeline + viewer); the most
+recent pipeline feature/fix releases:
 
 | Version  | Date       | Headline                                                                                  |
 | -------- | ---------- | ----------------------------------------------------------------------------------------- |
 | v1.11.0  | 2026-06-02 | **DJI HDR (HLG/Dolby Vision) footage support** — auto tone-map to SDR + adaptive blur rescue |
-| v1.5.0   | 2026-05-27 | **Train-till-Plateau** — opt-in patience-stop for Brush. New `PlateauMonitor` thread polls `eval_<step>/` dirs, computes PSNR via cv2, SIGTERMs Brush when Δ-PSNR flattens over `plateau_patience` consecutive evals past `plateau_min_steps`. Six new `[brush]` config fields, 13 new tests. |
-| v1.4.6   | 2026-05-27 | **Final Polish** — pre-flight viewer-config check at the start of `process`/`resume`/`add-video`/`rescue`; deprecation-warning test coverage; orphaned v1.3 hero assets removed. Closes the v1.4 line. |
-| v1.4.5   | 2026-05-27 | **Quality Sweep** — `autosplat cleanup-rescue` reclaims ~1-3 GB per capture after a successful rescue; `train.heartbeat` events make non-TTY Brush runs observable; `cli.serve --with-supersplat` shares `_serve_local_and_block` (DRY); remote-target deprecation warning; remaining mypy noise in `watcher.py` + `viewer.py` cleared; docs refreshed for the v1.4.4 local-viewer default. |
-| v1.4.4   | 2026-05-27 | **Local-Viewer Default** — `[viewer] target` defaults to `supersplat-local`. Auto-open at end of `process`/`rescue` now starts both local servers + opens the local SuperSplat editor, dodging the HTTPS→HTTP Mixed-Content blocking that left the remote editor empty. First end-to-end success: `max_strasse` 5:35 drone pass → 99.4 % camera registration via `autosplat rescue`. |
-| v1.4.3   | 2026-05-27 | **`autosplat serve` Browser-Download Hotfix** — serve (no --with-supersplat) now opens remote SuperSplat with `?load=<our-server-url>` instead of the raw PLY URL (which triggered a download prompt). |
-| v1.4.2   | 2026-05-27 | **Viewer Auto-Open Hotfix** — `viewer.open_in_viewer` now actually starts the local PLY server (was silent no-op since the very first viewer flow); CLI blocks on Ctrl-C while you look at the splat. |
-| v1.4.1   | 2026-05-26 | **Bisection Polish** — `autosplat rescue` CLI, opt-in smart-split at motion peak (OpenCV optical flow), WebUI per-clip progress (`bisect · probing clip 0_1`), 4× faster probes, pre-existing mypy noise cleared. |
-| v1.4.0   | 2026-05-26 | **Auto-Bisection-Rescue** — when `sequential→exhaustive` exhausts itself, binary-subdivide the source video, probe each leaf clip, and recombine the survivors automatically. `[retry] bisect_*` config knobs. |
+| v1.10.0  | 2026-05-29 | **Multi-video bisection-rescue** — auto-bisection now fires for multi-video captures; probe each flight whole, bisect only failing ones, recombine survivors; new `bisection_no_culprit` diagnosis |
+| v1.9.2   | 2026-05-29 | **Fix: app launch hang (Homebrew PATH)** — `AutoSplat.app` now prepends `/opt/homebrew/bin` so Finder/Dock launches can see ffmpeg/colmap |
+| v1.9.1   | 2026-05-29 | **Brand: marks, favicon, social card, app icon** — generative point-cloud brand kit, WebUI favicon + OG card, app icon; mypy strict added to pre-push hooks |
+| v1.9.0   | 2026-05-29 | **Quality pass** — actionable per-run `blur_threshold` override on the New-capture form, fast-fail on too-few frames, mypy strict green again |
+| v1.8.0   | 2026-05-29 | **Failure diagnostics** — `failure.py` classifies a failure into a plain-language headline + what-to-do hint; prominent failure panel; durable failed status across restarts |
+| v1.7.2   | 2026-05-29 | **Blur fast-fail + install fix** — typed `AllFramesRejectedError` on all-blurry footage; quarantine-clear install instructions |
+| v1.7.1   | 2026-05-29 | **Classic app window** — `AutoSplat.app` is now a real windowed app (pywebview/WKWebView) with a Dock icon instead of a menubar agent |
+| v1.7.0   | 2026-05-29 | **AutoSplat.app (DMG)** — CLI + WebUI frozen into a double-clickable macOS app via PyInstaller; heavy tools installed at first run |
+| v1.6.0   | 2026-05-29 | **Live Progress / Mission-Control** — `progress.json` single-source-of-truth, moving percent bar, elapsed/ETA, liveness pulse, real step/PSNR tiles |
+| v1.5.0   | 2026-05-27 | **Train-till-Plateau** — opt-in patience-stop for Brush; `PlateauMonitor` SIGTERMs Brush when Δ-PSNR flattens; six new `[brush]` config fields |
+| v1.4.0   | 2026-05-26 | **Auto-Bisection-Rescue** — when `sequential→exhaustive` exhausts itself, binary-subdivide the source video, probe each leaf clip, recombine the survivors automatically (v1.4.1–v1.4.6 polished it) |
+
+<details>
+<summary>Older releases (v1.3.0 → v0.9.0) and build-phase status — collapsed</summary>
+
+| Version  | Date       | Headline                                                                                  |
+| -------- | ---------- | ----------------------------------------------------------------------------------------- |
 | v1.3.0   | 2026-05-24 | **Multi-Video Rescue** — combine N video passes into one capture, `add-video`, `--target-frames`, CAPTURE-GUIDE |
 | v1.2.0   | 2026-05-24 | **Resume & Recovery** — `autosplat resume`, adaptive matcher retry, WebUI Resume button, persistent job history |
 | v1.1.2   | 2026-05-20 | Hotfix — wall-clock job timestamps + within-day sort, job-status badges, zero ruff findings |
@@ -95,10 +107,9 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 | v1.1.0   | 2026-05-17 | **Kuro Signal Protocol** WebUI restyle — all 7 surfaces, theme toggle, vendored HTMX      |
 | v1.0.1   | 2026-05-16 | Docs Sync Patch                                                                            |
 | v1.0.0   | 2026-05-16 | **WebUI Release** — FastAPI + HTMX + Jinja2, dashboard, captures, jobs, viewer, AGPL §13 |
-| v0.9.0   | earlier    | Initial public release — CLI MVP, watch-folder daemon, quality gate, compress, Obsidian   |
+| v0.9.0   | 2026-05-15 | Initial public release — CLI MVP, watch-folder daemon, quality gate, compress, Obsidian   |
 
-<details>
-<summary>Phase status (build phases — collapsed)</summary>
+**Build-phase status:**
 
 | Phase | Scope                                            | Status                                                                 |
 | ----- | ------------------------------------------------ | ---------------------------------------------------------------------- |
@@ -124,7 +135,7 @@ For full per-release notes see [`CHANGELOG.md`](https://codeberg.org/jkaindl/vid
 
 ### Option A — the app (DMG)
 
-Grab `AutoSplat.dmg` from the [latest release](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/releases), open it, and drag **AutoSplat** to Applications. The app opens as a normal window; on first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window.
+Grab `AutoSplat.dmg` from the [latest release](https://codeberg.org/jkaindl/autosplat/releases), open it, and drag **AutoSplat** to Applications. The app opens as a normal window; on first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window.
 
 The app is **Developer ID-signed and Apple-notarized**, so it opens with no Gatekeeper warning — just drag it to Applications and launch.
 
@@ -162,8 +173,8 @@ uv run autosplat webui --port 8080
 # then open http://127.0.0.1:8080
 ```
 
-See [`docs/WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) for the per-task user guide
-and [`docs/CAPTURE-GUIDE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md) **before you shoot a video** — most pipeline failures are capture-side, not code-side.
+See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the per-task user guide
+and [`docs/CAPTURE-GUIDE.md`](docs/CAPTURE-GUIDE.md) **before you shoot a video** — most pipeline failures are capture-side, not code-side.
 
 ---
 
@@ -232,7 +243,7 @@ Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features:
   </tr>
 </table>
 
-Persistent history (`runs.jsonl` append-log) survives WebUI restart. Stale-job liveness reconciliation flips dead worker threads to `failed` instead of phantom `running`. Responsive: 3 breakpoints (Desktop ≥1024 / Tablet ≤1023 / Mobile ≤767), off-canvas sidebar on mobile. **Kuro Signal Protocol** design system (v1.1.0) with dark/light theme toggle (anti-flash, persisted) and HTMX polling on every surface. See [`docs/WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
+Persistent history (`runs.jsonl` append-log) survives WebUI restart. Stale-job liveness reconciliation flips dead worker threads to `failed` instead of phantom `running`. Responsive: 3 breakpoints (Desktop ≥1024 / Tablet ≤1023 / Mobile ≤767), off-canvas sidebar on mobile. **Kuro Signal Protocol** design system (v1.1.0) with dark/light theme toggle (anti-flash, persisted) and HTMX polling on every surface. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) § "Web-UI control" for the full browser workflow.
 
 ---
 
@@ -244,19 +255,19 @@ Nerfstudio's `gsplat` rasterization kernels are CUDA-only. Brush is a Rust binar
 
 ## Configuration
 
-Defaults live in [`config/default.toml`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/config/default.toml). User overrides:
+Defaults live in [`config/default.toml`](config/default.toml). User overrides:
 
 1. `~/.config/autosplat/config.toml` (XDG-style)
 2. `--config <path>` CLI flag
 
-Every key is documented in [`docs/CONFIGURATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONFIGURATION.md).
+Every key is documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 ---
 
 ## Test suite
 
 ```bash
-uv run pytest -q                    # 267 unit tests, ~7s
+uv run pytest -q                    # 448 unit tests, ~1s
 AUTOSPLAT_E2E=1 uv run pytest      # +1 opt-in end-to-end test (needs ffmpeg+colmap+brush)
 AUTOSPLAT_COMPRESS_E2E=1 uv run pytest tests/test_compress.py  # +1 opt-in compress smoke
 uv run ruff check src/ tests/      # lint
@@ -272,14 +283,14 @@ Pre-commit hooks run ruff + ruff-format on commit and `pytest` on push. Install 
 
 ```
 auto-splat-pipeline/
-├── src/autosplat/        # 17 modules (+ webui/): config, logging, doctor, preflight,
+├── src/autosplat/        # modules (+ webui/): config, logging, doctor, preflight,
 │                         #   preprocess, sfm, quality, train, export, compress,
-│                         #   viewer, watcher, obsidian, notification,
-│                         #   pipeline, cli
+│                         #   viewer, watcher, obsidian, notification, bisection,
+│                         #   failure, progress, desktop, pipeline, cli
 │   └── webui/            #   FastAPI + HTMX WebUI (app, routes/, jobs_runner, state, templates/, static/)
 ├── config/default.toml   # All defaults, all sections
 ├── scripts/              # install_deps.sh, fetch_brush.sh, install_splat.sh, setup_supersplat.sh
-├── tests/                # 267 unit + 2 opt-in E2E (see tests/README.md)
+├── tests/                # 448 unit + opt-in E2E (see tests/README.md)
 ├── examples/             # ready-made --config overlays for common use cases
 ├── docs/                 # spec, architecture, capture-guide, configuration, workflows,
 │                         # concepts, getting-started, ply-output-format,
@@ -296,31 +307,31 @@ auto-splat-pipeline/
 
 ## Documentation index
 
-**New here?** Start with [`GETTING-STARTED.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/GETTING-STARTED.md).
-**About to shoot a video?** Read [`CAPTURE-GUIDE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md) first — most pipeline failures are capture-side, not code-side.
-**Curious about the moving parts?** Read [`CONCEPTS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONCEPTS.md).
+**New here?** Start with [`GETTING-STARTED.md`](docs/GETTING-STARTED.md).
+**About to shoot a video?** Read [`CAPTURE-GUIDE.md`](docs/CAPTURE-GUIDE.md) first — most pipeline failures are capture-side, not code-side.
+**Curious about the moving parts?** Read [`CONCEPTS.md`](docs/CONCEPTS.md).
 
 ### Reference
-- [`AUTO-SPLAT PIPELINE — Spec & Implementation Plan.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/AUTO-SPLAT%20PIPELINE%20%E2%80%94%20Spec%20%26%20Implementation%20Plan.md) — authoritative spec
-- [`ARCHITECTURE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/ARCHITECTURE.md) — module map, capture-dir layout, stage I/O
-- [`CAPTURE-GUIDE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md) — how to shoot a video COLMAP can actually solve (rotation/texture/lighting rules)
-- [`CONFIGURATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CONFIGURATION.md) — every TOML key, with example overlays in [`examples/`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/examples)
-- [`WORKFLOWS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/WORKFLOWS.md) — user-facing recipes (one-shot, watch, status, viewer, Obsidian, smoke-test)
-- [`PLY-OUTPUT-FORMAT.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PLY-OUTPUT-FORMAT.md) — INRIA/Kerbl 3DGS PLY reference + viewer compat matrix + measured compression ratios
-- [`TROUBLESHOOTING.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/TROUBLESHOOTING.md) — failure-modes + recovery
+- [`AUTO-SPLAT PIPELINE — Spec & Implementation Plan.md`](docs/AUTO-SPLAT%20PIPELINE%20%E2%80%94%20Spec%20%26%20Implementation%20Plan.md) — authoritative spec
+- [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module map, capture-dir layout, stage I/O
+- [`CAPTURE-GUIDE.md`](docs/CAPTURE-GUIDE.md) — how to shoot a video COLMAP can actually solve (rotation/texture/lighting rules)
+- [`CONFIGURATION.md`](docs/CONFIGURATION.md) — every TOML key, with example overlays in [`examples/`](examples)
+- [`WORKFLOWS.md`](docs/WORKFLOWS.md) — user-facing recipes (one-shot, watch, status, viewer, Obsidian, smoke-test)
+- [`PLY-OUTPUT-FORMAT.md`](docs/PLY-OUTPUT-FORMAT.md) — INRIA/Kerbl 3DGS PLY reference + viewer compat matrix + measured compression ratios
+- [`TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — failure-modes + recovery
 
 ### Phase notes (release history)
-- [`CHANGELOG.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CHANGELOG.md) — per-phase release entries (Keep-A-Changelog format)
-- [`PHASE-0-CALIBRATION.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-0-CALIBRATION.md) — first end-to-end run findings
-- [`PHASE-2-WATCHER.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-2-WATCHER.md) — daemon schema + lifecycle
-- [`PHASE-3-RETRY.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-3-RETRY.md) — quality-gate + adaptive retry
-- [`PHASE-9-PLAN.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-9-PLAN.md) — Local SuperSplat auto-open design
-- [`PHASE-9-RECON.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-9-RECON.md) — Phase-9 recon findings
-- [`PHASE-10-WEBUI.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/PHASE-10-WEBUI.md) — Phase 10 WebUI plan snapshot (FastAPI + HTMX)
+- [`CHANGELOG.md`](CHANGELOG.md) — per-phase release entries (Keep-A-Changelog format)
+- [`PHASE-0-CALIBRATION.md`](docs/PHASE-0-CALIBRATION.md) — first end-to-end run findings
+- [`PHASE-2-WATCHER.md`](docs/PHASE-2-WATCHER.md) — daemon schema + lifecycle
+- [`PHASE-3-RETRY.md`](docs/PHASE-3-RETRY.md) — quality-gate + adaptive retry
+- [`PHASE-9-PLAN.md`](docs/PHASE-9-PLAN.md) — Local SuperSplat auto-open design
+- [`PHASE-9-RECON.md`](docs/PHASE-9-RECON.md) — Phase-9 recon findings
+- [`PHASE-10-WEBUI.md`](docs/PHASE-10-WEBUI.md) — Phase 10 WebUI plan snapshot (FastAPI + HTMX)
 
 ### Tooling
-- [`tests/README.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/tests/README.md) — how to run unit + opt-in E2E tests
-- [`CONTRIBUTING.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CONTRIBUTING.md) — bug reports + PR workflow
+- [`tests/README.md`](tests/README.md) — how to run unit + opt-in E2E tests
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — bug reports + PR workflow
 
 ---
 
@@ -351,13 +362,13 @@ All failures produce structured JSON events in `state.json` and are visible via 
 **v1.2.0+ rescue paths reduce the failure rate further:**
 - Crashed / cancelled / host-slept runs → `autosplat resume <capture>` picks up at the highest completed stage.
 - Sequential-matcher failures → adaptive retry transparently re-runs with `exhaustive` matcher (a 180° drone turn with 3/244 cameras self-rescued to a successful run).
-- Rotation-broken passes (180°/360° turns) → split the source, then `autosplat process clip_a.mp4 clip_b.mp4 …`. The `max_strasse` capture (previously unrecoverable in v1.2.0) reconstructed at **865/865 cameras** with 4 manually-split sub-clips. See [`docs/CAPTURE-GUIDE.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md) for the shoot rules and recovery decision tree.
+- Rotation-broken passes (180°/360° turns) → split the source, then `autosplat process clip_a.mp4 clip_b.mp4 …`. The `max_strasse` capture (previously unrecoverable in v1.2.0) reconstructed at **865/865 cameras** with 4 manually-split sub-clips. See [`docs/CAPTURE-GUIDE.md`](docs/CAPTURE-GUIDE.md) for the shoot rules and recovery decision tree.
 
 ---
 
 ## Contributing
 
-Issues and pull requests are welcome at [codeberg.org/jkaindl/video-to-3d-gaussian-splat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat). For larger changes, open an issue first to discuss the approach. See [`CONTRIBUTING.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CONTRIBUTING.md) for bug-report and PR conventions.
+Issues and pull requests are welcome at [codeberg.org/jkaindl/autosplat](https://codeberg.org/jkaindl/autosplat). For larger changes, open an issue first to discuss the approach. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for bug-report and PR conventions.
 
 ---
 
@@ -369,9 +380,9 @@ Actively maintained by a single maintainer ([@jkaindl](https://codeberg.org/jkai
 
 ## License
 
-**Code:** GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) — see [LICENSE](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/LICENSE).
+**Code:** GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) — see [LICENSE](LICENSE).
 
-**Documentation** (README, `docs/`): Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) — see [LICENSE-DOCS](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/LICENSE-DOCS).
+**Documentation** (README, `docs/`): Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) — see [LICENSE-DOCS](LICENSE-DOCS).
 
 ### Why AGPL?
 
@@ -385,11 +396,11 @@ This is a deliberate choice against maximum adoption and for theoretical coheren
 
 AGPL is the right default for the commons, but it isn't workable for everyone — some organisations cannot comply with the Network Clause (§13) or cannot ship AGPL code in a closed product. For those cases, a **separate commercial license is available on request**.
 
-This is possible because the code is single-authored: Johannes Kaindl holds the full copyright and can therefore offer the project under AGPL **and** under commercial terms. External contributions are accepted under a lightweight [Contributor License Agreement](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CLA.md) that preserves this option — you keep your copyright; the project keeps the ability to dual-license.
+This is possible because the code is single-authored: Johannes Kaindl holds the full copyright and can therefore offer the project under AGPL **and** under commercial terms. External contributions are accepted under a lightweight [Contributor License Agreement](CLA.md) that preserves this option — you keep your copyright; the project keeps the ability to dual-license.
 
 If you need to use `auto-splat-pipeline` under terms other than AGPL — for example a **proprietary/closed-source product or an Apple App Store build**, which are incompatible with the AGPL — or you want a commissioned 3D capture rather than the tool — get in touch: **code@jkaindl.de**.
 
-- **Commercial license:** how the open-source and commercial licenses fit together — see [LICENSING.md](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/LICENSING.md) and the [Contributor License Agreement](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/CLA.md).
+- **Commercial license:** how the open-source and commercial licenses fit together — see [LICENSING.md](LICENSING.md) and the [Contributor License Agreement](CLA.md).
 
 **Dependency licenses:** All Python dependencies (typer, pydantic, numpy, opencv-python, rich, structlog, watchdog, etc.) are MIT/BSD/Apache-2.0 — AGPL-3.0-compatible. External tool invocations (COLMAP BSD-3, FFmpeg LGPL, Brush Apache-2.0, SuperSplat MIT) are via subprocess aggregation, conforming with FSF GPL FAQ aggregation rules.
 

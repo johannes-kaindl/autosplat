@@ -1,6 +1,6 @@
 [project]
 name = "autosplat"
-version = "1.11.0"
+version = "1.12.0"
 description = "Automated local pipeline for drone-video → Gaussian Splat (Apple Silicon)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -51,10 +51,10 @@ dev = [
 autosplat = "autosplat.cli:app"
 
 [project.urls]
-Homepage = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
-Repository = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
-Documentation = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat#readme"
-Issues = "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues"
+Homepage = "https://codeberg.org/jkaindl/autosplat"
+Repository = "https://codeberg.org/jkaindl/autosplat"
+Documentation = "https://codeberg.org/jkaindl/autosplat/src/branch/main/pipeline#readme"
+Issues = "https://codeberg.org/jkaindl/autosplat/issues"
 
 [build-system]
 requires = ["hatchling"]

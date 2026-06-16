@@ -2,4 +2,4 @@
 
 """auto-splat-pipeline — Drone video → Gaussian Splat on Apple Silicon."""
 
-__version__ = "1.11.0"
+__version__ = "1.12.0"
