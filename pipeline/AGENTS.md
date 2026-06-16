@@ -92,7 +92,7 @@ If a change materially alters the surface, update the spec or call out the diver
 - Commits with substantial AI input add the trailer:
   `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`
 - Create new commits; do not amend or force-push without explicit instruction.
-- Remote is Codeberg (Forgejo) at `codeberg.org/jkaindl/video-to-3d-gaussian-splat`.
+- Remote is Codeberg (Forgejo) at `codeberg.org/jkaindl/autosplat`.
 
 ## Scope boundaries
 

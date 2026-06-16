@@ -4,7 +4,7 @@ Hosted client splats for the service. Drop a compressed `<name>.sog` here and
 share a walkable link:
 
 ```
-https://jkaindl.codeberg.page/autosplat-viewer/viewer.html?src=c/<name>.sog
+https://jkaindl.codeberg.page/autosplat/viewer.html?src=c/<name>.sog
 ```
 
 The viewer loads the splat, **auto-frames** it (percentile bounds over the

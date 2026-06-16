@@ -1,7 +1,7 @@
 # Contributing
 
-`autosplat-viewer` is a small, deliberately minimal static viewer PWA — a
-showcase for the [autosplat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
+The autosplat viewer is a small, deliberately minimal static viewer PWA — a
+showcase for the [autosplat](https://codeberg.org/jkaindl/autosplat)
 pipeline and a general-purpose 3D Gaussian Splat viewer. Issues and PRs are
 welcome.
 
@@ -23,7 +23,7 @@ welcome.
 
 ## Bug reports
 
-Use the [Codeberg issue tracker](https://codeberg.org/jkaindl/autosplat-viewer/issues).
+Use the [Codeberg issue tracker](https://codeberg.org/jkaindl/autosplat/issues).
 Please include:
 
 - Browser + version (e.g. `Safari 17 on iOS 17.4`, `Firefox 124 on macOS`)
@@ -37,8 +37,8 @@ For security-sensitive reports see [`SECURITY.md`](SECURITY.md).
 ## Development setup
 
 ```bash
-git clone https://codeberg.org/jkaindl/autosplat-viewer.git
-cd autosplat-viewer
+git clone https://codeberg.org/jkaindl/autosplat.git
+cd autosplat/viewer
 ./serve.sh                       # → http://localhost:8123/
 ./tests/run.sh                   # unit + e2e
 ```
@@ -91,7 +91,7 @@ license as the overall project: [AGPL-3.0-or-later](LICENSE).
 
 ## Out of scope
 
-- **Splat training / capture.** That's the [autosplat](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat)
+- **Splat training / capture.** That's the [autosplat](https://codeberg.org/jkaindl/autosplat)
   pipeline — this repo is only the viewer.
 - **Build tooling, frameworks, bundlers.** Stays vanilla.
 - **Server-side anything.** Static-only. No upload, no telemetry, no

@@ -13,7 +13,7 @@ body:
         easier it is to reproduce, the faster the fix.
 
         **Security-sensitive issues** do not belong here — see
-        [`SECURITY.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/SECURITY.md).
+        [`SECURITY.md`](https://codeberg.org/jkaindl/autosplat/src/branch/main/SECURITY.md).
   - type: textarea
     id: what-happened
     attributes:
@@ -82,7 +82,7 @@ body:
       options:
         - label: I ran `autosplat doctor` and all preflight deps are present.
           required: true
-        - label: I checked [existing issues](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues) for duplicates.
+        - label: I checked [existing issues](https://codeberg.org/jkaindl/autosplat/issues) for duplicates.
           required: true
         - label: This is not a security issue (otherwise → SECURITY.md).
           required: true

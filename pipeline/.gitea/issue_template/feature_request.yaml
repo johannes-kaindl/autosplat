@@ -10,7 +10,7 @@ body:
     attributes:
       value: |
         Before you type — autosplat is deliberately scoped to **local-first
-        Mac Silicon** (see [`AGENTS.md`](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/AGENTS.md)):
+        Mac Silicon** (see [`AGENTS.md`](https://codeberg.org/jkaindl/autosplat/src/branch/main/AGENTS.md)):
 
         - **no** cloud GPU dependency, no API keys
         - **no** Linux/Windows-only paths in the supported flow
@@ -59,7 +59,7 @@ body:
     attributes:
       label: Pre-flight checks
       options:
-        - label: I checked [existing issues](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues) for duplicates.
+        - label: I checked [existing issues](https://codeberg.org/jkaindl/autosplat/issues) for duplicates.
           required: true
         - label: I understand the platform + stack guardrails.
           required: true

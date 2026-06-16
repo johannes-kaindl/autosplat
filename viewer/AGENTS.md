@@ -37,7 +37,7 @@ runtime from the jsDelivr CDN.
 ## Memory + logs
 
 - **Memory** (cross-session, outside the repo):
-  `~/.claude/projects/-Users-Shared-code-autosplat-viewer/memory/`
+  `~/.claude/projects/-Users-Shared-code-autosplat/memory/`
 - **Session logs** (in repo, gitignored):
   `.claude/logs/YYYY-MM-DD-<topic>.md` — written at end-of-session
   by the `clean-shutdown` skill.

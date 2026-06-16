@@ -1,6 +1,6 @@
 # Licensing
 
-autosplat-viewer is **dual-licensed**.
+The autosplat viewer is **dual-licensed**.
 
 ## 1. Open-source license (default)
 
@@ -13,7 +13,7 @@ self-hosting it, and building on it.
 The AGPL's network-use clause (§13) is deliberate, not incidental: anything
 published as a contribution to the commons should stay in the commons — even
 when someone would otherwise reprivatise it behind a network service. If you
-distribute autosplat-viewer, or make a modified version available to users
+distribute the autosplat viewer, or make a modified version available to users
 over a network (for example, as a hosted web service), the AGPL requires that
 the corresponding source — including your modifications — be offered to those
 users under the same terms.
@@ -21,7 +21,7 @@ users under the same terms.
 ## 2. Commercial license (on request)
 
 If the AGPL's copyleft and source-disclosure obligations do not fit your use
-case — for example, shipping autosplat-viewer as part of a **proprietary
+case — for example, shipping the autosplat viewer as part of a **proprietary
 product, a closed-source service, or an Apple App Store build** (App Store
 distribution terms are incompatible with the AGPL) — a separate **commercial
 license** is available.
@@ -35,7 +35,7 @@ description of your intended use.
 
 ## Why this is possible
 
-autosplat-viewer is authored by a single copyright holder (Johannes Kaindl).
+The autosplat viewer is authored by a single copyright holder (Johannes Kaindl).
 Because all copyright is held in one place — and because every external
 contribution is made under the [Contributor License Agreement](CLA.md), which
 grants the maintainer the right to relicense — the project can be offered

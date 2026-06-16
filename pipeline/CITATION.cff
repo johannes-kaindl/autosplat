@@ -14,8 +14,8 @@ authors:
     given-names: Johannes
     email: code.jkaindl@mailbox.org
     affiliation: Independent
-repository-code: "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
-url: "https://codeberg.org/jkaindl/video-to-3d-gaussian-splat"
+repository-code: "https://codeberg.org/jkaindl/autosplat"
+url: "https://codeberg.org/jkaindl/autosplat"
 license: AGPL-3.0-or-later
 version: "1.5.0"
 date-released: "2026-05-27"

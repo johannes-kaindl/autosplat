@@ -2,7 +2,7 @@
 
 ## Scope
 
-`autosplat-viewer` is a **static, client-side-only Progressive Web App**.
+The autosplat viewer is a **static, client-side-only Progressive Web App**.
 There is no backend, no server-side rendering, no account system, no
 telemetry, and no upload — every splat the viewer renders stays in the
 user's browser.
@@ -10,7 +10,7 @@ user's browser.
 The attack surface is therefore narrow:
 
 - The static site served from Codeberg Pages
-  (<https://jkaindl.codeberg.page/autosplat-viewer/>)
+  (<https://jkaindl.codeberg.page/autosplat/>)
 - The service worker (`service-worker.js`) that caches the app shell
 - The runtime import of the PlayCanvas Engine from the jsDelivr CDN
   (`https://cdn.jsdelivr.net/npm/playcanvas@<pinned-version>/+esm`)
@@ -34,7 +34,7 @@ are kept as historical references.
 Preferred channel:
 
 - Email: **code.jkaindl@mailbox.org** (in-repo Git identity)
-- Subject line: `[security] autosplat-viewer: <short description>`
+- Subject line: `[security] autosplat viewer: <short description>`
 
 If you don't get an acknowledgement within 7 days, please open a
 placeholder Codeberg issue titled `Security report pending` (no details)

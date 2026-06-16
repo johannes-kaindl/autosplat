@@ -4,7 +4,7 @@
 
 ## Bug reports
 
-Use the [Codeberg issue tracker](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/issues) — the bug-report and feature-request templates in `.forgejo/issue_template/` prompt for everything below.
+Use the [Codeberg issue tracker](https://codeberg.org/jkaindl/autosplat/issues) — the bug-report and feature-request templates in `.gitea/issue_template/` prompt for everything below.
 
 Please include:
 
@@ -18,8 +18,8 @@ For security-sensitive reports see [`SECURITY.md`](SECURITY.md).
 ## Development setup
 
 ```bash
-git clone https://codeberg.org/jkaindl/video-to-3d-gaussian-splat.git
-cd video-to-3d-gaussian-splat
+git clone https://codeberg.org/jkaindl/autosplat.git
+cd autosplat
 uv sync                          # install deps (Python 3.11+, uv-managed)
 uv run pre-commit install        # install pre-commit hooks (ruff + ruff-format on commit, pytest on push)
 uv run autosplat doctor          # check ffmpeg / colmap / brush / compress

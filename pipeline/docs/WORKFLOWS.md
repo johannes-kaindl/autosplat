@@ -246,7 +246,7 @@ Once a PLY is available, the **View** button appears on the detail view. It open
 
 **6. AGPL §13 source link**
 
-Every page has a footer with a link to `/source`, which in turn links to the [Codeberg repository](https://codeberg.org/jkaindl/video-to-3d-gaussian-splat). This satisfies the AGPL Network Clause for WebUI users.
+Every page has a footer with a link to `/source`, which in turn links to the [Codeberg repository](https://codeberg.org/jkaindl/autosplat). This satisfies the AGPL Network Clause for WebUI users.
 
 ### LAN access
 

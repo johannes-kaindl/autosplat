@@ -3,8 +3,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security report
-    url: https://codeberg.org/jkaindl/autosplat-viewer/src/branch/main/SECURITY.md
+    url: https://codeberg.org/jkaindl/autosplat/src/branch/main/viewer/SECURITY.md
     about: Security-sensitive issues — please do not file publicly. See SECURITY.md.
   - name: Live demo
-    url: https://jkaindl.codeberg.page/autosplat-viewer/
+    url: https://jkaindl.codeberg.page/autosplat/viewer.html
     about: Try the live version before filing — many issues are easier to reproduce there.

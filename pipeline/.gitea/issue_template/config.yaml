@@ -3,11 +3,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security report
-    url: https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/SECURITY.md
+    url: https://codeberg.org/jkaindl/autosplat/src/branch/main/SECURITY.md
     about: Security-sensitive issues — please do not file publicly. See SECURITY.md.
   - name: Capture-guide (shoot good source video)
-    url: https://codeberg.org/jkaindl/video-to-3d-gaussian-splat/src/branch/main/docs/CAPTURE-GUIDE.md
+    url: https://codeberg.org/jkaindl/autosplat/src/branch/main/docs/CAPTURE-GUIDE.md
     about: Most pipeline failures are capture-side, not code-side. Read this before filing a "SfM failed" issue.
-  - name: Viewer (separate repo)
-    url: https://codeberg.org/jkaindl/autosplat-viewer
-    about: Issues with the in-browser viewer belong in autosplat-viewer.
+  - name: Viewer
+    url: https://codeberg.org/jkaindl/autosplat
+    about: Issues with the in-browser viewer also belong here.

@@ -1,6 +1,6 @@
 # Contributor License Agreement (CLA)
 
-Thank you for contributing to autosplat-viewer. To keep the project's
+Thank you for contributing to the autosplat viewer. To keep the project's
 [dual-licensing model](LICENSING.md) possible, contributors agree to the
 following terms before their contributions are merged. This is intentionally
 short and plain.

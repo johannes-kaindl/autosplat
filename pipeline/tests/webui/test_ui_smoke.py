@@ -63,7 +63,7 @@ def test_source_renders_ksp(app: FastAPI) -> None:
         r = client.get("/source")
     assert r.status_code == 200
     assert "AGPL-3.0-or-later" in r.text
-    assert "codeberg.org/jkaindl/video-to-3d-gaussian-splat" in r.text
+    assert "codeberg.org/jkaindl/autosplat" in r.text
 
 
 def test_static_tokens_css(app: FastAPI) -> None:
