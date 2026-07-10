@@ -96,4 +96,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         runner.load_history()
     app.state.job_runner = runner
 
+    from .share_runner import ShareJobRunner
+
+    app.state.share_runner = ShareJobRunner(cfg) if cfg is not None else None
+
     return app

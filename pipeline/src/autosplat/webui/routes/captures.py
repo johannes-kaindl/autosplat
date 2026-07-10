@@ -40,6 +40,10 @@ def _job_runner(request: Request) -> JobRunner | None:
     return runner
 
 
+def _share_runner(request: Request):  # type: ignore[no-untyped-def]
+    return getattr(request.app.state, "share_runner", None)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def captures_list(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
@@ -389,3 +393,33 @@ async def capture_delete(request: Request, capture_id: str) -> RedirectResponse:
         raise HTTPException(status_code=409, detail="Cannot delete a running capture")
     shutil.rmtree(capture.path, ignore_errors=True)
     return RedirectResponse(url="/captures/", status_code=303)
+
+
+@router.post("/{capture_id}/share")
+async def capture_share(request: Request, capture_id: str) -> RedirectResponse:
+    """Compress + assemble a self-hostable share bundle in the background."""
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    runner = _share_runner(request)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="Share runner not available")
+    runner.start(capture_id, capture.path)
+    return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+@router.get("/{capture_id}/share/{token}.zip")
+async def capture_share_zip(request: Request, capture_id: str, token: str) -> FileResponse:
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id)
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    zip_path = capture.path / "share" / f"{token}.zip"
+    if not zip_path.is_file():
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{token}.zip",
+    )

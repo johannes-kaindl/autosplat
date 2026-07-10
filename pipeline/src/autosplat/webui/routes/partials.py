@@ -131,6 +131,17 @@ async def capture_brush_partial(request: Request, capture_id: str) -> HTMLRespon
     )
 
 
+@router.get("/capture/{capture_id}/share", response_class=HTMLResponse)
+async def capture_share_partial(request: Request, capture_id: str) -> HTMLResponse:
+    runner = getattr(request.app.state, "share_runner", None)
+    job = runner.get(capture_id) if runner is not None else None
+    return _templates(request).TemplateResponse(
+        request,
+        "partials/share.html",
+        {"capture_id": capture_id, "job": job},
+    )
+
+
 @router.get("/capture/{capture_id}/liveness", response_class=HTMLResponse)
 async def capture_liveness_partial(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)

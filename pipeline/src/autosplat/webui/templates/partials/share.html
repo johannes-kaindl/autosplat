@@ -1,0 +1,12 @@
+{% if job and job.status == 'done' %}
+  <div class="share-done">
+    {% if job.link %}<a href="{{ job.link }}">{{ job.link }}</a>{% else %}<code>{{ job.token }}/</code>{% endif %}
+    <a href="/captures/{{ capture_id }}/share/{{ job.token }}.zip">Download .zip</a>
+  </div>
+{% elif job and job.status == 'failed' %}
+  <div class="share-failed">{{ job.error }}</div>
+{% elif job %}
+  <div hx-get="/partials/capture/{{ capture_id }}/share" hx-trigger="every 2s" hx-swap="outerHTML">building…</div>
+{% else %}
+  <div>—</div>
+{% endif %}
