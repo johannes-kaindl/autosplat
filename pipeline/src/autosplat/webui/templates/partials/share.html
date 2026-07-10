@@ -1,12 +1,32 @@
+{%- from "_icons.html" import icon -%}
 {% if job and job.status == 'done' %}
-  <div class="share-done">
-    {% if job.link %}<a href="{{ job.link }}">{{ job.link }}</a>{% else %}<code>{{ job.token }}/</code>{% endif %}
-    <a href="/captures/{{ capture_id }}/share/{{ job.token }}.zip">Download .zip</a>
+<div style="display:flex;flex-direction:column;gap:8px;font-family:var(--font-mono);font-size:11px">
+  <div style="color:var(--fg-tertiary)">
+    {% if job.output_bytes and job.input_bytes %}
+    {{ '%.0f'|format(job.output_bytes / 1048576) }} mb ·
+    {{ '%.0f'|format((1 - job.output_bytes / job.input_bytes) * 100) }} % smaller
+    {% endif %}
   </div>
+  {% if job.link %}
+  <a href="{{ job.link }}" target="_blank" rel="noopener"
+     style="color:var(--signal-circuit);word-break:break-all">{{ job.link }}</a>
+  {% else %}
+  <div style="color:var(--fg-secondary)">Upload the bundle, then share
+    <code>&lt;your-host&gt;/{{ job.token }}/</code></div>
+  {% endif %}
+  <a href="/captures/{{ capture_id }}/share/{{ job.token }}.zip"
+     class="as-btn sm ghost" download>{{ icon('download', 11) }} Download bundle (.zip)</a>
+</div>
 {% elif job and job.status == 'failed' %}
-  <div class="share-failed">{{ job.error }}</div>
+<div style="color:var(--stage-failed);font-family:var(--font-mono);font-size:11px">{{ job.error }}</div>
 {% elif job %}
-  <div hx-get="/partials/capture/{{ capture_id }}/share" hx-trigger="every 2s" hx-swap="outerHTML">building…</div>
+<div hx-get="/partials/capture/{{ capture_id }}/share" hx-trigger="every 2s" hx-swap="outerHTML"
+     style="display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">
+  <span class="as-pulse-dot" style="width:7px;height:7px;border-radius:50%;background:var(--signal-circuit);display:inline-block"></span>
+  building bundle…
+</div>
 {% else %}
-  <div>—</div>
+<form method="post" action="/captures/{{ capture_id }}/share">
+  <button type="submit" class="as-btn sm">{{ icon('external', 12) }} Create share bundle</button>
+</form>
 {% endif %}

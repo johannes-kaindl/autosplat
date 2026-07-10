@@ -199,6 +199,30 @@
       </div>
       {% endif %}
 
+      {% if capture.status == 'done' and capture.has_ply %}
+      <div class="as-card" id="as-share-card">
+        <div class="as-card-head">
+          <span class="t">web export · share</span><span class="spacer"></span>
+          {{ icon('external', 13) }}
+        </div>
+        <div class="as-card-body" style="display:flex;flex-direction:column;gap:10px">
+          <p style="margin:0;font-family:var(--font-body);font-size:12.5px;color:var(--fg-secondary);line-height:1.55">
+            Compress to a web-optimal <code style="font-family:var(--font-mono);font-size:10px">.sog</code>
+            and package a self-contained viewer you can host anywhere.
+            <strong>Anyone with this link can view this model</strong> — it is unlisted, not access-controlled.
+          </p>
+          <div id="as-share-region"
+               hx-get="/partials/capture/{{ capture.id }}/share"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <form method="post" action="/captures/{{ capture.id }}/share">
+              <button type="submit" class="as-btn sm">{{ icon('external', 12) }} Create share bundle</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="as-card">
         <div class="as-card-head">
           <span class="t">capture</span><span class="spacer"></span>

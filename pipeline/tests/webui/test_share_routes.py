@@ -53,6 +53,14 @@ def test_post_share_starts_job_and_partial_shows_link(app: FastAPI, tmp_path: Pa
         assert "share/lgs-" in body and ".zip" in body
 
 
+def test_detail_page_shows_share_card_for_done_capture(app: FastAPI, tmp_path: Path) -> None:
+    _install(app, tmp_path)
+    with TestClient(app) as client:
+        body = client.get("/captures/2026-07-10_lgs").text
+    assert "Create share bundle" in body
+    assert "anyone with this link" in body.lower()
+
+
 def test_share_zip_downloads(app: FastAPI, tmp_path: Path) -> None:
     _install(app, tmp_path)
     with TestClient(app) as client:
