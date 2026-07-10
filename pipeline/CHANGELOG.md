@@ -9,6 +9,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **WebUI capture detail froze in its `running` render after a run finished.**
+  The page renders the stage stepper, status badge and action buttons once and
+  then only polls the small liveness fragment — which never detected the
+  `running → done` transition, so a completed capture kept showing the
+  preflight/running view with an ever-growing "quiet for Ns" phantom. The
+  liveness poll now passes the job runner through (so it sees the authoritative
+  status) and returns `HX-Refresh: true` once the run is no longer running,
+  reloading the page into the real terminal state.
+
 ---
 
 ## [v1.12.0] — 2026-06-15 — Joined the autosplat monorepo

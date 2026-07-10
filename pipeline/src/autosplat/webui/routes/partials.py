@@ -134,9 +134,19 @@ async def capture_brush_partial(request: Request, capture_id: str) -> HTMLRespon
 @router.get("/capture/{capture_id}/liveness", response_class=HTMLResponse)
 async def capture_liveness_partial(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    capture = get_capture(captures_dir, capture_id)
+    # Pass the job runner so we see the authoritative running→done/failed
+    # transition — without it a WebUI job that finished resolves to a stale
+    # status here (see SF-G2-9 in state.list_captures).
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    # The detail page renders the stepper, badge and action buttons once and
+    # then only polls this liveness fragment. If the run has finished (or died)
+    # since the page loaded, swapping the pulse alone would leave the outer page
+    # frozen in its 'running' render — the "quiet for Ns" phantom. Ask HTMX to
+    # reload the whole page so it re-renders into the real terminal state.
+    if capture.status != "running":
+        return HTMLResponse(content="", headers={"HX-Refresh": "true"})
     return _templates(request).TemplateResponse(
         request,
         "partials/liveness.html",

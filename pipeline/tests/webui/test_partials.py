@@ -215,7 +215,12 @@ def test_last_activity_age_s_none_without_log(tmp_path: Path) -> None:
 def test_liveness_partial_shows_activity_pulse(app: FastAPI, tmp_path: Path) -> None:
     """Any running capture (e.g. COLMAP, which has no brush card) gets a generic
     'last activity Xs ago' pulse so a silent-but-healthy stage isn't a dead screen."""
+    from autosplat.webui.jobs_runner import JobState
+
     _running_capture(app, tmp_path, "2026-05-29_colmap")
+    app.state.job_runner._jobs["2026-05-29_colmap"] = JobState(
+        capture_id="2026-05-29_colmap", status="running"
+    )
 
     with TestClient(app) as client:
         response = client.get("/partials/capture/2026-05-29_colmap/liveness")
@@ -224,6 +229,49 @@ def test_liveness_partial_shows_activity_pulse(app: FastAPI, tmp_path: Path) -> 
     body = response.text
     assert "activity" in body.lower()
     assert "/partials/capture/2026-05-29_colmap/liveness" in body  # keeps polling
+
+
+def test_liveness_partial_triggers_page_refresh_when_run_finished(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    """A run that finishes while the detail page is open must break the stale
+    'running' render. The detail page only ever polls /liveness (the stepper,
+    badge and action buttons are rendered once). So when the capture is no
+    longer running, the liveness poll returns `HX-Refresh: true`, telling HTMX
+    to reload the whole page into the real 'done' view (SF-LIVE-REFRESH)."""
+    capture_dir = tmp_path / "2026-07-10_done"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+    (capture_dir / "pipeline.log").write_text('{"event": "pipeline.done"}\n')
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/partials/capture/2026-07-10_done/liveness")
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Refresh") == "true"
+
+
+def test_liveness_partial_no_refresh_while_running(app: FastAPI, tmp_path: Path) -> None:
+    """The guard against a refresh loop: while a job is genuinely running, the
+    liveness poll must keep swapping the pulse in place and NOT ask for a full
+    page reload."""
+    from autosplat.webui.jobs_runner import JobState
+
+    capture_dir = tmp_path / "2026-05-29_run"
+    (capture_dir / "frames").mkdir(parents=True)
+    (capture_dir / "pipeline.log").write_text('{"event": "train.brush.start"}\n')
+    app.state.cfg.paths.captures_dir = tmp_path
+    app.state.job_runner._jobs["2026-05-29_run"] = JobState(
+        capture_id="2026-05-29_run", status="running"
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/partials/capture/2026-05-29_run/liveness")
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Refresh") is None
+    assert "activity" in response.text.lower()
 
 
 def test_brush_card_gated_to_train_stage(app: FastAPI, tmp_path: Path) -> None:
