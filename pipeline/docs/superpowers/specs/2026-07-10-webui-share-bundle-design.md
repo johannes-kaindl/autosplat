@@ -162,3 +162,8 @@ Route (FastAPI `TestClient`, share job with a fake compressor):
   independently of any globally-installed v3. Unchanged by this feature.
 - **Bundle size**: dominated by the `.sog` (tens of MB); the viewer runtime
   copy is a few hundred KB — negligible.
+- **CDN engine dependency (not a bug)**: `viewer.html` loads the PlayCanvas
+  engine from `cdn.jsdelivr.net` via importmap — same as the live viewer. The
+  bundle is self-*hosted* for viewer code + splat data (independent of Codeberg
+  Pages), but needs internet for the engine at runtime; it is **not**
+  zero-external. Vendoring the engine into the bundle is a possible later slice.
