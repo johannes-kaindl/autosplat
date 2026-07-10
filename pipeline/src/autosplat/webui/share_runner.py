@@ -90,7 +90,7 @@ class ShareJobRunner:
             job.link = share_link(self._cfg.share.base_url, token)
             job.status = "done"
             logger.info("share.done", capture_id=job.capture_id, token=token)
-        except Exception as e:  # noqa: BLE001 — surfaced on the job, not raised
+        except Exception as e:  # surfaced on the job, not raised
             job.status = "failed"
             job.error = str(e)
             logger.error("share.failed", capture_id=job.capture_id, error=str(e))

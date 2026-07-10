@@ -9,6 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **WebUI "Create share bundle"** — an on-demand action on a finished capture
+  compresses the scene to `.sog` and assembles a self-contained, self-hostable
+  viewer bundle (folder + `.zip`) reachable via an unguessable link
+  (`[share] base_url`). Unlisted, not access-controlled. Runs as a background
+  job that leaves the capture's `done` status untouched. The bundled viewer
+  loads the PlayCanvas engine from a CDN (same as the live viewer), so the
+  bundle is self-hosted for code + data but not zero-external.
+
 ### Fixed
 
 - **WebUI capture detail froze in its `running` render after a run finished.**
