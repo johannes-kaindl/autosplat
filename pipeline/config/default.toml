@@ -115,3 +115,10 @@ max_history = 50
 enabled = false
 formats = ["sog"]          # list, can include multiple of: "sog", "spz", "ksplat"
 quality = "medium"         # low | medium | high — controls SOG iterations + SH filter
+
+[share]
+# WebUI web-export share bundles. base_url is your public splat host; empty
+# shows a host-agnostic link template. viewer_src_path is copied into each
+# self-contained bundle (relative paths resolve against the working directory).
+base_url = ""
+viewer_src_path = "../viewer"

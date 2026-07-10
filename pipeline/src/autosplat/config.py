@@ -382,6 +382,21 @@ class CompressConfig(BaseModel):
     )
 
 
+class ShareConfig(BaseModel):
+    """Web-export share bundles: compress + self-contained viewer package."""
+
+    base_url: str = Field(
+        default="",
+        description="Public base URL of your splat host, e.g. 'https://splat.jkaindl.de'. "
+        "Empty → the UI shows a host-agnostic link template instead.",
+    )
+    viewer_src_path: Path = Field(
+        default=Path("../viewer"),
+        description="Path to the viewer static sources copied into each bundle. "
+        "Relative paths resolve against the current working directory.",
+    )
+
+
 class Config(BaseModel):
     paths: PathsConfig
     preprocess: PreprocessConfig
@@ -397,6 +412,8 @@ class Config(BaseModel):
     status: StatusConfig = Field(default_factory=StatusConfig)
     # Phase-5 — opt-in compress stage after Export
     compress: CompressConfig = Field(default_factory=CompressConfig)
+    # WebUI web-export share bundles
+    share: ShareConfig = Field(default_factory=ShareConfig)
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

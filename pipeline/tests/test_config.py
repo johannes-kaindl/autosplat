@@ -34,6 +34,12 @@ def test_load_default_config_parses_cleanly() -> None:
     assert cfg.obsidian.enabled is False
 
 
+def test_share_config_defaults() -> None:
+    cfg = load_config(include_xdg=False)
+    assert cfg.share.base_url == ""
+    assert str(cfg.share.viewer_src_path) == "../viewer"
+
+
 def test_paths_expand_tilde() -> None:
     cfg = load_config(include_xdg=False)
     assert "~" not in str(cfg.paths.captures_dir)
