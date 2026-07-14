@@ -15,6 +15,7 @@ const els = {
   controls: document.getElementById('controls'),
   btnOrbit: document.getElementById('btn-orbit'),
   btnFullscreen: document.getElementById('btn-fullscreen'),
+  btnCopyPose: document.getElementById('btn-copy-pose'),
 };
 
 const params = parseParams(location.search);
@@ -35,6 +36,43 @@ function syncOrbitButton(on) {
   els.btnOrbit.textContent = on ? '⏸' : '▶';
   els.btnOrbit.setAttribute('aria-pressed', String(on));
   els.btnOrbit.setAttribute('aria-label', on ? 'Pause auto-orbit' : 'Start auto-orbit');
+}
+
+// Builds the URL a scene author copies out of authoring mode: current src/
+// poster/autoplay carried over, pose+orbit set from the live camera state,
+// authoring itself dropped (the copied link is for end users).
+function buildPoseUrl() {
+  const pose = viewer.getPose();
+  const poseStr = [...pose.camPos, ...pose.focus]
+    .map((n) => n.toFixed(3)).join(',');
+  const url = new URL(location.href);
+  url.searchParams.set('pose', poseStr);
+  url.searchParams.set('orbit', viewer.isAutoOrbit() ? '1' : '0');
+  url.searchParams.delete('authoring');
+  return url.toString();
+}
+
+async function copyPoseUrl() {
+  const url = buildPoseUrl();
+  const original = els.btnCopyPose.textContent;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    els.btnCopyPose.textContent = 'Copied!';
+  } catch {
+    els.btnCopyPose.textContent = 'Copy failed';
+  }
+  setTimeout(() => { els.btnCopyPose.textContent = original; }, 1500);
 }
 
 function wireControls() {
@@ -65,6 +103,8 @@ function wireControls() {
       });
     }
   });
+
+  els.btnCopyPose.addEventListener('click', copyPoseUrl);
 }
 
 async function start() {
@@ -84,12 +124,14 @@ async function start() {
       viewer = await createViewer(els.host);
       wireControls();
     }
-    await viewer.loadSplat(params.src, params.filename);
+    await viewer.loadSplat(params.src, params.filename,
+      { pose: params.pose, orbit: params.orbit });
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       viewer.setAutoOrbit(false);
     }
     els.spinner.hidden = true;
     els.controls.hidden = false;
+    if (params.authoring) els.btnCopyPose.hidden = false;
     syncOrbitButton(viewer.isAutoOrbit());
   } catch (err) {
     console.error('[embed] load failed:', err);

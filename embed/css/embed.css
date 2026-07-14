@@ -83,6 +83,10 @@ body {
 }
 #controls button:hover { background: rgba(38, 41, 52, 0.85); }
 
+#btn-copy-pose {
+  width: auto; padding: 0 0.75rem; font-size: 0.8rem; white-space: nowrap;
+}
+
 /* --- badge --- */
 #badge {
   position: absolute; z-index: 5;
