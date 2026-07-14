@@ -20,6 +20,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   percentile auto-framing, auto-orbit and fullscreen — and a fully vendored
   PlayCanvas engine (**zero external requests**). `viewer/` is parked as the
   development viewer (walking mode, collision editor, landing page live there).
+  A pose-authoring workflow (`?pose=…&orbit=…&authoring=1`) lets you capture a
+  curated camera view into a ready-to-embed link instead of relying on
+  auto-framing.
 
 ---
 
