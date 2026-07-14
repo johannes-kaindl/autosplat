@@ -69,7 +69,11 @@ export async function createViewer(hostElement) {
     canvas.addEventListener(ev, () => setAutoOrbit(false));
   }
 
-  async function loadSplat(url, filename) {
+  // opts.pose: optional [cx,cy,cz,fx,fy,fz] from the pose-authoring workflow
+  // (?pose=…) — when present, skips auto-frame and positions the camera
+  // directly. opts.orbit: whether auto-orbit should start after loading
+  // (default true, matching historical behavior when omitted).
+  async function loadSplat(url, filename, opts = {}) {
     // loadFromUrlAndFilename: the filename drives format detection (.sog/.ply).
     let asset;
     try {
@@ -97,8 +101,13 @@ export async function createViewer(hostElement) {
       new Vec3(DEFAULT_POSE.cameraPos.x, DEFAULT_POSE.cameraPos.y,
                DEFAULT_POSE.cameraPos.z));
 
-    await autoFrame();
-    setAutoOrbit(true);
+    if (opts.pose) {
+      const [cx, cy, cz, fx, fy, fz] = opts.pose;
+      cc.reset(new Vec3(fx, fy, fz), new Vec3(cx, cy, cz));
+    } else {
+      await autoFrame();
+    }
+    setAutoOrbit(opts.orbit !== false);
   }
 
   // Frame the camera from the splat center positions (PC 2.x:
@@ -132,10 +141,24 @@ export async function createViewer(hostElement) {
     cc.reset(center, camPos);
   }
 
+  // Current camera pose for the authoring "copy pose" workflow — reflects
+  // manual orbiting/zooming, not just the pose at load time. cc.focusPoint
+  // returns a reused internal Vec3, so its components are copied out
+  // immediately.
+  function getPose() {
+    const camPos = camera.getPosition();
+    const focus = cc.focusPoint;
+    return {
+      camPos: [camPos.x, camPos.y, camPos.z],
+      focus: [focus.x, focus.y, focus.z],
+    };
+  }
+
   return {
     loadSplat,
     setAutoOrbit,
     isAutoOrbit() { return autoOrbit; },
     onAutoOrbitChange(fn) { orbitListeners.push(fn); },
+    getPose,
   };
 }
