@@ -12,6 +12,11 @@ Static viewer PWA for 3D Gaussian Splats. Vanilla HTML/CSS/JS, no build
 step, no runtime dependencies. The PlayCanvas Engine is loaded at
 runtime from the jsDelivr CDN.
 
+> **Status: geparkt als Entwicklungsviewer (2026-07).** Neue Features und
+> Experimente (Walking-Mode, Collision-Editor, Landing) leben hier; der
+> saubere, produktive Embed-Viewer ist die eigene Komponente `../embed/`
+> (Spec: `pipeline/docs/superpowers/specs/2026-07-14-embed-viewer-design.md`).
+
 ## Workflow conventions
 
 - **Tests:** `./tests/run.sh` runs unit + e2e. Unit tests use

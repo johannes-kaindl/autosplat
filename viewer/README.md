@@ -1,5 +1,8 @@
 # autosplat · viewer
 
+> **Status (2026-07):** geparkt als Entwicklungsviewer — der saubere,
+> embed-fähige Produktiv-Viewer lebt in [`../embed/`](../embed/).
+
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fcodeberg.org&sort=semver&label=release&color=2ecc71)](https://codeberg.org/jkaindl/autosplat/releases)
 [![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/autosplat)

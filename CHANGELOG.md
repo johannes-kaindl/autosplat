@@ -12,6 +12,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`embed/` — minimal, embeddable splat viewer.** A new self-contained
+  monorepo component: a single iframe page
+  (`embed/index.html?src=…&poster=…&autoplay=1`) with click-to-load gate,
+  percentile auto-framing, auto-orbit and fullscreen — and a fully vendored
+  PlayCanvas engine (**zero external requests**). `viewer/` is parked as the
+  development viewer (walking mode, collision editor, landing page live there).
+
 ---
 
 ## [v1.13.0] — 2026-07-14 — WebUI share bundles

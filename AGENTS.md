@@ -12,7 +12,8 @@ Guidance for AI coding agents working in this monorepo.
 | Pfad | Inhalt | Eigene AGENTS.md |
 |---|---|---|
 | `pipeline/` | Lokale Pipeline: Drohnen-/Handheld-Video → trainierter 3D Gaussian Splat (Python, uv, Apple-Silicon-only) | `pipeline/AGENTS.md` |
-| `viewer/` | Statische Viewer-PWA für Gaussian Splats (Vanilla HTML/CSS/JS, kein Build-Step) | `viewer/AGENTS.md` |
+| `viewer/` | Statische Viewer-PWA für Gaussian Splats (Vanilla HTML/CSS/JS, kein Build-Step) — geparkt als Entwicklungsviewer | `viewer/AGENTS.md` |
+| `embed/` | Minimaler, embed-fähiger Splat-Viewer: iframe-Seite mit vendored Engine, zero-external | `embed/AGENTS.md` |
 
 **Regel:** Für Arbeit *innerhalb* einer Komponente gilt deren eigene AGENTS.md — dort
 stehen Befehle, Test-Pflichten, Commit-Stil und Architektur-Notizen. Diese Datei regelt
@@ -29,7 +30,7 @@ die Produkt-Ebene darüber.
 - **Versionierung:** eine gemeinsame Version ab `v1.12.0` (ein Release-Tag `vX.Y.Z` für
   beides). Historische Tags sind `pipeline-v*` / `viewer-v*`.
 - **Tests vor jedem Commit:** `cd pipeline && uv run pytest -q` bzw.
-  `cd viewer && ./tests/run.sh`.
+  `cd viewer && ./tests/run.sh` bzw. `cd embed && ./tests/run.sh`.
 - **Pages-Deploy des Viewers:** `scripts/deploy-pages.sh` (subtree split `viewer/` →
   `pages`-Branch). Live: `https://jkaindl.codeberg.page/autosplat/`.
 
