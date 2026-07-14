@@ -1,0 +1,10 @@
+{
+  "name": "autosplat-embed-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Test harness for the embed viewer (gitignored node_modules).",
+  "devDependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}
