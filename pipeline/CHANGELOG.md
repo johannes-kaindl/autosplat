@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [v1.13.0] — 2026-07-14 — WebUI share bundles
+
 ### Added
 
 - **WebUI "Create share bundle"** — an on-demand action on a finished capture

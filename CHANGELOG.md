@@ -14,6 +14,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.13.0] — 2026-07-14 — WebUI share bundles
+
+### Changed
+
+- **`pipeline/` only this release** — WebUI "Create share bundle" action and a
+  capture-detail liveness fix. See [`pipeline/CHANGELOG.md`](pipeline/CHANGELOG.md#v1130--2026-07-14--webui-share-bundles)
+  for details. No viewer changes.
+
+---
+
 ## [v1.12.0] — 2026-06-15 — Monorepo merge
 
 ### Changed
