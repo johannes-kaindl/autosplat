@@ -37,3 +37,22 @@ test('sceneLabel: strips extension, prettifies separators', () => {
   assert.equal(sceneLabel('wasser-turm.ply'), 'wasser turm');
   assert.equal(sceneLabel(null), '');
 });
+
+test('parseParams: orbit defaults true, "0" disables it, anything else stays true', () => {
+  assert.equal(parseParams('?src=x.sog').orbit, true);
+  assert.equal(parseParams('?src=x.sog&orbit=0').orbit, false);
+  assert.equal(parseParams('?src=x.sog&orbit=yes').orbit, true);
+});
+
+test('parseParams: authoring only for exact "1"', () => {
+  assert.equal(parseParams('?src=x.sog').authoring, false);
+  assert.equal(parseParams('?src=x.sog&authoring=1').authoring, true);
+  assert.equal(parseParams('?src=x.sog&authoring=true').authoring, false);
+});
+
+test('parseParams: valid pose is parsed through, invalid pose is null', () => {
+  const p = parseParams('?src=x.sog&pose=1,2,3,4,5,6');
+  assert.deepEqual(p.pose, [1, 2, 3, 4, 5, 6]);
+  assert.equal(parseParams('?src=x.sog&pose=1,2,3').pose, null);
+  assert.equal(parseParams('?src=x.sog').pose, null);
+});
