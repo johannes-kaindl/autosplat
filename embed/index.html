@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>autosplat embed</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/embed.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "playcanvas": "./vendor/playcanvas.mjs"
+    }
+  }
+  </script>
+</head>
+<body>
+  <main id="stage">
+    <div id="canvas-host"></div>
+
+    <button id="gate" hidden>
+      <span class="play-ico" aria-hidden="true">▶</span>
+      <span id="gate-label"></span>
+      <span class="gate-sub">Click to load 3D scene</span>
+    </button>
+
+    <div id="hint-card" hidden>
+      <p>No scene specified.</p>
+      <p class="muted">Embed this page with <code>?src=path/to/scene.sog</code></p>
+    </div>
+
+    <div id="error-card" role="alert" hidden>
+      <p id="error-msg"></p>
+      <button id="btn-retry" type="button">Retry</button>
+    </div>
+
+    <div id="spinner" hidden aria-live="polite">Loading…</div>
+
+    <div id="controls" hidden>
+      <button id="btn-orbit" type="button" aria-pressed="true"
+              aria-label="Pause auto-orbit">⏸</button>
+      <button id="btn-fullscreen" type="button" aria-label="Fullscreen">⛶</button>
+    </div>
+
+    <a id="badge" href="https://codeberg.org/jkaindl/autosplat"
+       target="_blank" rel="noopener">autosplat</a>
+  </main>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
