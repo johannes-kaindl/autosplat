@@ -29,13 +29,21 @@ APP_VERSION = _app_version()
 
 # Data files: (source, dest-in-bundle). The webui resolves templates/static via
 # sys._MEIPASS/autosplat/webui when frozen; config.py reads
-# sys._MEIPASS/config/default.toml; desktop.py finds scripts/ for first-run setup.
+# sys._MEIPASS/config/default.toml; desktop.py finds scripts/ for first-run
+# setup; share.py's ShareJobRunner reads sys._MEIPASS/embed for share-bundle
+# assembly (see config.py's _default_embed_src()). embed/ is bundled as an
+# explicit allowlist (not the whole folder) so tests/ and AGENTS.md never end
+# up inside the .app, mirroring share.py's own _EMBED_ALLOWLIST.
 datas = [
     (_p("src/autosplat/webui/templates"), "autosplat/webui/templates"),
     (_p("src/autosplat/webui/static"), "autosplat/webui/static"),
     (_p("config/default.toml"), "config"),
     (_p("scripts/install_deps.sh"), "scripts"),
     (_p("scripts/fetch_brush.sh"), "scripts"),
+    (_p("..", "embed", "index.html"), "embed"),
+    (_p("..", "embed", "css"), "embed/css"),
+    (_p("..", "embed", "js"), "embed/js"),
+    (_p("..", "embed", "vendor"), "embed/vendor"),
 ]
 
 # uvicorn[standard] resolves its protocol/loop implementations dynamically, so
