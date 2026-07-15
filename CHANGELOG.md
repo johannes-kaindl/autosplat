@@ -14,6 +14,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.14.1] — 2026-07-15 — Share-bundle/embed migration
+
+### Fixed
+
+- **`pipeline/` only this release** — share bundles now bundle and use the
+  `embed/` viewer runtime instead of `viewer/`, making them genuinely
+  zero-external and fixing the feature being non-functional in the packaged
+  DMG app. See [`pipeline/CHANGELOG.md`](pipeline/CHANGELOG.md#v1141--2026-07-15--share-bundleembed-migration)
+  for details.
+
+---
+
 ## [v1.14.0] — 2026-07-15 — Embed viewer + pose-authoring
 
 ### Added

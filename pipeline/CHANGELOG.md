@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [v1.14.1] — 2026-07-15 — Share-bundle/embed migration
+
 ### Changed
 
 - **Share bundles now use the `embed/` viewer runtime, not `viewer/`.**
