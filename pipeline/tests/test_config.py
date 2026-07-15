@@ -37,7 +37,8 @@ def test_load_default_config_parses_cleanly() -> None:
 def test_share_config_defaults() -> None:
     cfg = load_config(include_xdg=False)
     assert cfg.share.base_url == ""
-    assert str(cfg.share.viewer_src_path) == "../viewer"
+    assert cfg.share.embed_src_path.is_absolute()
+    assert cfg.share.embed_src_path.name == "embed"
 
 
 def test_paths_expand_tilde() -> None:

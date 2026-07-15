@@ -34,6 +34,18 @@ def _packaged_default_config() -> Path:
     return Path(__file__).resolve().parents[2] / "config" / "default.toml"
 
 
+def _default_embed_src() -> Path:
+    """Locate the embed/ viewer sources copied into share bundles — frozen-aware.
+
+    In a PyInstaller bundle, resolve against `sys._MEIPASS` (where build_app.sh
+    stages `embed/`); otherwise use the monorepo-relative path (config.py →
+    autosplat → src → pipeline → repo root → embed).
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "embed"  # type: ignore[attr-defined]
+    return Path(__file__).resolve().parents[3] / "embed"
+
+
 # Default-config path (repo-relative, or bundle-relative when frozen)
 PACKAGED_DEFAULT_CONFIG = _packaged_default_config()
 
@@ -383,17 +395,18 @@ class CompressConfig(BaseModel):
 
 
 class ShareConfig(BaseModel):
-    """Web-export share bundles: compress + self-contained viewer package."""
+    """Web-export share bundles: compress + self-contained embed-viewer package."""
 
     base_url: str = Field(
         default="",
         description="Public base URL of your splat host, e.g. 'https://splat.jkaindl.de'. "
         "Empty → the UI shows a host-agnostic link template instead.",
     )
-    viewer_src_path: Path = Field(
-        default=Path("../viewer"),
-        description="Path to the viewer static sources copied into each bundle. "
-        "Relative paths resolve against the current working directory.",
+    embed_src_path: Path = Field(
+        default_factory=_default_embed_src,
+        description="Path to the embed/ viewer sources copied into each share "
+        "bundle. Frozen-app aware (resolves inside the DMG bundle when "
+        "packaged); override only if your embed/ checkout lives elsewhere.",
     )
 
 

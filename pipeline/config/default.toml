@@ -118,7 +118,8 @@ quality = "medium"         # low | medium | high — controls SOG iterations + S
 
 [share]
 # WebUI web-export share bundles. base_url is your public splat host; empty
-# shows a host-agnostic link template. viewer_src_path is copied into each
-# self-contained bundle (relative paths resolve against the working directory).
+# shows a host-agnostic link template. embed_src_path is NOT set here — it
+# defaults to the monorepo's embed/ viewer sources (frozen-app aware, see
+# config.py's _default_embed_src()). Only set it if your embed/ checkout
+# lives somewhere unusual.
 base_url = ""
-viewer_src_path = "../viewer"
