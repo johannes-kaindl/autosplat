@@ -50,10 +50,11 @@ one release line.
 | Path | Component | What it is |
 |---|---|---|
 | [`pipeline/`](pipeline/) | **Capture → splat pipeline** | Drone / handheld video → trained 3D Gaussian Splat. Python · `uv` · COLMAP · Brush (WebGPU). Apple-Silicon-only, macOS 15+. → [`pipeline/README.md`](pipeline/README.md) |
-| [`viewer/`](viewer/) | **Splat viewer PWA** | Static, installable web app that loads and renders `.ply` / `.sog` splats locally. Vanilla HTML/CSS/JS, no build step. → [`viewer/README.md`](viewer/README.md) |
+| [`embed/`](embed/) | **Embeddable splat viewer** | Minimal self-contained iframe page (`index.html?src=…`) with click-to-load gate, auto-framing and a fully vendored PlayCanvas engine — zero external requests. Powers the share bundles. |
+| [`viewer/`](viewer/) | **Splat viewer PWA** (parked development viewer) | Static, installable web app that loads and renders `.ply` / `.sog` splats locally — walking mode, collision editor and landing page live here. Vanilla HTML/CSS/JS, no build step. → [`viewer/README.md`](viewer/README.md) |
 
 ```
-video ──▶ pipeline/  ──exports .ply / .sog──▶  viewer/  ──▶ fly through it
+video ──▶ pipeline/  ──exports .ply / .sog──▶  embed/ · viewer/  ──▶ fly through it
           (COLMAP → Brush → compress)          (PlayCanvas / WebGL2)
 ```
 
