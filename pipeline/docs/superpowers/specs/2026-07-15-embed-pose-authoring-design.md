@@ -22,8 +22,17 @@ obendrauf auf die bestehende `embed/`-Komponente aus
 | Was wird festgelegt | **Komplette Kamera-Pose** (Position + Fokuspunkt), nicht nur Startwinkel oder Geschwindigkeit |
 | Workflow | **Interaktiv im Viewer** — kein manuelles Koordinaten-Eintippen |
 | Sichtbarkeit des Capture-UI | **Eigener Autoren-Modus** (`?authoring=1`); normale Embeds bleiben unverändert |
-| URL-Format der Pose | **Ein Parameter, 6 Werte** (`pose=cx,cy,cz,fx,fy,fz`) statt zweier getrennter Parameter |
+| URL-Format der Pose | **Ein Parameter, 7 Werte** (`pose=cx,cy,cz,fx,fy,fz,yaw`) statt zweier getrennter Parameter |
 | Auto-Orbit bei fixer Pose | **Eigener Parameter** (`orbit=0`/`1`), unabhängig von `pose` steuerbar — nicht an das Vorhandensein von `pose` gekoppelt |
+
+**Nachtrag (Whole-Branch-Review, 2026-07-15):** Die ursprüngliche 6-Werte-Fassung
+(nur Kamera-Position + Fokuspunkt) erfasste die Auto-Orbit-Pivot-Rotation nicht —
+ein Autor, der vor dem Klick auf „Pose kopieren" auch nur kurz auto-orbiten ließ,
+bekam beim Laden der kopierten `orbit=0`-URL eine leicht verdrehte Ansicht
+(`splatPivot` startet bei jedem Load auf Rotation 0). Behoben durch einen
+7. Wert `yaw` (Grad, `splatPivot`-Y-Rotation), der in `getPose()` mit erfasst
+und beim Laden mit `pose` auf `splatPivot` angewendet wird — siehe Abschnitte
+unten.
 
 ## URL-Parameter-API (Ergänzung)
 
@@ -31,36 +40,46 @@ Bestehend: `src`, `poster`, `autoplay` (siehe Basis-Spec, unverändert).
 
 | Param | Pflicht | Wirkung |
 |---|---|---|
-| `pose` | nein | `cx,cy,cz,fx,fy,fz` — sechs kommagetrennte Floats (Kamera-Position + Fokuspunkt). Bei gültigem Wert überspringt `loadSplat` das Perzentil-Auto-Frame und positioniert die Kamera direkt über `cc.reset(focus, camPos)`. Ungültig (falsche Arity, `NaN`) → wird ignoriert, Auto-Frame greift wie bisher |
+| `pose` | nein | `cx,cy,cz,fx,fy,fz,yaw` — sieben kommagetrennte Floats (Kamera-Position, Fokuspunkt, `splatPivot`-Y-Rotation in Grad). Bei gültigem Wert überspringt `loadSplat` das Perzentil-Auto-Frame, setzt `splatPivot` auf `yaw` und positioniert die Kamera direkt über `cc.reset(focus, camPos)`. Ungültig (falsche Arity, `NaN`) → wird ignoriert, Auto-Frame greift wie bisher |
 | `orbit` | nein | `0` deaktiviert den Auto-Orbit beim Start. Default (Param fehlt oder jeder andere Wert) bleibt **an** — unverändertes heutiges Verhalten. Wirkt unabhängig davon, ob `pose` gesetzt ist |
 | `authoring` | nein | `1` blendet einen zusätzlichen „Pose kopieren"-Button in den Controls ein. Ohne diesen Parameter existiert der Button nicht sichtbar für Endnutzer |
 
 ## Viewer-Runtime (`viewer.js`)
 
 - `loadSplat(url, filename, { pose, orbit } = {})`:
-  - Ist `pose` gesetzt (6 gültige Zahlen), wird `autoFrame()` **nicht** aufgerufen;
-    stattdessen direkt `cc.reset(focus, camPos)` mit den übergebenen Werten.
-  - Ohne `pose`: Verhalten unverändert (Auto-Frame wie bisher).
+  - Ist `pose` gesetzt (7 gültige Zahlen), wird `autoFrame()` **nicht** aufgerufen;
+    stattdessen wird `splatPivot` auf `yaw` (7. Wert, Grad) gesetzt und die Kamera
+    direkt über `cc.reset(focus, camPos)` positioniert.
+  - Ohne `pose`: Verhalten unverändert (Auto-Frame wie bisher; der bisherige
+    `DEFAULT_POSE`-Reset bleibt als Fallback erhalten, falls `autoFrame()` keine
+    Center-Positionen findet).
   - Nach der Positionierung: `setAutoOrbit(orbit !== false)` statt des heute fest
     verdrahteten `setAutoOrbit(true)` — der Aufrufer (main.js) reicht den
     geparsten `orbit`-Wert durch.
 - Neue Funktion `getPose()` am zurückgegebenen Viewer-Objekt: liest die aktuelle
-  Kamera-Position (`camera.getPosition()`) und den aktuellen Fokuspunkt
+  Kamera-Position (`camera.getPosition()`), den aktuellen Fokuspunkt
   (`cc.focusPoint` — von `vendor/camera-controls.mjs` bereits als Getter/Setter
-  exponiert) und gibt `{ camPos: [x,y,z], focus: [x,y,z] }` zurück. Funktioniert
+  exponiert) und die aktuelle `splatPivot`-Y-Rotation (`getLocalEulerAngles().y`,
+  `0` falls noch keine Szene geladen ist) und gibt
+  `{ camPos: [x,y,z], focus: [x,y,z], yaw: number }` zurück. Funktioniert
   unabhängig davon, ob die Szene per Auto-Frame oder per `pose`-Override
-  positioniert wurde, und reflektiert auch nachträgliches manuelles Orbiten/Zoomen.
+  positioniert wurde, und reflektiert auch nachträgliches manuelles Orbiten/Zoomen
+  **und** die vom Auto-Orbit akkumulierte Pivot-Rotation.
 
 ## Params-Parsing (`params.js`)
 
 - `parseParams` erweitert um:
   - `pose`: `string | null` — roher Parameter-Wert, **Parsing/Validierung
-    (6-Zahlen-Check) passiert separat** in einer neuen pure Funktion
-    `parsePose(raw) → [number,number,number,number,number,number] | null`
-    (unit-testbar, analog zu `frameBounds`).
+    (7-Zahlen-Check) passiert separat** in einer neuen pure Funktion
+    `parsePose(raw) → number[7] | null` (unit-testbar, analog zu
+    `frameBounds`).
   - `orbit`: `boolean` — `q.get('orbit') !== '0'` (Default `true`).
   - `authoring`: `boolean` — `q.get('authoring') === '1'` (gleiches Muster wie
     `autoplay`).
+- Neue pure Funktion `serializePose(pose: number[7]) → string` (Inverse von
+  `parsePose`, `n.toFixed(3)` pro Wert, komma-verbunden) — von `main.js`
+  genutzt, um `buildPoseUrl` selbst testbar-pur zu halten statt die
+  String-Formatierung inline im DOM-Code zu vergraben.
 
 ## Authoring-UI (`main.js` + `index.html` + `embed.css`)
 
@@ -73,7 +92,7 @@ Bestehend: `src`, `poster`, `autoplay` (siehe Basis-Spec, unverändert).
   1. `viewer.getPose()` lesen.
   2. Aktuelle `viewer.isAutoOrbit()` lesen.
   3. Ziel-URL bauen: bestehende `src`/`poster`/`autoplay`-Query-Werte aus
-     `location.search` übernehmen, `pose=<6 Werte, 3 Nachkommastellen>` und
+     `location.search` übernehmen, `pose=<7 Werte via serializePose>` und
      `orbit=<0|1>` setzen/überschreiben, `authoring` **entfernen** (die kopierte
      URL ist für Endnutzer gedacht, nicht für weiteres Authoring).
   4. `navigator.clipboard.writeText(url)`; Button-Text wechselt kurz (z. B. 1,5 s)
@@ -95,8 +114,10 @@ Bestehend: `src`, `poster`, `autoplay` (siehe Basis-Spec, unverändert).
 ## Tests
 
 - **Unit (`params.test.mjs`, `pose.test.mjs`):**
-  - `parsePose`: gültige 6er-Liste → Array von Floats; falsche Arity → `null`;
+  - `parsePose`: gültige 7er-Liste → Array von Floats; falsche Arity → `null`;
     nicht-numerische Werte → `null`; Whitespace/führende Nullen tolerant.
+  - `serializePose`: 7 Zahlen → String mit 3 Nachkommastellen, komma-verbunden
+    (Inverse von `parsePose`).
   - `parseParams`: `orbit` Default `true`, `orbit=0` → `false`, beliebiger anderer
     Wert → `true`; `authoring` exakt `'1'` → `true`, sonst `false`.
 - **E2E (Ergänzung `embed-smoke.test.mjs` oder neue Datei):**
