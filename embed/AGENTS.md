@@ -15,8 +15,9 @@ requests** — the PlayCanvas engine is vendored under `vendor/`. Spec:
 ## Architecture principles
 
 - `index.html?src=…&poster=…&autoplay=1&pose=…&orbit=…&authoring=1` is the
-  entire public API. `pose=cx,cy,cz,fx,fy,fz` overrides auto-framing with a
-  fixed camera position + focus point; `orbit=0` disables auto-orbit on load
+  entire public API. `pose=cx,cy,cz,fx,fy,fz,yaw` overrides auto-framing with a
+  fixed camera position + focus point plus the splat-pivot yaw (degrees, from
+  accumulated auto-orbit rotation); `orbit=0` disables auto-orbit on load
   (default: on); `authoring=1` reveals a "Copy pose" button that captures the
   live camera into a ready-to-embed `pose=`/`orbit=` URL. Spec:
   `pipeline/docs/superpowers/specs/2026-07-15-embed-pose-authoring-design.md`.

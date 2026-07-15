@@ -1,6 +1,6 @@
 // Shell wiring for the embed page: poster gate, controls, error handling.
 // The engine is imported only after the gate is clicked (or ?autoplay=1).
-import { parseParams, sceneLabel } from './params.js';
+import { parseParams, sceneLabel, serializePose } from './params.js';
 
 const els = {
   stage: document.getElementById('stage'),
@@ -43,8 +43,7 @@ function syncOrbitButton(on) {
 // authoring itself dropped (the copied link is for end users).
 function buildPoseUrl() {
   const pose = viewer.getPose();
-  const poseStr = [...pose.camPos, ...pose.focus]
-    .map((n) => n.toFixed(3)).join(',');
+  const poseStr = serializePose([...pose.camPos, ...pose.focus, pose.yaw]);
   const url = new URL(location.href);
   url.searchParams.set('pose', poseStr);
   url.searchParams.set('orbit', viewer.isAutoOrbit() ? '1' : '0');
@@ -126,6 +125,8 @@ async function start() {
     }
     await viewer.loadSplat(params.src, params.filename,
       { pose: params.pose, orbit: params.orbit });
+    // Overrides any orbit=1 from the URL — accessibility wins over the
+    // author's captured orbit state.
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       viewer.setAutoOrbit(false);
     }

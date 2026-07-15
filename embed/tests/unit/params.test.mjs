@@ -51,8 +51,9 @@ test('parseParams: authoring only for exact "1"', () => {
 });
 
 test('parseParams: valid pose is parsed through, invalid pose is null', () => {
-  const p = parseParams('?src=x.sog&pose=1,2,3,4,5,6');
-  assert.deepEqual(p.pose, [1, 2, 3, 4, 5, 6]);
+  const p = parseParams('?src=x.sog&pose=1,2,3,4,5,6,7');
+  assert.deepEqual(p.pose, [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(parseParams('?src=x.sog&pose=1,2,3').pose, null);
+  assert.equal(parseParams('?src=x.sog&pose=1,2,3,4,5,6').pose, null);
   assert.equal(parseParams('?src=x.sog').pose, null);
 });

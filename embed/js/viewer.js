@@ -69,10 +69,11 @@ export async function createViewer(hostElement) {
     canvas.addEventListener(ev, () => setAutoOrbit(false));
   }
 
-  // opts.pose: optional [cx,cy,cz,fx,fy,fz] from the pose-authoring workflow
-  // (?pose=…) — when present, skips auto-frame and positions the camera
-  // directly. opts.orbit: whether auto-orbit should start after loading
-  // (default true, matching historical behavior when omitted).
+  // opts.pose: optional [cx,cy,cz,fx,fy,fz,yaw] from the pose-authoring
+  // workflow (?pose=…) — when present, skips auto-frame, applies yaw (degrees)
+  // to the splat pivot, and positions the camera directly. opts.orbit: whether
+  // auto-orbit should start after loading (default true, matching historical
+  // behavior when omitted).
   async function loadSplat(url, filename, opts = {}) {
     // loadFromUrlAndFilename: the filename drives format detection (.sog/.ply).
     let asset;
@@ -95,16 +96,16 @@ export async function createViewer(hostElement) {
     splatPivot.addChild(splatEntity);
     app.root.addChild(splatPivot);
 
-    cc.reset(
-      new Vec3(DEFAULT_POSE.cameraFocus.x, DEFAULT_POSE.cameraFocus.y,
-               DEFAULT_POSE.cameraFocus.z),
-      new Vec3(DEFAULT_POSE.cameraPos.x, DEFAULT_POSE.cameraPos.y,
-               DEFAULT_POSE.cameraPos.z));
-
     if (opts.pose) {
-      const [cx, cy, cz, fx, fy, fz] = opts.pose;
+      const [cx, cy, cz, fx, fy, fz, yaw] = opts.pose;
+      splatPivot.setLocalEulerAngles(0, yaw, 0);
       cc.reset(new Vec3(fx, fy, fz), new Vec3(cx, cy, cz));
     } else {
+      cc.reset(
+        new Vec3(DEFAULT_POSE.cameraFocus.x, DEFAULT_POSE.cameraFocus.y,
+                 DEFAULT_POSE.cameraFocus.z),
+        new Vec3(DEFAULT_POSE.cameraPos.x, DEFAULT_POSE.cameraPos.y,
+                 DEFAULT_POSE.cameraPos.z));
       await autoFrame();
     }
     setAutoOrbit(opts.orbit !== false);
@@ -142,15 +143,17 @@ export async function createViewer(hostElement) {
   }
 
   // Current camera pose for the authoring "copy pose" workflow — reflects
-  // manual orbiting/zooming, not just the pose at load time. cc.focusPoint
-  // returns a reused internal Vec3, so its components are copied out
-  // immediately.
+  // manual orbiting/zooming AND the auto-orbit pivot's accumulated rotation,
+  // not just the pose at load time. cc.focusPoint returns a reused internal
+  // Vec3, so its components are copied out immediately.
   function getPose() {
     const camPos = camera.getPosition();
     const focus = cc.focusPoint;
+    const yaw = splatPivot ? splatPivot.getLocalEulerAngles().y : 0;
     return {
       camPos: [camPos.x, camPos.y, camPos.z],
       focus: [focus.x, focus.y, focus.z],
+      yaw,
     };
   }
 

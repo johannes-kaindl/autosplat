@@ -19,14 +19,22 @@ export function sceneLabel(filename) {
   return filename.replace(/\.(sog|ply)$/i, '').replace(/[-_]+/g, ' ');
 }
 
-// "cx,cy,cz,fx,fy,fz" → [6 floats] | null — camera position + focus point for
-// the pose-authoring workflow (?pose=…). Invalid arity or non-numeric parts
-// are ignored (null), letting the caller fall back to auto-frame.
+// "cx,cy,cz,fx,fy,fz,yaw" → [7 floats] | null — camera position, focus point,
+// and splat-pivot yaw (degrees) for the pose-authoring workflow (?pose=…).
+// Invalid arity or non-numeric parts are ignored (null), letting the caller
+// fall back to auto-frame.
 export function parsePose(raw) {
   if (!raw) return null;
   const parts = raw.split(',').map((s) => s.trim());
-  if (parts.length !== 6) return null;
+  if (parts.length !== 7) return null;
   const nums = parts.map(Number);
   if (nums.some((n) => Number.isNaN(n))) return null;
   return nums;
+}
+
+// [cx,cy,cz,fx,fy,fz,yaw] → "cx,cy,cz,fx,fy,fz,yaw" (3 decimal places,
+// comma-joined) — the inverse of parsePose, used by the pose-authoring
+// "copy pose" workflow (main.js) to keep string formatting pure and testable.
+export function serializePose(pose) {
+  return pose.map((n) => n.toFixed(3)).join(',');
 }
