@@ -12,6 +12,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [v1.14.0] — 2026-07-15 — Embed viewer + pose-authoring
+
 ### Added
 
 - **`embed/` — minimal, embeddable splat viewer.** A new self-contained
