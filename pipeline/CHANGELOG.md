@@ -9,6 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Share bundles now use the `embed/` viewer runtime, not `viewer/`.**
+  Bundles are genuinely zero-external (PlayCanvas vendored, no CDN request)
+  instead of self-hosted-for-code-but-CDN-for-engine. Fixes the share-bundle
+  feature being non-functional in the packaged DMG app (`viewer/` was never
+  bundled by PyInstaller and the old `viewer_src_path` had no frozen-app
+  path resolution — `[share].embed_src_path` now resolves correctly in both
+  the dev checkout and the frozen `.app`).
+
 ---
 
 ## [v1.13.0] — 2026-07-14 — WebUI share bundles

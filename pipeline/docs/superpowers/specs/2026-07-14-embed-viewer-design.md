@@ -22,7 +22,7 @@ Der bestehende `viewer/` bleibt **unangetastet geparkt** als Entwicklungsviewer
 | Struktur | **Neue Top-Level-Komponente `embed/`**, self-contained; bewusste kleine Kern-Duplikation statt Kopplung an den geparkten Dev-Viewer |
 | Engine | **Vendored** (`vendor/playcanvas.mjs` 2.18.1 + `vendor/camera-controls.mjs`) — zero-external, keine Third-Party-Requests (Privacy-Invariante jkaindl.de) |
 | UI | **Minimal-Chrome** mit Click-to-Load-Poster-Gate |
-| Share-Bundle-Umstellung | **Folge-Slice**, nicht Teil dieser Arbeit |
+| Share-Bundle-Umstellung | **Folge-Slice**, nicht Teil dieser Arbeit — umgesetzt in `2026-07-15-share-bundle-embed-migration-design.md` |
 
 ## Dateilayout
 
@@ -102,8 +102,8 @@ Muster von `viewer/tests` (zero-dep `node:test` + auto-installiertes
 
 ## Bewusst außerhalb des Scopes
 
-- Share-Bundle-Umstellung der Pipeline auf `embed/` als Bundle-Runtime
-  (Folge-Slice; macht Bundles dann echt zero-external).
+- ~~Share-Bundle-Umstellung der Pipeline auf `embed/` als Bundle-Runtime~~ —
+  umgesetzt, siehe `2026-07-15-share-bundle-embed-migration-design.md`.
 - Einbindung auf jkaindl.de (Ordner kopieren + iframe setzen).
 - Web-Component-Wrapper (`<autosplat-viewer>`).
 - Walking-Mode im Embed (bewusst abgewählt, bleibt im Dev-Viewer).
