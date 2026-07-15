@@ -11,6 +11,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.14.2] — 2026-07-15 — Fix downloads in the desktop app window
+
+### Fixed
+
+- **"Download bundle (.zip)" did nothing in the packaged DMG app.** The
+  desktop app opens the WebUI in a native `pywebview` WKWebView window, which
+  gates handling of `<a download>` links behind `webview.settings
+  ["ALLOW_DOWNLOADS"]` (default `False`) — clicking the button silently did
+  nothing, with no error. The server-side download route itself was correct.
+  `_run_window` now sets `ALLOW_DOWNLOADS = True` before opening the window.
+
+---
+
 ## [v1.14.1] — 2026-07-15 — Share-bundle/embed migration
 
 ### Changed

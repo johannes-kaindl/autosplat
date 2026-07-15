@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import socket
+import sys
+import types
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from autosplat.doctor import CheckResult
 
@@ -159,6 +161,26 @@ def test_wait_until_serving_false_on_timeout() -> None:
     # A free (unbound) port → nothing accepts → times out to False fast.
     dead = pick_free_port()
     assert wait_until_serving("127.0.0.1", dead, timeout=0.5) is False
+
+
+def test_run_window_enables_downloads_before_opening() -> None:
+    """The share-bundle 'Download bundle (.zip)' link relies on WKWebView's
+    download delegate, which pywebview gates behind ALLOW_DOWNLOADS (default
+    False) — without it, clicks on <a download> links do nothing silently."""
+    from autosplat.desktop import _run_window
+
+    fake_webview = types.ModuleType("webview")
+    fake_webview.settings = {"ALLOW_DOWNLOADS": False}  # type: ignore[attr-defined]
+    fake_webview.create_window = MagicMock()  # type: ignore[attr-defined]
+    fake_webview.start = MagicMock()  # type: ignore[attr-defined]
+
+    server = MagicMock()
+    with patch.dict(sys.modules, {"webview": fake_webview}):
+        _run_window("http://127.0.0.1:8080", server)
+
+    assert fake_webview.settings["ALLOW_DOWNLOADS"] is True
+    fake_webview.create_window.assert_called_once()
+    fake_webview.start.assert_called_once()
 
 
 def test_run_first_run_setup_invokes_osascript_with_command(tmp_path: Path) -> None:

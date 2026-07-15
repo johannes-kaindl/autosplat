@@ -14,6 +14,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.14.2] — 2026-07-15 — Fix downloads in the desktop app window
+
+### Fixed
+
+- **`pipeline/` only this release** — "Download bundle (.zip)" did nothing in
+  the packaged DMG app (pywebview's WKWebView window gates `<a download>`
+  links behind a setting the app never enabled). See
+  [`pipeline/CHANGELOG.md`](pipeline/CHANGELOG.md#v1142--2026-07-15--fix-downloads-in-the-desktop-app-window)
+  for details.
+
+---
+
 ## [v1.14.1] — 2026-07-15 — Share-bundle/embed migration
 
 ### Fixed

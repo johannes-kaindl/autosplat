@@ -194,6 +194,10 @@ def _run_window(url: str, server: uvicorn.Server) -> None:  # pragma: no cover -
         _block_until_exit(server)
         return
 
+    # pywebview gates the WKWebView download delegate behind this flag (default
+    # False); without it, clicks on <a download> links (e.g. the share-bundle
+    # "Download bundle (.zip)" button) silently do nothing.
+    webview.settings["ALLOW_DOWNLOADS"] = True
     webview.create_window("AutoSplat", url, width=1280, height=860, min_size=(900, 600))
     webview.start()  # blocks on the Cocoa run loop until the window is closed
     server.should_exit = True
