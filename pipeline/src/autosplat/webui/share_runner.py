@@ -78,9 +78,9 @@ class ShareJobRunner:
                 quality=self._cfg.compress.quality,
             )
             token = make_share_token(job.capture_id)
-            viewer_src = self._resolve_viewer_src()
+            embed_src = self._resolve_embed_src()
             paths = assemble_bundle(
-                result.output_path, viewer_src, capture_dir / "share", token
+                result.output_path, embed_src, capture_dir / "share", token
             )
 
             job.token = token
@@ -95,6 +95,6 @@ class ShareJobRunner:
             job.error = str(e)
             logger.error("share.failed", capture_id=job.capture_id, error=str(e))
 
-    def _resolve_viewer_src(self) -> Path:
-        p = self._cfg.share.viewer_src_path
+    def _resolve_embed_src(self) -> Path:
+        p = self._cfg.share.embed_src_path
         return p if p.is_absolute() else (Path.cwd() / p)

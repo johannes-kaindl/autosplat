@@ -8,11 +8,11 @@ from autosplat.config import load_config
 from autosplat.webui.share_runner import ShareJobRunner
 
 
-def _fake_viewer(root: Path) -> Path:
-    v = root / "viewer"
-    v.mkdir()
-    (v / "viewer.html").write_text("<html>v</html>")
-    return v
+def _fake_embed(root: Path) -> Path:
+    e = root / "embed"
+    e.mkdir()
+    (e / "index.html").write_text("<html>e</html>")
+    return e
 
 
 def _wait(job, timeout: float = 3.0) -> None:
@@ -22,7 +22,7 @@ def _wait(job, timeout: float = 3.0) -> None:
 
 
 def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
-    viewer = _fake_viewer(tmp_path)
+    embed = _fake_embed(tmp_path)
     capture_dir = tmp_path / "2026-07-10_lgs"
     (capture_dir / "output").mkdir(parents=True)
     (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
@@ -38,7 +38,7 @@ def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
 
     cfg = load_config(include_xdg=False)
     cfg.share.base_url = "https://splat.example"
-    cfg.share.viewer_src_path = viewer
+    cfg.share.embed_src_path = embed
     runner = ShareJobRunner(cfg, compressor=fake_compress)
 
     job = runner.start("2026-07-10_lgs", capture_dir)
@@ -49,15 +49,15 @@ def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
     assert job.zip_path is not None and job.zip_path.exists()
     assert (capture_dir / "share" / job.token / "c" / "scene.sog").exists()
     assert job.output_bytes == 300 and job.input_bytes == 15000
-    assert job.link == f"https://splat.example/{job.token}/"
+    assert job.link == f"https://splat.example/{job.token}/?src=c/scene.sog"
 
 
 def test_share_job_fails_without_ply(tmp_path: Path) -> None:
-    viewer = _fake_viewer(tmp_path)
+    embed = _fake_embed(tmp_path)
     capture_dir = tmp_path / "2026-07-10_empty"
     capture_dir.mkdir()
     cfg = load_config(include_xdg=False)
-    cfg.share.viewer_src_path = viewer
+    cfg.share.embed_src_path = embed
     runner = ShareJobRunner(cfg)
 
     job = runner.start("2026-07-10_empty", capture_dir)

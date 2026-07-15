@@ -10,21 +10,21 @@ from autosplat.compress import CompressResult
 from autosplat.webui.share_runner import ShareJobRunner
 
 
-def _fake_viewer(root: Path) -> Path:
-    v = root / "viewer"
-    v.mkdir()
-    (v / "viewer.html").write_text("<html>v</html>")
-    return v
+def _fake_embed(root: Path) -> Path:
+    e = root / "embed"
+    e.mkdir()
+    (e / "index.html").write_text("<html>e</html>")
+    return e
 
 
 def _install(app: FastAPI, tmp_path: Path) -> Path:
-    viewer = _fake_viewer(tmp_path)
+    embed = _fake_embed(tmp_path)
     capture_dir = tmp_path / "2026-07-10_lgs"
     (capture_dir / "output").mkdir(parents=True)
     (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
     (capture_dir / "pipeline.log").write_text("done\n")
     app.state.cfg.paths.captures_dir = tmp_path
-    app.state.cfg.share.viewer_src_path = viewer
+    app.state.cfg.share.embed_src_path = embed
     app.state.cfg.share.base_url = "https://splat.example"
 
     def fake_compress(ply, out_dir, *, fmt="sog", quality="medium"):
