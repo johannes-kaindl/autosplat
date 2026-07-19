@@ -14,6 +14,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.15.0] — 2026-07-19 — Publish quality gate + capture cleanup
+
+### Added
+
+- **`pipeline/` only this release** — captures must be reviewed once in the
+  SuperSplat viewer (upload a cleaned `.ply` or confirm unchanged) before
+  their first share; auto-invalidates on rebuild. Also: `cleanup-intermediates`
+  CLI command + WebUI "Free up space" button to reclaim disk space held by
+  finished captures' working directories. See
+  [`pipeline/CHANGELOG.md`](pipeline/CHANGELOG.md#v1150--2026-07-19--publish-quality-gate--capture-cleanup)
+  for details.
+
+---
+
 ## [v1.14.3] — 2026-07-19 — WebUI captures/detail papercut cleanup
 
 ### Fixed

@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [v1.15.0] — 2026-07-19 — Publish quality gate + capture cleanup
+
 ### Added
 
 - **Publish quality gate — captures must be reviewed before their first share.**
@@ -17,6 +21,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   SuperSplat's own export UI) or confirm the scene unchanged. The gate is tracked
   per-capture and auto-invalidates when the capture is rebuilt (detected via
   `scene.ply` mtime), requiring a fresh review.
+- **`cleanup-intermediates` CLI command + WebUI "Free up space" button.**
+  Reclaims disk space held by `frames/`, `colmap/`, `training/` once a capture
+  has finished exporting (`output/scene.ply` exists) — these directories are
+  pure cost after export, since `add-video` always rebuilds them from the
+  source videos and `resume` only needs them for an unfinished capture. Shared
+  core logic (`autosplat.cleanup`) between the CLI and the new detail-page
+  button, which only appears when there's actually something to prune.
+
+### Docs
+
+- Marked all four `AGENTS.md` files (root, `pipeline/`, `embed/`, `viewer/`) as
+  maintainer-local where they referenced the maintainer's own machine setup
+  (private workspace conventions doc, Obsidian cockpit, Claude Code memory
+  path) instead of presenting them as required setup for other clones.
+  `GETTING-STARTED.md`'s first quickstart command now uses a relative path
+  instead of the maintainer's own absolute clone path.
 
 ---
 
