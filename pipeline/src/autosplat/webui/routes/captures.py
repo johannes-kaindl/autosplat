@@ -6,7 +6,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Request, Response
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -245,6 +245,16 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     )
 
 
+def _supersplat_embed_context(request: Request, capture_id: str, has_ply: bool) -> tuple[bool, str]:
+    """(supersplat_available, embed_url) for the SuperSplat iframe on a capture."""
+    supersplat_available = any(getattr(r, "name", None) == "supersplat" for r in request.app.routes)
+    embed_url = ""
+    if supersplat_available and has_ply:
+        base = str(request.base_url).rstrip("/")
+        embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/scene.ply"
+    return supersplat_available, embed_url
+
+
 @router.get("/{capture_id}/view", response_class=HTMLResponse)
 async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
@@ -252,15 +262,7 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
 
-    # Check if SuperSplat is mounted (app.mount sets it in app.routes)
-    supersplat_available = any(getattr(r, "name", None) == "supersplat" for r in request.app.routes)
-
-    # Build the iframe embed URL — SuperSplat loads the PLY via ?load=
-    embed_url = ""
-    if supersplat_available and capture.has_ply:
-        # Absolute URL so the iframe can resolve the PLY route correctly
-        base = str(request.base_url).rstrip("/")
-        embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/scene.ply"
+    supersplat_available, embed_url = _supersplat_embed_context(request, capture_id, capture.has_ply)
 
     return _templates(request).TemplateResponse(
         request,
@@ -444,6 +446,53 @@ async def capture_review_confirm(request: Request, capture_id: str) -> RedirectR
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     if not (capture.path / "output" / "scene.ply").exists():
         raise HTTPException(status_code=409, detail="Capture has no output/scene.ply yet")
+    _write_review_marker(capture.path)
+    return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+@router.post("/{capture_id}/review/upload")
+async def capture_review_upload(
+    request: Request,
+    capture_id: str,
+    reviewed_ply: UploadFile = File(...),
+) -> Response:
+    """Accept a cleaned PLY exported from SuperSplat (publish quality gate)."""
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    if not (capture.path / "output" / "scene.ply").exists():
+        raise HTTPException(status_code=409, detail="Capture has no output/scene.ply yet")
+
+    filename = reviewed_ply.filename or ""
+    content = await reviewed_ply.read()
+
+    error: str | None = None
+    if not filename.lower().endswith(".ply"):
+        error = f"Unsupported file type — expected a .ply file, got '{filename}'."
+    elif not content:
+        error = "Uploaded file is empty."
+    elif not content.startswith(b"ply\n"):
+        error = "File does not look like a valid PLY (missing 'ply' header)."
+
+    if error is not None:
+        supersplat_available, embed_url = _supersplat_embed_context(
+            request, capture_id, capture.has_ply
+        )
+        return _templates(request).TemplateResponse(
+            request,
+            "capture/view.html",
+            {
+                "version": __version__,
+                "capture": capture,
+                "supersplat_available": supersplat_available,
+                "embed_url": embed_url,
+                "review_error": error,
+            },
+            status_code=400,
+        )
+
+    (capture.path / "output" / "scene_reviewed.ply").write_bytes(content)
     _write_review_marker(capture.path)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 

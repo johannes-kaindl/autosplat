@@ -72,3 +72,65 @@ def test_confirm_legacy_layout_409s(app: FastAPI, tmp_path: Path) -> None:
     # Should return 409, not 500 (unhandled FileNotFoundError)
     assert r.status_code == 409
     assert "output/scene.ply" in r.json()["detail"]
+
+
+def test_upload_valid_ply_saves_reviewed_file_and_marker(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = _make_capture(tmp_path)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/captures/2026-07-19_lgs/review/upload",
+            files={"reviewed_ply": ("cleaned.ply", b"ply\ncleaned-data", "application/octet-stream")},
+            follow_redirects=False,
+        )
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/captures/2026-07-19_lgs"
+    reviewed = capture_dir / "output" / "scene_reviewed.ply"
+    assert reviewed.exists()
+    assert reviewed.read_bytes() == b"ply\ncleaned-data"
+    marker = capture_dir / "output" / ".review.json"
+    assert json.loads(marker.read_text())["status"] == "reviewed"
+
+
+def test_upload_rejects_non_ply_extension(app: FastAPI, tmp_path: Path) -> None:
+    _make_capture(tmp_path)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/captures/2026-07-19_lgs/review/upload",
+            files={"reviewed_ply": ("cleaned.txt", b"ply\ndata", "text/plain")},
+        )
+
+    assert r.status_code == 400
+    assert "Unsupported file type" in r.text
+
+
+def test_upload_rejects_missing_ply_header(app: FastAPI, tmp_path: Path) -> None:
+    _make_capture(tmp_path)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/captures/2026-07-19_lgs/review/upload",
+            files={"reviewed_ply": ("cleaned.ply", b"not a ply file", "application/octet-stream")},
+        )
+
+    assert r.status_code == 400
+    assert "PLY" in r.text
+
+
+def test_upload_rejects_empty_file(app: FastAPI, tmp_path: Path) -> None:
+    _make_capture(tmp_path)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/captures/2026-07-19_lgs/review/upload",
+            files={"reviewed_ply": ("cleaned.ply", b"", "application/octet-stream")},
+        )
+
+    assert r.status_code == 400
+    assert "empty" in r.text.lower()
