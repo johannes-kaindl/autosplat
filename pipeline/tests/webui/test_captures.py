@@ -59,6 +59,127 @@ def test_list_captures_propagates_in_progress_detail(tmp_path: Path) -> None:
     assert captures[0].detail == "probing clip 0_1 (depth 2/3)"
 
 
+def test_review_status_unreviewed_without_marker(tmp_path: Path) -> None:
+    from autosplat.webui.state import _review_status
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+
+    assert _review_status(capture_dir) == "unreviewed"
+
+
+def test_review_status_reviewed_with_matching_marker(tmp_path: Path) -> None:
+    import json
+
+    from autosplat.webui.state import _review_status
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    scene_ply = output_dir / "scene.ply"
+    scene_ply.write_bytes(b"ply\n")
+    marker = output_dir / ".review.json"
+    marker.write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": "2026-07-19T00:00:00",
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        )
+    )
+
+    assert _review_status(capture_dir) == "reviewed"
+
+
+def test_review_status_unreviewed_after_ply_rebuilt(tmp_path: Path) -> None:
+    import json
+    import time
+
+    from autosplat.webui.state import _review_status
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    scene_ply = output_dir / "scene.ply"
+    scene_ply.write_bytes(b"ply\n")
+    marker = output_dir / ".review.json"
+    marker.write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": "2026-07-19T00:00:00",
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        )
+    )
+
+    time.sleep(0.01)
+    scene_ply.write_bytes(b"ply\nrebuilt")
+
+    assert _review_status(capture_dir) == "unreviewed"
+
+
+def test_review_status_unreviewed_when_marker_corrupt(tmp_path: Path) -> None:
+    from autosplat.webui.state import _review_status
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "scene.ply").write_bytes(b"ply\n")
+    (output_dir / ".review.json").write_text("not json")
+
+    assert _review_status(capture_dir) == "unreviewed"
+
+
+def test_resolve_publish_ply_prefers_reviewed_file(tmp_path: Path) -> None:
+    from autosplat.webui.state import resolve_publish_ply
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "scene.ply").write_bytes(b"ply\noriginal")
+    reviewed = output_dir / "scene_reviewed.ply"
+    reviewed.write_bytes(b"ply\ncleaned")
+
+    assert resolve_publish_ply(capture_dir, "reviewed") == reviewed
+
+
+def test_resolve_publish_ply_falls_back_when_unreviewed(tmp_path: Path) -> None:
+    from autosplat.webui.state import resolve_publish_ply
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    scene_ply = output_dir / "scene.ply"
+    scene_ply.write_bytes(b"ply\noriginal")
+    (output_dir / "scene_reviewed.ply").write_bytes(b"ply\ncleaned")
+
+    assert resolve_publish_ply(capture_dir, "unreviewed") == scene_ply
+
+
+def test_resolve_publish_ply_falls_back_when_reviewed_file_missing(tmp_path: Path) -> None:
+    from autosplat.webui.state import resolve_publish_ply
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    scene_ply = output_dir / "scene.ply"
+    scene_ply.write_bytes(b"ply\noriginal")
+
+    assert resolve_publish_ply(capture_dir, "reviewed") == scene_ply
+
+
+def test_list_captures_surfaces_review_status(tmp_path: Path) -> None:
+    capture_dir = tmp_path / "2026-07-19_test"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+
+    captures = list_captures(tmp_path)
+    assert captures[0].review_status == "unreviewed"
+
+
 def test_capture_ply_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
     capture_dir = tmp_path / "2026-05-16_ply_smoke"
     capture_dir.mkdir()
