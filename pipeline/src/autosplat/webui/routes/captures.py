@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import json
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
@@ -18,6 +20,7 @@ from autosplat.webui.state import (
     last_activity_age_s,
     list_captures,
     read_log_tail,
+    review_marker_path,
     sort_captures,
 )
 
@@ -413,6 +416,35 @@ async def capture_prune(request: Request, capture_id: str) -> RedirectResponse:
         cleanup_mod.prune_intermediates(capture.path)
     except cleanup_mod.NotExported as e:
         raise HTTPException(status_code=409, detail="Capture hasn't finished exporting yet") from e
+    return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+def _write_review_marker(capture_dir: Path) -> None:
+    """Mark capture_dir as reviewed against output/scene.ply's current mtime."""
+    scene_ply = capture_dir / "output" / "scene.ply"
+    marker = review_marker_path(capture_dir)
+    marker.write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": datetime.now(UTC).isoformat(),
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+@router.post("/{capture_id}/review/confirm")
+async def capture_review_confirm(request: Request, capture_id: str) -> RedirectResponse:
+    """Mark a capture as reviewed without changing its PLY (publish quality gate)."""
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    if not capture.has_ply:
+        raise HTTPException(status_code=409, detail="Capture has no output/scene.ply yet")
+    _write_review_marker(capture.path)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
 
