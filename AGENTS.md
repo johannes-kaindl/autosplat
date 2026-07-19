@@ -1,7 +1,10 @@
 # AGENTS.md
 
-> **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
-> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain.
+> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
+> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
+> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — das ist kein Teil
+> dieses Repos und existiert in einem frischen Klon nicht. Modell comply-or-explain für
+> ihn selbst; für andere Contributor irrelevant.
 
 Guidance for AI coding agents working in this monorepo.
 
@@ -36,10 +39,14 @@ die Produkt-Ebene darüber.
 
 ## Memory + session state
 
+> Dieser Abschnitt beschreibt das persönliche Claude-Code-Setup des Maintainers
+> (`johannes`) auf seiner eigenen Maschine — für andere Klone/Contributor irrelevant,
+> einfach überspringen.
+
 - **Session-Handoff** (sessionübergreifend, in diesem Repo): `.remember/` — `remember.md`
   (Handoff), `now.md` (Buffer), `today-*.md`, `recent.md`, `archive.md`, `core-memories.md`.
   `.remember/` ist Arbeitspuffer und gitignored.
-- **Persistentes Memory** (außerhalb des Repos):
+- **Persistentes Memory** (außerhalb des Repos, nur auf der Maintainer-Maschine vorhanden):
   `~/.claude/projects/-Users-Shared-code-autosplat/memory/`
-- **Coding-Cockpit** (Status/Tasks/History) im Pallas-Vault:
+- **Coding-Cockpit** (Status/Tasks/History) im privaten Obsidian-Vault des Maintainers:
   `10_Pallas/25_Coding/autosplat/autosplat.md`.

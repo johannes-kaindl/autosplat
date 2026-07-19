@@ -19,8 +19,8 @@ Not running on Apple Silicon? This pipeline is intentionally Mac-Silicon-only �
 
 ```bash
 # 1. Clone the repo
-git clone <your-repo-url> /Users/Shared/code/auto-splat-pipeline
-cd /Users/Shared/code/auto-splat-pipeline
+git clone <your-repo-url> autosplat
+cd autosplat
 
 # 2. System dependencies (Homebrew)
 brew install ffmpeg colmap python@3.11 uv
@@ -219,7 +219,7 @@ The function uses a subshell so your working directory is never changed by `spla
 ## A quick mental model of file locations
 
 ```
-auto-splat-pipeline/              ← the source code (this repo)
+autosplat/pipeline/               ← the source code (this repo)
 ├── config/default.toml           ← all defaults
 ├── docs/                         ← read these for context
 ├── src/autosplat/                ← Python modules

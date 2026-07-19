@@ -1,8 +1,10 @@
 # AGENTS.md
 
-> **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
-> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain. Offene Punkte fuer
-> dieses Repo siehe Abschnitt "Offene Konventions-Punkte".
+> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
+> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
+> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — kein Teil dieses
+> Repos, existiert in einem frischen Klon nicht. Offene Punkte fuer dieses Repo siehe
+> Abschnitt "Offene Konventions-Punkte" unten.
 
 Guidance for AI coding agents working in this repository. Human-facing docs live in
 `README.md`, `CONTRIBUTING.md`, and `docs/`.

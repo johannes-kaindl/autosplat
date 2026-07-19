@@ -1,7 +1,9 @@
 # AGENTS.md
 
-> **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
-> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain.
+> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
+> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
+> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — kein Teil dieses
+> Repos, existiert in einem frischen Klon nicht.
 
 Conventions for AI assistants working in `embed/`.
 
@@ -62,5 +64,7 @@ requests** — the PlayCanvas engine is vendored under `vendor/`. Spec:
 
 ## Memory
 
-- Cross-session memory: `~/.claude/projects/-Users-Shared-code-autosplat/memory/`
-- Coding-Cockpit: Pallas vault `25_Coding/autosplat/autosplat.md`.
+> Maintainer-lokales Claude-Code-Setup — für andere Klone/Contributor irrelevant.
+
+- Cross-session memory (nur auf der Maintainer-Maschine): `~/.claude/projects/-Users-Shared-code-autosplat/memory/`
+- Coding-Cockpit: privater Obsidian-Vault des Maintainers, `25_Coding/autosplat/autosplat.md`.

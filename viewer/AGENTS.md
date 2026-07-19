@@ -1,8 +1,10 @@
 # AGENTS.md
 
-> **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
-> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain. Offene Punkte fuer
-> dieses Repo siehe Abschnitt "Offene Konventions-Punkte".
+> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
+> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
+> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — kein Teil dieses
+> Repos, existiert in einem frischen Klon nicht. Offene Punkte fuer dieses Repo siehe
+> Abschnitt "Offene Konventions-Punkte" unten.
 
 Conventions for AI assistants working in this repo.
 
@@ -41,7 +43,11 @@ runtime from the jsDelivr CDN.
 
 ## Memory + logs
 
-- **Memory** (cross-session, outside the repo):
+> The memory line below is the maintainer's own local Claude Code setup —
+> not part of this repo, doesn't exist in a fresh clone, irrelevant to
+> other contributors.
+
+- **Memory** (cross-session, outside the repo, maintainer-machine only):
   `~/.claude/projects/-Users-Shared-code-autosplat/memory/`
 - **Session logs** (in repo, gitignored):
   `.claude/logs/YYYY-MM-DD-<topic>.md` — written at end-of-session
