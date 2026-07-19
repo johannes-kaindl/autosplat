@@ -442,7 +442,7 @@ async def capture_review_confirm(request: Request, capture_id: str) -> RedirectR
     capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
-    if not capture.has_ply:
+    if not (capture.path / "output" / "scene.ply").exists():
         raise HTTPException(status_code=409, detail="Capture has no output/scene.ply yet")
     _write_review_marker(capture.path)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
