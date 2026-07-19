@@ -17,6 +17,7 @@ from autosplat.webui.state import (
     last_activity_age_s,
     list_captures,
     read_log_tail,
+    sort_captures,
 )
 
 router = APIRouter(prefix="/captures")
@@ -45,9 +46,11 @@ def _share_runner(request: Request):  # type: ignore[no-untyped-def]
 
 
 @router.get("/", response_class=HTMLResponse)
-async def captures_list(request: Request) -> HTMLResponse:
+async def captures_list(
+    request: Request, sort: str | None = None, dir: str = "desc"
+) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    captures = list_captures(captures_dir, _job_runner(request))
+    captures = sort_captures(list_captures(captures_dir, _job_runner(request)), sort, dir)
     active = next((c for c in captures if c.status == "running"), None)
     stats = {
         "total": len(captures),
@@ -63,6 +66,8 @@ async def captures_list(request: Request) -> HTMLResponse:
             "captures_dir": str(captures_dir),
             "stats": stats,
             "active_capture": active,
+            "sort": sort,
+            "direction": dir,
         },
     )
 

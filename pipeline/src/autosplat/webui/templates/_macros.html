@@ -117,6 +117,21 @@
 {%- endmacro -%}
 
 
+{# ── Sortable column header (captures list) ───────────────────────────────── #}
+{%- macro sort_th(key, label, sort, direction, align='left') -%}
+  {%- if sort == key and direction == 'asc' -%}{%- set next_dir = 'desc' -%}
+  {%- elif sort == key -%}{%- set next_dir = 'asc' -%}
+  {%- else -%}{%- set next_dir = 'desc' -%}
+  {%- endif -%}
+  <th{% if align == 'right' %} style="text-align:right"{% endif %}>
+    <a href="?sort={{ key }}&dir={{ next_dir }}" class="as-sort-th{% if sort == key %} active{% endif %}"
+       style="color:inherit;text-decoration:none">
+      {{ label }}{% if sort == key %} {{ '▲' if direction == 'asc' else '▼' }}{% endif %}
+    </a>
+  </th>
+{%- endmacro -%}
+
+
 {# ── Key-value info row ───────────────────────────────────────────────────── #}
 {%- macro kv_row(key, value, klass='') -%}
 <div class="row"><span class="k">{{ key }}</span><span class="v {{ klass }}">{{ value }}</span></div>

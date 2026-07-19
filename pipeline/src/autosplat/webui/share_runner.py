@@ -9,6 +9,7 @@ card reflects bundle progress.
 
 from __future__ import annotations
 
+import shutil
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -79,9 +80,8 @@ class ShareJobRunner:
             )
             token = make_share_token(job.capture_id)
             embed_src = self._resolve_embed_src()
-            paths = assemble_bundle(
-                result.output_path, embed_src, capture_dir / "share", token
-            )
+            paths = assemble_bundle(result.output_path, embed_src, capture_dir / "share", token)
+            shutil.rmtree(capture_dir / "share" / "_tmp", ignore_errors=True)
 
             job.token = token
             job.zip_path = paths.zip_path

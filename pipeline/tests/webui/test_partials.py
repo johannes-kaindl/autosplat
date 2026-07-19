@@ -212,6 +212,46 @@ def test_last_activity_age_s_none_without_log(tmp_path: Path) -> None:
     assert last_activity_age_s(tmp_path, now=1042.0) is None
 
 
+def test_last_activity_age_s_uses_colmap_database_mtime_when_newer(tmp_path: Path) -> None:
+    """The mapper stage writes nothing to pipeline.log for long stretches, but
+    COLMAP is still actively touching its own workspace — database.db mtime
+    must count as activity even when the JSONL log has gone stale."""
+    import os
+
+    from autosplat.webui.state import last_activity_age_s
+
+    log = tmp_path / "pipeline.log"
+    log.write_text("x\n")
+    os.utime(log, (1000.0, 1000.0))  # stale — no JSONL event during matching
+
+    colmap_dir = tmp_path / "colmap"
+    colmap_dir.mkdir()
+    db = colmap_dir / "database.db"
+    db.write_text("db")
+    os.utime(db, (1030.0, 1030.0))  # COLMAP is actively writing here
+
+    assert last_activity_age_s(tmp_path, now=1042.0) == 12
+
+
+def test_last_activity_age_s_uses_colmap_sparse_mtime_when_newer(tmp_path: Path) -> None:
+    """Same for the mapper's incremental sparse-model output."""
+    import os
+
+    from autosplat.webui.state import last_activity_age_s
+
+    log = tmp_path / "pipeline.log"
+    log.write_text("x\n")
+    os.utime(log, (1000.0, 1000.0))
+
+    sparse_dir = tmp_path / "colmap" / "sparse" / "0"
+    sparse_dir.mkdir(parents=True)
+    images_bin = sparse_dir / "images.bin"
+    images_bin.write_bytes(b"x")
+    os.utime(images_bin, (1035.0, 1035.0))  # mapper just wrote a reconstruction
+
+    assert last_activity_age_s(tmp_path, now=1042.0) == 7
+
+
 def test_liveness_partial_shows_activity_pulse(app: FastAPI, tmp_path: Path) -> None:
     """Any running capture (e.g. COLMAP, which has no brush card) gets a generic
     'last activity Xs ago' pulse so a silent-but-healthy stage isn't a dead screen."""

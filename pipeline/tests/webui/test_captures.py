@@ -11,7 +11,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from autosplat.webui.state import list_captures
+from autosplat.webui.state import CaptureInfo, list_captures
 
 
 def test_list_captures_empty_dir(tmp_path: Path) -> None:
@@ -500,6 +500,183 @@ def test_list_captures_failed_from_runs_jsonl_after_restart(tmp_path: Path) -> N
     assert c.status == "failed"
     assert c.reason == "No images with matches"
     assert c.finished_at == "2026-05-29T11:01:00Z"
+
+
+def test_list_captures_done_from_runs_jsonl_after_restart(tmp_path: Path) -> None:
+    """After a restart the in-memory job is gone; a capture whose last persisted
+    run succeeded must still surface finished_at — not fall back to None just
+    because output/scene.ply already exists on disk."""
+    from autosplat.webui.jobs_runner import JobRunner
+    from autosplat.webui.state import list_captures
+
+    cap = tmp_path / "2026-05-29_olddone"
+    (cap / "output").mkdir(parents=True)
+    (cap / "output" / "scene.ply").write_bytes(b"PLY")
+    (cap / "runs.jsonl").write_text(
+        '{"capture_id":"2026-05-29_olddone","status":"done",'
+        '"started_at":"2026-05-29T11:00:00Z","finished_at":"2026-05-29T11:05:00Z"}\n'
+    )
+    jr = JobRunner(captures_dir=tmp_path)
+    jr.load_history()
+
+    caps = list_captures(tmp_path, jr)
+    c = next(x for x in caps if x.id == "2026-05-29_olddone")
+    assert c.status == "done"
+    assert c.finished_at == "2026-05-29T11:05:00Z"
+
+
+def test_captures_list_shows_delete_button_for_done_capture(app: FastAPI, tmp_path: Path) -> None:
+    """A finished capture gets a delete action right in the list row — mirrors
+    the confirm-dialog pattern already used on the detail page's Erase button."""
+    capture_dir = tmp_path / "2026-05-29_done_row"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/")
+
+    assert response.status_code == 200
+    assert 'action="/captures/2026-05-29_done_row/delete"' in response.text
+    assert "confirm(" in response.text
+
+
+def test_captures_list_hides_delete_button_for_running_capture(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    """The delete route 409s on a running capture — don't offer the button at
+    all for a status the backend will reject."""
+    from autosplat.webui.jobs_runner import JobState
+
+    capture_dir = tmp_path / "2026-05-29_running_row"
+    capture_dir.mkdir(parents=True)
+    app.state.cfg.paths.captures_dir = tmp_path
+    app.state.job_runner._jobs["2026-05-29_running_row"] = JobState(
+        capture_id="2026-05-29_running_row", status="running"
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/captures/")
+
+    assert response.status_code == 200
+    assert 'action="/captures/2026-05-29_running_row/delete"' not in response.text
+
+
+# ── Sortable columns ──────────────────────────────────────────────────────────
+
+
+def _capture_info(
+    id: str, status: str = "done", stage: str | None = None, ply_size_bytes: int | None = None
+) -> CaptureInfo:
+    return CaptureInfo(
+        id=id,
+        path=Path(f"/tmp/{id}"),
+        status=status,
+        stage=stage,
+        has_ply=ply_size_bytes is not None,
+        ply_path=None,
+        ply_size_bytes=ply_size_bytes,
+        has_log=False,
+        started_at=None,
+        finished_at=None,
+        duration_s=None,
+        reason=None,
+    )
+
+
+def test_sort_captures_by_status_ascending() -> None:
+    from autosplat.webui.state import sort_captures
+
+    captures = [
+        _capture_info("2026-05-29_c", status="running"),
+        _capture_info("2026-05-29_a", status="done"),
+        _capture_info("2026-05-29_b", status="failed"),
+    ]
+    result = sort_captures(captures, sort="status", direction="asc")
+    assert [c.status for c in result] == ["done", "failed", "running"]
+
+
+def test_sort_captures_by_status_descending() -> None:
+    from autosplat.webui.state import sort_captures
+
+    captures = [
+        _capture_info("2026-05-29_c", status="running"),
+        _capture_info("2026-05-29_a", status="done"),
+        _capture_info("2026-05-29_b", status="failed"),
+    ]
+    result = sort_captures(captures, sort="status", direction="desc")
+    assert [c.status for c in result] == ["running", "failed", "done"]
+
+
+def test_sort_captures_by_ply_size() -> None:
+    from autosplat.webui.state import sort_captures
+
+    captures = [
+        _capture_info("2026-05-29_big", ply_size_bytes=3000),
+        _capture_info("2026-05-29_small", ply_size_bytes=100),
+        _capture_info("2026-05-29_none", ply_size_bytes=None),
+    ]
+    result = sort_captures(captures, sort="ply", direction="desc")
+    assert [c.id for c in result] == [
+        "2026-05-29_big",
+        "2026-05-29_small",
+        "2026-05-29_none",
+    ]
+
+
+def test_sort_captures_no_sort_key_returns_input_order_unchanged() -> None:
+    """No sort param → the caller's existing order (e.g. the finished_at-desc
+    default from list_captures) passes through untouched."""
+    from autosplat.webui.state import sort_captures
+
+    captures = [_capture_info("2026-05-29_c"), _capture_info("2026-05-29_a")]
+    result = sort_captures(captures, sort=None, direction="desc")
+    assert [c.id for c in result] == ["2026-05-29_c", "2026-05-29_a"]
+
+
+def test_captures_list_route_applies_sort_query_param(app: FastAPI, tmp_path: Path) -> None:
+    for cid in ("2026-05-29_run", "2026-05-28_fail"):
+        (tmp_path / cid).mkdir(parents=True)
+    app.state.cfg.paths.captures_dir = tmp_path
+    from autosplat.webui.jobs_runner import JobState
+
+    app.state.job_runner._jobs["2026-05-29_run"] = JobState(
+        capture_id="2026-05-29_run", status="running"
+    )
+    from autosplat.watcher import FailedEntry, WatcherState
+
+    state = WatcherState()
+    state.failed = [
+        FailedEntry(
+            path=str(tmp_path / "2026-05-28_fail"),
+            failed_at="2026-05-28T10:00:00Z",
+            reason="boom",
+            stage="sfm",
+        )
+    ]
+    with (
+        patch("autosplat.webui.state._load_watcher_state", return_value=state),
+        TestClient(app) as client,
+    ):
+        response = client.get("/captures/?sort=status&dir=asc")
+
+    assert response.status_code == 200
+    tbody = response.text[response.text.index("<tbody>") :]
+    failed_pos = tbody.index("2026-05-28_fail")
+    running_pos = tbody.index("2026-05-29_run")
+    assert failed_pos < running_pos  # "failed" < "running" alphabetically
+
+
+def test_captures_list_column_headers_are_sort_links(app: FastAPI, tmp_path: Path) -> None:
+    (tmp_path / "2026-05-29_any").mkdir(parents=True)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/")
+
+    assert response.status_code == 200
+    assert 'href="?sort=status&dir=' in response.text
+    assert 'href="?sort=ply&dir=' in response.text
 
 
 # ── Native Finder file-picker (osascript) ────────────────────────────────────

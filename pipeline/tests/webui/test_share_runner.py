@@ -32,8 +32,12 @@ def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
         sog = out_dir / f"{ply.stem}.sog"
         sog.write_bytes(b"SOG" * 100)
         return CompressResult(
-            output_path=sog, backend_used="fake", quality="medium",
-            duration_s=0.1, input_bytes=15000, output_bytes=300,
+            output_path=sog,
+            backend_used="fake",
+            quality="medium",
+            duration_s=0.1,
+            input_bytes=15000,
+            output_bytes=300,
         )
 
     cfg = load_config(include_xdg=False)
@@ -50,6 +54,36 @@ def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
     assert (capture_dir / "share" / job.token / "c" / "scene.sog").exists()
     assert job.output_bytes == 300 and job.input_bytes == 15000
     assert job.link == f"https://splat.example/{job.token}/?src=c/scene.sog"
+
+
+def test_share_job_cleans_up_tmp_dir_after_success(tmp_path: Path) -> None:
+    embed = _fake_embed(tmp_path)
+    capture_dir = tmp_path / "2026-07-10_lgs"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
+
+    def fake_compress(ply: Path, out_dir: Path, *, fmt: str = "sog", quality: str = "medium"):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sog = out_dir / f"{ply.stem}.sog"
+        sog.write_bytes(b"SOG" * 100)
+        return CompressResult(
+            output_path=sog,
+            backend_used="fake",
+            quality="medium",
+            duration_s=0.1,
+            input_bytes=15000,
+            output_bytes=300,
+        )
+
+    cfg = load_config(include_xdg=False)
+    cfg.share.embed_src_path = embed
+    runner = ShareJobRunner(cfg, compressor=fake_compress)
+
+    job = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(job)
+
+    assert job.status == "done"
+    assert not (capture_dir / "share" / "_tmp").exists()
 
 
 def test_share_job_fails_without_ply(tmp_path: Path) -> None:

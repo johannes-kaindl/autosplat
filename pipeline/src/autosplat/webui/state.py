@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from dataclasses import dataclass
@@ -165,6 +166,17 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
             finished_at = last_run.finished_at_walltime
             duration_s = None
             reason = last_run.error
+        elif last_run is not None and last_run.status == "done" and ply is not None:
+            # Durable done status from runs.jsonl — a WebUI job that finished
+            # before a restart (in-memory job gone) must still surface its
+            # wall-clock finished_at instead of falling through to the bare
+            # ply-not-None branch below, which has no timestamp to offer.
+            status = "done"
+            stage = "export"
+            started_at = last_run.started_at_walltime
+            finished_at = last_run.finished_at_walltime
+            duration_s = None
+            reason = None
         elif ply is not None:
             status = "done"
             stage = "export"
@@ -206,6 +218,29 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
     return captures
 
 
+_SORT_KEYS = {
+    "id": lambda c: c.id,
+    "created": lambda c: c.id,  # capture id is prefixed YYYY-MM-DD, same ordering
+    "status": lambda c: c.status,
+    "stage": lambda c: c.stage or "",
+    "ply": lambda c: c.ply_size_bytes or 0,
+}
+
+
+def sort_captures(
+    captures: list[CaptureInfo], sort: str | None, direction: str = "desc"
+) -> list[CaptureInfo]:
+    """Re-order captures by a list-column key (click-to-sort UI).
+
+    `sort=None` (or an unknown key) passes the input order through unchanged —
+    callers rely on this to keep `list_captures`'s finished_at-desc default.
+    """
+    key = _SORT_KEYS.get(sort) if sort else None
+    if key is None:
+        return captures
+    return sorted(captures, key=key, reverse=(direction != "asc"))
+
+
 def get_capture(
     captures_dir: Path, capture_id: str, job_runner: JobRunner | None = None
 ) -> CaptureInfo | None:
@@ -233,16 +268,41 @@ def read_log_tail(capture_dir: Path, max_lines: int = 50) -> list[str]:
         return []
 
 
-def last_activity_age_s(capture_dir: Path, now: float | None = None) -> int | None:
-    """Seconds since pipeline.log was last written, or None if there is no log.
+def _colmap_activity_mtime(capture_dir: Path) -> float | None:
+    """Latest mtime among COLMAP's own workspace files (database.db, sparse/**).
 
-    A stage-agnostic liveness signal: the log is appended throughout every
-    stage, so its mtime tells us whether *anything* is still happening — useful
-    for the silent stretches (COLMAP mapper) where there's no percent to show.
+    COLMAP's subprocesses (feature_extractor/matcher/mapper) are blocking
+    external processes that never touch pipeline.log — during their silent
+    stretches (especially the mapper) these files are the only on-disk sign
+    that work is still happening.
     """
-    log_path = capture_dir / "pipeline.log"
-    try:
-        mtime = log_path.stat().st_mtime
-    except OSError:
+    colmap_dir = capture_dir / "colmap"
+    mtimes: list[float] = []
+    with contextlib.suppress(OSError):
+        mtimes.append((colmap_dir / "database.db").stat().st_mtime)
+    sparse_dir = colmap_dir / "sparse"
+    if sparse_dir.is_dir():
+        for f in sparse_dir.rglob("*"):
+            if f.is_file():
+                with contextlib.suppress(OSError):
+                    mtimes.append(f.stat().st_mtime)
+    return max(mtimes) if mtimes else None
+
+
+def last_activity_age_s(capture_dir: Path, now: float | None = None) -> int | None:
+    """Seconds since the most recent sign of activity, or None if there is none.
+
+    A stage-agnostic liveness signal: pipeline.log is appended throughout every
+    in-process stage, but COLMAP's own subprocesses (feature_extractor/matcher/
+    mapper) write only to their own workspace — see `_colmap_activity_mtime`.
+    The freshest of the two wins.
+    """
+    mtimes: list[float] = []
+    with contextlib.suppress(OSError):
+        mtimes.append((capture_dir / "pipeline.log").stat().st_mtime)
+    colmap_mtime = _colmap_activity_mtime(capture_dir)
+    if colmap_mtime is not None:
+        mtimes.append(colmap_mtime)
+    if not mtimes:
         return None
-    return max(0, int((now if now is not None else time.time()) - mtime))
+    return max(0, int((now if now is not None else time.time()) - max(mtimes)))

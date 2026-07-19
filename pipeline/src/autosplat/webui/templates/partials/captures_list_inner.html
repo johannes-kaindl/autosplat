@@ -1,7 +1,7 @@
 {%- from "_icons.html" import icon -%}
-{%- from "_macros.html" import capture_badge, STAGE_MAP -%}
+{%- from "_macros.html" import capture_badge, STAGE_MAP, sort_th -%}
 <div class="as-main-inner"
-     hx-get="/partials/captures"
+     hx-get="/partials/captures{% if sort %}?sort={{ sort }}&dir={{ direction }}{% endif %}"
      hx-trigger="every 3s"
      hx-swap="outerHTML">
 
@@ -37,11 +37,11 @@
     <table class="as-tbl">
       <thead>
         <tr>
-          <th>capture id</th>
-          <th>status</th>
-          <th>stage</th>
-          <th>created</th>
-          <th style="text-align:right">ply</th>
+          {{ sort_th('id', 'capture id', sort, direction) }}
+          {{ sort_th('status', 'status', sort, direction) }}
+          {{ sort_th('stage', 'stage', sort, direction) }}
+          {{ sort_th('created', 'created', sort, direction) }}
+          {{ sort_th('ply', 'ply', sort, direction, align='right') }}
           <th style="text-align:right">actions</th>
         </tr>
       </thead>
@@ -79,6 +79,11 @@
             {% if c.status == 'running' %}
             <form method="post" action="/captures/{{ c.id }}/cancel" style="display:inline">
               <button type="submit" class="as-icon-btn" title="Cancel" style="color:var(--stage-failed)">{{ icon('square') }}</button>
+            </form>
+            {% else %}
+            <form method="post" action="/captures/{{ c.id }}/delete" style="display:inline"
+                  onsubmit="return confirm('Delete capture? This cannot be undone.')">
+              <button type="submit" class="as-icon-btn" title="Delete" style="color:var(--stage-failed)">{{ icon('trash') }}</button>
             </form>
             {% endif %}
             <a href="/captures/{{ c.id }}" class="as-icon-btn" title="Open">{{ icon('chevron-right') }}</a>

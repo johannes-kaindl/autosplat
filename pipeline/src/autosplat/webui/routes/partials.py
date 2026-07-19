@@ -15,6 +15,7 @@ from autosplat.webui.state import (
     last_activity_age_s,
     list_captures,
     read_log_tail,
+    sort_captures,
 )
 
 router = APIRouter(prefix="/partials")
@@ -75,15 +76,15 @@ async def jobs_partial(request: Request) -> HTMLResponse:
 
 
 @router.get("/captures", response_class=HTMLResponse)
-async def captures_list_partial(request: Request) -> HTMLResponse:
+async def captures_list_partial(
+    request: Request, sort: str | None = None, dir: str = "desc"
+) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    from autosplat.webui.state import list_captures as _list
-
-    captures = _list(captures_dir, _job_runner(request))
+    captures = sort_captures(list_captures(captures_dir, _job_runner(request)), sort, dir)
     return _templates(request).TemplateResponse(
         request,
         "partials/captures_list_inner.html",
-        {"captures": captures, "captures_dir": captures_dir},
+        {"captures": captures, "captures_dir": captures_dir, "sort": sort, "direction": dir},
     )
 
 
