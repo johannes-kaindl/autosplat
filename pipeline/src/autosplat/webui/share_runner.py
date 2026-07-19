@@ -20,6 +20,7 @@ from autosplat.compress import CompressResult, compress_ply
 from autosplat.config import Config
 from autosplat.logging import get_logger
 from autosplat.webui.share import assemble_bundle, make_share_token, share_link
+from autosplat.webui.state import _review_status, resolve_publish_ply
 
 logger = get_logger(__name__)
 
@@ -68,8 +69,9 @@ class ShareJobRunner:
 
     def _run(self, job: ShareJob, capture_dir: Path) -> None:
         try:
-            ply = capture_dir / "output" / "scene.ply"
-            if not ply.exists():
+            review_status = _review_status(capture_dir)
+            ply = resolve_publish_ply(capture_dir, review_status)
+            if ply is None or not ply.exists():
                 raise FileNotFoundError(f"No output/scene.ply in {capture_dir}")
 
             result = self._compress(
