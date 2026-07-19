@@ -100,4 +100,33 @@ body {
 /* iOS pseudo-fullscreen fallback (fills the iframe viewport, not the screen) */
 body.fs-fallback #stage { position: fixed; inset: 0; z-index: 999; }
 
+/* --- dropzone --- */
+#dropzone {
+  position: absolute; inset: 0; z-index: 6;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: rgba(14, 15, 19, 0.95);
+  border: 2px dashed rgba(232, 240, 240, 0.15);
+  color: inherit; font: inherit;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+#dropzone.drag-over {
+  border-color: rgba(232, 240, 240, 0.5);
+  background: rgba(20, 22, 29, 0.97);
+}
+#dropzone p { font-size: 0.9rem; }
+#dropzone code { font-family: ui-monospace, monospace; font-size: 0.85em; }
+#dropzone .muted { font-size: 0.8rem; opacity: 0.6; }
+
+/* --- drag-over overlay (when dragging on active viewer) --- */
+#stage.drag-over::before {
+  content: "Drop to load";
+  position: absolute; inset: 0; z-index: 10;
+  display: grid; place-items: center;
+  background: rgba(14, 15, 19, 0.88);
+  font-size: 1.2rem; font-weight: 600;
+  pointer-events: none;
+}
+
 [hidden] { display: none !important; }

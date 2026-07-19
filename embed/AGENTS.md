@@ -25,8 +25,13 @@ requests** — the PlayCanvas engine is vendored under `vendor/`. Spec:
   page stays a few KB.
 - Pure logic (`js/params.js`, `js/autoframe.js`) is framework-free and
   unit-tested in node; DOM/engine glue lives in `js/main.js` / `js/viewer.js`.
-- Deliberately NOT here: walking mode, collision editor, dropzone, PWA/service
-  worker, demo scenes, marketing copy. That all stays in `viewer/` (the parked
+- No-`src` state: dropping a `.sog`/`.ply` file onto the page loads it via a
+  blob URL (no server round-trip needed) — this is the local-file entry point
+  for an otherwise `?src=`-only page. Wired in `js/main.js`
+  (`wireDropzone`/`handleDroppedFile`); markup/styling in `#dropzone` /
+  `#stage.drag-over`.
+- Deliberately NOT here: walking mode, collision editor, PWA/service worker,
+  demo scenes, marketing copy. That all stays in `viewer/` (the parked
   development viewer).
 
 ## Commands

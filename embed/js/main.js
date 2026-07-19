@@ -8,6 +8,7 @@ const els = {
   gate: document.getElementById('gate'),
   gateLabel: document.getElementById('gate-label'),
   hint: document.getElementById('hint-card'),
+  dropzone: document.getElementById('dropzone'),
   error: document.getElementById('error-card'),
   errorMsg: document.getElementById('error-msg'),
   retry: document.getElementById('btn-retry'),
@@ -106,6 +107,78 @@ function wireControls() {
   els.btnCopyPose.addEventListener('click', copyPoseUrl);
 }
 
+// Drag-and-drop: accept .sog / .ply files, create blob URL, load via viewer.
+function isSplatFile(f) {
+  return /\.(sog|ply)$/i.test(f.name);
+}
+
+async function handleDroppedFile(file) {
+  if (!isSplatFile(file)) {
+    showError('Not a supported scene file. Drop a .sog or .ply file.');
+    return;
+  }
+  els.dropzone.hidden = true;
+  els.error.hidden = true;
+  els.spinner.hidden = false;
+
+  if (!hasWebGL2()) {
+    showError('Your browser does not support WebGL2.');
+    return;
+  }
+
+  try {
+    if (!viewer) {
+      const { createViewer } = await import('./viewer.js');
+      viewer = await createViewer(els.host);
+      wireControls();
+    }
+    const blobUrl = URL.createObjectURL(file);
+    await viewer.loadSplat(blobUrl, file.name,
+      { pose: null, orbit: true });
+    els.spinner.hidden = true;
+    els.controls.hidden = false;
+    syncOrbitButton(viewer.isAutoOrbit());
+  } catch (err) {
+    console.error('[embed] drop load failed:', err);
+    showError('Could not load the scene.');
+  }
+}
+
+function wireDropzone() {
+  const stage = els.stage;
+
+  // Prevent default on all drag events so the browser doesn't try to open the file.
+  stage.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    if (viewer) stage.classList.add('drag-over');
+  });
+  stage.addEventListener('dragleave', (e) => {
+    if (!stage.contains(e.relatedTarget)) {
+      stage.classList.remove('drag-over');
+      if (!viewer) els.dropzone.classList.remove('drag-over');
+    }
+  });
+  stage.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    stage.classList.remove('drag-over');
+    els.dropzone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) await handleDroppedFile(file);
+  });
+
+  // Visual feedback on the dropzone card itself.
+  els.dropzone.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    els.dropzone.classList.add('drag-over');
+  });
+  els.dropzone.addEventListener('dragleave', (e) => {
+    if (!els.dropzone.contains(e.relatedTarget)) {
+      els.dropzone.classList.remove('drag-over');
+    }
+  });
+}
+
 async function start() {
   els.error.hidden = true;
   els.gate.hidden = true;
@@ -140,8 +213,10 @@ async function start() {
   }
 }
 
+wireDropzone();
+
 if (!params.src) {
-  els.hint.hidden = false;
+  els.dropzone.hidden = false;
 } else {
   els.gateLabel.textContent = sceneLabel(params.filename);
   if (params.poster) {

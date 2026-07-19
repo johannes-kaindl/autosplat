@@ -39,15 +39,17 @@ after(async () => {
   if (server) { server.kill(); await wait(200); }
 });
 
-test('no src: hint card shown, gate + controls stay hidden', async () => {
+test('no src: dropzone shown, gate + controls stay hidden', async () => {
   const page = await browser.newPage();
   await page.goto(URL_BASE + '/', { waitUntil: 'domcontentloaded' });
   const s = await page.evaluate(() => ({
-    hint: !document.getElementById('hint-card').hidden,
+    dropzone: !document.getElementById('dropzone').hidden,
+    hint: document.getElementById('hint-card').hidden,
     gate: document.getElementById('gate').hidden,
     controls: document.getElementById('controls').hidden,
   }));
-  assert.equal(s.hint, true, 'hint card visible');
+  assert.equal(s.dropzone, true, 'dropzone visible');
+  assert.equal(s.hint, true, 'hint card hidden');
   assert.equal(s.gate, true, 'gate hidden');
   assert.equal(s.controls, true, 'controls hidden');
   await page.close();
