@@ -23,6 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from . import cleanup as cleanup_mod
 from . import viewer as viewer_mod
 from .bisection import rescue_via_bisection
 from .compress import CompressorNotAvailable, compress_ply, install_hint_for
@@ -482,8 +483,7 @@ def cleanup_intermediates(
         ...,
         exists=True,
         file_okay=False,
-        help="Capture directory whose frames/colmap/training working dirs "
-        "you want to reclaim.",
+        help="Capture directory whose frames/colmap/training working dirs you want to reclaim.",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -502,35 +502,23 @@ def cleanup_intermediates(
     Refuses when `output/scene.ply` is missing — an unfinished capture still
     needs these for `autosplat resume`.
     """
-    output_ply = capture_dir / "output" / "scene.ply"
-    legacy_ply = capture_dir / "scene.ply"
-    if not output_ply.exists() and not legacy_ply.exists():
+    targets = cleanup_mod.prunable_targets(capture_dir)
+    try:
+        # Peek dry-run first so we can report before touching disk either way.
+        preview = cleanup_mod.prune_intermediates(capture_dir, dry_run=True)
+    except cleanup_mod.NotExported:
         err_console.print(
             f"[red]Refusing:[/red] {capture_dir} has no output/scene.ply yet — "
             "this capture hasn't finished exporting. `autosplat resume` still "
             "needs frames/colmap/training to continue."
         )
-        raise typer.Exit(EXIT_USER_ERROR)
-
-    import shutil
-
-    targets = [
-        capture_dir / sub
-        for sub in ("frames", "colmap", "training")
-        if (capture_dir / sub).is_dir()
-    ]
+        raise typer.Exit(EXIT_USER_ERROR) from None
 
     if not targets:
         console.print(f"[dim]Nothing to remove in {capture_dir}.[/dim]")
         return
 
-    total_bytes = 0
-    for target in targets:
-        for p in target.rglob("*"):
-            if p.is_file():
-                total_bytes += p.stat().st_size
-
-    mb = total_bytes / (1024 * 1024)
+    mb = preview.bytes_reclaimed / (1024 * 1024)
     action = "Would remove" if dry_run else "Removing"
     console.print(f"[yellow]{action}:[/yellow] {len(targets)} dir(s), ~{mb:.1f} MB")
     for target in targets:
@@ -540,8 +528,7 @@ def cleanup_intermediates(
         console.print("[dim]Dry-run — no changes made.[/dim]")
         return
 
-    for target in targets:
-        shutil.rmtree(target)
+    cleanup_mod.prune_intermediates(capture_dir)
     console.print(f"[green]Done.[/green] Reclaimed ~{mb:.1f} MB.")
 
 

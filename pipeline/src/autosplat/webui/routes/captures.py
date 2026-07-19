@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 
 from autosplat import __version__
+from autosplat import cleanup as cleanup_mod
 from autosplat.config import apply_override
 from autosplat.failure import classify_failure, failure_reason_from_log
 from autosplat.webui.jobs_runner import JobRunner
@@ -236,6 +237,7 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
             "age_s": last_activity_age_s(capture.path),
             "failure": failure,
             "failure_reason": failure_reason,
+            "has_prunable": bool(cleanup_mod.prunable_targets(capture.path)),
         },
     )
 
@@ -398,6 +400,20 @@ async def capture_delete(request: Request, capture_id: str) -> RedirectResponse:
         raise HTTPException(status_code=409, detail="Cannot delete a running capture")
     shutil.rmtree(capture.path, ignore_errors=True)
     return RedirectResponse(url="/captures/", status_code=303)
+
+
+@router.post("/{capture_id}/prune")
+async def capture_prune(request: Request, capture_id: str) -> RedirectResponse:
+    """Free up space: delete frames/colmap/training once export is done."""
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    try:
+        cleanup_mod.prune_intermediates(capture.path)
+    except cleanup_mod.NotExported as e:
+        raise HTTPException(status_code=409, detail="Capture hasn't finished exporting yet") from e
+    return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
 
 @router.post("/{capture_id}/share")

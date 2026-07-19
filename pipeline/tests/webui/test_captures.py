@@ -679,6 +679,83 @@ def test_captures_list_column_headers_are_sort_links(app: FastAPI, tmp_path: Pat
     assert 'href="?sort=ply&dir=' in response.text
 
 
+# ── Free-up-space (prune intermediates) ───────────────────────────────────────
+
+
+def _done_capture_with_intermediates(tmp_path: Path, cid: str) -> Path:
+    capture_dir = tmp_path / cid
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 1000)
+    (capture_dir / "frames").mkdir()
+    (capture_dir / "frames" / "frame_00001.jpg").write_bytes(b"\xff" * 2048)
+    (capture_dir / "colmap" / "sparse" / "0").mkdir(parents=True)
+    (capture_dir / "training").mkdir()
+    return capture_dir
+
+
+def test_capture_prune_route_removes_intermediates(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = _done_capture_with_intermediates(tmp_path, "2026-05-29_prune_me")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.post("/captures/2026-05-29_prune_me/prune", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert not (capture_dir / "frames").exists()
+    assert not (capture_dir / "colmap").exists()
+    assert not (capture_dir / "training").exists()
+    assert (capture_dir / "output" / "scene.ply").exists()
+
+
+def test_capture_prune_route_409_when_not_exported(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = tmp_path / "2026-05-29_unfinished"
+    (capture_dir / "frames").mkdir(parents=True)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.post("/captures/2026-05-29_unfinished/prune")
+
+    assert response.status_code == 409
+    assert (capture_dir / "frames").exists()
+
+
+def test_capture_prune_route_404_for_unknown_capture(app: FastAPI, tmp_path: Path) -> None:
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.post("/captures/2026-05-29_nope/prune")
+
+    assert response.status_code == 404
+
+
+def test_capture_detail_shows_free_up_space_button_when_prunable(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    _done_capture_with_intermediates(tmp_path, "2026-05-29_has_stuff")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-29_has_stuff")
+
+    assert response.status_code == 200
+    assert 'action="/captures/2026-05-29_has_stuff/prune"' in response.text
+
+
+def test_capture_detail_hides_free_up_space_button_when_already_clean(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    capture_dir = tmp_path / "2026-05-29_clean"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-29_clean")
+
+    assert response.status_code == 200
+    assert 'action="/captures/2026-05-29_clean/prune"' not in response.text
+
+
 # ── Native Finder file-picker (osascript) ────────────────────────────────────
 
 

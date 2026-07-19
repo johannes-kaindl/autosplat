@@ -287,6 +287,16 @@
       </div>
       {% endif %}
 
+      {% if capture.status == 'done' and has_prunable %}
+      <form method="post" action="/captures/{{ capture.id }}/prune"
+            onsubmit="return confirm('Delete frames/colmap/training for this capture? The exported scene.ply is kept — this only removes rebuildable working data.')"
+            style="margin-bottom:var(--space-2)">
+        <button type="submit" class="as-btn ghost" style="width:100%">
+          {{ icon('trash', 13) }} Free up space
+        </button>
+      </form>
+      {% endif %}
+
       {% if capture.status == 'done' %}
       <form method="post" action="/captures/{{ capture.id }}/delete"
             onsubmit="return confirm('Delete capture? This cannot be undone.')">
