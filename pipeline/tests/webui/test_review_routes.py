@@ -134,3 +134,35 @@ def test_upload_rejects_empty_file(app: FastAPI, tmp_path: Path) -> None:
 
     assert r.status_code == 400
     assert "empty" in r.text.lower()
+
+
+def test_view_page_shows_review_panel_when_unreviewed(app: FastAPI, tmp_path: Path) -> None:
+    _make_capture(tmp_path)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        body = client.get("/captures/2026-07-19_lgs/view").text
+
+    assert 'action="/captures/2026-07-19_lgs/review/upload"' in body
+    assert 'action="/captures/2026-07-19_lgs/review/confirm"' in body
+    assert "Confirm unchanged" in body
+
+
+def test_view_page_hides_review_panel_when_reviewed(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = _make_capture(tmp_path)
+    scene_ply = capture_dir / "output" / "scene.ply"
+    (capture_dir / "output" / ".review.json").write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": "2026-07-19T00:00:00",
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        )
+    )
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        body = client.get("/captures/2026-07-19_lgs/view").text
+
+    assert 'action="/captures/2026-07-19_lgs/review/upload"' not in body
