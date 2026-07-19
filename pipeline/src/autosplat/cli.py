@@ -476,6 +476,75 @@ def cleanup_rescue(
     console.print(f"[green]Done.[/green] Reclaimed ~{mb:.1f} MB.")
 
 
+@app.command("cleanup-intermediates")
+def cleanup_intermediates(
+    capture_dir: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=False,
+        help="Capture directory whose frames/colmap/training working dirs "
+        "you want to reclaim.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print what would be removed without touching disk.",
+    ),
+) -> None:
+    """Delete frames/, colmap/, training/ once a capture has finished exporting.
+
+    These are the SfM/training working directories — once `output/scene.ply`
+    exists they're pure disk cost (typically 1-2 GB per capture). Nothing
+    downstream needs them: `autosplat add-video` always wipes and
+    re-extracts them from scratch from the original source videos (recorded
+    in pipeline.log), it never reuses their contents.
+
+    Refuses when `output/scene.ply` is missing — an unfinished capture still
+    needs these for `autosplat resume`.
+    """
+    output_ply = capture_dir / "output" / "scene.ply"
+    legacy_ply = capture_dir / "scene.ply"
+    if not output_ply.exists() and not legacy_ply.exists():
+        err_console.print(
+            f"[red]Refusing:[/red] {capture_dir} has no output/scene.ply yet — "
+            "this capture hasn't finished exporting. `autosplat resume` still "
+            "needs frames/colmap/training to continue."
+        )
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    import shutil
+
+    targets = [
+        capture_dir / sub
+        for sub in ("frames", "colmap", "training")
+        if (capture_dir / sub).is_dir()
+    ]
+
+    if not targets:
+        console.print(f"[dim]Nothing to remove in {capture_dir}.[/dim]")
+        return
+
+    total_bytes = 0
+    for target in targets:
+        for p in target.rglob("*"):
+            if p.is_file():
+                total_bytes += p.stat().st_size
+
+    mb = total_bytes / (1024 * 1024)
+    action = "Would remove" if dry_run else "Removing"
+    console.print(f"[yellow]{action}:[/yellow] {len(targets)} dir(s), ~{mb:.1f} MB")
+    for target in targets:
+        console.print(f"  • {target}")
+
+    if dry_run:
+        console.print("[dim]Dry-run — no changes made.[/dim]")
+        return
+
+    for target in targets:
+        shutil.rmtree(target)
+    console.print(f"[green]Done.[/green] Reclaimed ~{mb:.1f} MB.")
+
+
 @app.command()
 def watch(
     folder: Path = typer.Argument(..., help="Folder to watch for new videos."),
