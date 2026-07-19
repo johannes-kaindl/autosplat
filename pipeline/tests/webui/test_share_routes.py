@@ -17,7 +17,23 @@ def _fake_embed(root: Path) -> Path:
     return e
 
 
-def _install(app: FastAPI, tmp_path: Path) -> Path:
+def _mark_reviewed(capture_dir: Path) -> None:
+    import json
+
+    scene_ply = capture_dir / "output" / "scene.ply"
+    marker = capture_dir / "output" / ".review.json"
+    marker.write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": "2026-07-19T00:00:00",
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        )
+    )
+
+
+def _install(app: FastAPI, tmp_path: Path, *, reviewed: bool = True) -> Path:
     embed = _fake_embed(tmp_path)
     capture_dir = tmp_path / "2026-07-10_lgs"
     (capture_dir / "output").mkdir(parents=True)
@@ -26,6 +42,8 @@ def _install(app: FastAPI, tmp_path: Path) -> Path:
     app.state.cfg.paths.captures_dir = tmp_path
     app.state.cfg.share.embed_src_path = embed
     app.state.cfg.share.base_url = "https://splat.example"
+    if reviewed:
+        _mark_reviewed(capture_dir)
 
     def fake_compress(ply, out_dir, *, fmt="sog", quality="medium"):
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -76,3 +94,13 @@ def test_share_zip_downloads(app: FastAPI, tmp_path: Path) -> None:
         r = client.get(f"/captures/2026-07-10_lgs/share/{token}.zip")
         assert r.status_code == 200
         assert r.headers["content-type"] == "application/zip"
+
+
+def test_post_share_redirects_to_view_when_unreviewed(app: FastAPI, tmp_path: Path) -> None:
+    _install(app, tmp_path, reviewed=False)
+    with TestClient(app) as client:
+        r = client.post("/captures/2026-07-10_lgs/share", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/captures/2026-07-10_lgs/view"
+    # no share job was started
+    assert app.state.share_runner.get("2026-07-10_lgs") is None

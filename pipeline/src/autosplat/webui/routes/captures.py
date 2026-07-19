@@ -499,11 +499,17 @@ async def capture_review_upload(
 
 @router.post("/{capture_id}/share")
 async def capture_share(request: Request, capture_id: str) -> RedirectResponse:
-    """Compress + assemble a self-hostable share bundle in the background."""
+    """Compress + assemble a self-hostable share bundle in the background.
+
+    Gated on the publish quality review (see review_status) — a capture
+    must be reviewed at least once before its first share.
+    """
     captures_dir = _captures_dir(request)
     capture = get_capture(captures_dir, capture_id, _job_runner(request))
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    if capture.review_status == "unreviewed":
+        return RedirectResponse(url=f"/captures/{capture_id}/view", status_code=303)
     runner = _share_runner(request)
     if runner is None:
         raise HTTPException(status_code=503, detail="Share runner not available")
