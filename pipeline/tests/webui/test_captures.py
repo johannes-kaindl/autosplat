@@ -133,6 +133,21 @@ def test_review_status_unreviewed_when_marker_corrupt(tmp_path: Path) -> None:
     assert _review_status(capture_dir) == "unreviewed"
 
 
+def test_review_status_unreviewed_when_marker_not_a_dict(tmp_path: Path) -> None:
+    """Valid JSON that isn't a dict (e.g. a bare number or string) must not
+    crash _review_status via AttributeError on `.get()` — it should just be
+    treated as an unreviewed/invalid marker, same as corrupt JSON."""
+    from autosplat.webui.state import _review_status
+
+    capture_dir = tmp_path / "2026-07-19_test"
+    output_dir = capture_dir / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "scene.ply").write_bytes(b"ply\n")
+    (output_dir / ".review.json").write_text("42")
+
+    assert _review_status(capture_dir) == "unreviewed"
+
+
 def test_resolve_publish_ply_prefers_reviewed_file(tmp_path: Path) -> None:
     from autosplat.webui.state import resolve_publish_ply
 

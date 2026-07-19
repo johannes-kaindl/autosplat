@@ -34,6 +34,46 @@ def test_confirm_writes_review_marker(app: FastAPI, tmp_path: Path) -> None:
     assert not (capture_dir / "output" / "scene_reviewed.ply").exists()
 
 
+def test_confirm_after_rebuild_removes_stale_reviewed_ply(app: FastAPI, tmp_path: Path) -> None:
+    """Reproduces the stale-scene_reviewed.ply bug: upload a cleaned PLY (v1),
+    simulate a rebuild that changes scene.ply's mtime (v2, review auto-
+    invalidates), then confirm-unchanged on v2. The leftover v1
+    scene_reviewed.ply must not linger and get silently re-published."""
+    import time
+
+    from autosplat.webui.state import _review_status, resolve_publish_ply
+
+    capture_id = "2026-07-19_lgs"
+    capture_dir = _make_capture(tmp_path, capture_id)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        # 1. Upload a cleaned PLY -> scene_reviewed.ply (v1) written + marker recorded.
+        r = client.post(
+            f"/captures/{capture_id}/review/upload",
+            files={"reviewed_ply": ("cleaned.ply", b"ply\nv1-cleaned", "application/octet-stream")},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        reviewed = capture_dir / "output" / "scene_reviewed.ply"
+        assert reviewed.read_bytes() == b"ply\nv1-cleaned"
+
+        # 2. Simulate a rebuild: scene.ply gets new content + a later mtime.
+        time.sleep(0.01)
+        (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n" + b"y" * 1000)
+        assert _review_status(capture_dir) == "unreviewed"
+
+        # 3. User reviews the rebuilt v2 scene and confirms it unchanged.
+        r = client.post(f"/captures/{capture_id}/review/confirm", follow_redirects=False)
+        assert r.status_code == 303
+
+    # The stale v1 cleaned file must be gone, not silently re-published.
+    assert not reviewed.exists()
+    status = _review_status(capture_dir)
+    assert status == "reviewed"
+    assert resolve_publish_ply(capture_dir, status) == capture_dir / "output" / "scene.ply"
+
+
 def test_confirm_unknown_capture_404s(app: FastAPI, tmp_path: Path) -> None:
     app.state.cfg.paths.captures_dir = tmp_path
     with TestClient(app) as client:

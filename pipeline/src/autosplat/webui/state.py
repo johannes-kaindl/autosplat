@@ -74,6 +74,8 @@ def _review_status(capture_dir: Path) -> ReviewStatus:
         data = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return "unreviewed"
+    if not isinstance(data, dict):
+        return "unreviewed"
     recorded_mtime = data.get("source_ply_mtime")
     scene_ply = capture_dir / "output" / "scene.ply"
     try:

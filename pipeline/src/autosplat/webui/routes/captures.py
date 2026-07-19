@@ -446,6 +446,11 @@ async def capture_review_confirm(request: Request, capture_id: str) -> RedirectR
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     if not (capture.path / "output" / "scene.ply").exists():
         raise HTTPException(status_code=409, detail="Capture has no output/scene.ply yet")
+    # "Confirm unchanged" publishes scene.ply as-is — a scene_reviewed.ply left
+    # over from a prior review cycle (e.g. before an add-video rebuild) must
+    # not linger, or resolve_publish_ply would silently keep serving it.
+    reviewed = capture.path / "output" / "scene_reviewed.ply"
+    reviewed.unlink(missing_ok=True)
     _write_review_marker(capture.path)
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
