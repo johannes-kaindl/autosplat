@@ -200,6 +200,24 @@ uv run autosplat cleanup-rescue <capture-dir> --dry-run
 
 The `rescue/clips/*.mp4` sub-clips are kept by default because `pipeline.log` references them — `autosplat resume` and `autosplat add-video` re-extract from them.
 
+### Reclaiming disk after a successful export
+
+Every capture also leaves `frames/`, `colmap/`, and `training/` behind after it finishes —
+the SfM/training working directories, typically **~1-2 GB per capture**. Once
+`output/scene.ply` exists, nothing downstream needs them: `autosplat add-video` always wipes
+and re-extracts them from scratch from the original source videos, and `autosplat resume`
+only needs them for a capture that hasn't finished yet. Reclaim them with:
+
+```bash
+uv run autosplat cleanup-intermediates ~/AutoSplat/captures/<capture-name>
+# preview without touching disk:
+uv run autosplat cleanup-intermediates <capture-dir> --dry-run
+```
+
+Refuses (non-zero exit) if `output/scene.ply` is missing — the same capture directory that's
+still mid-run or failed before exporting. The WebUI's capture-detail page has an equivalent
+"Free up space" button for captures that are `done` and still have something to reclaim.
+
 ---
 
 ## Reference cases that worked
