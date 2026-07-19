@@ -191,6 +191,7 @@ autosplat status                                              # queue + complete
 autosplat config show | init
 autosplat doctor                                              # ffmpeg / colmap / brush / compress
 autosplat compress <ply> [--format sog|spz|ksplat]
+autosplat cleanup-intermediates <capture-dir> [--dry-run]           # v1.15.0+
 autosplat version
 ```
 
@@ -221,9 +222,10 @@ Opens a FastAPI + HTMX interface at `http://127.0.0.1:8080`. Features:
 
 - **Dashboard** — live capture queue + recent jobs with wall-clock timestamps + within-day sort
 - **New capture** form — single video or multi-line (multi-video) input; path-validated
-- **Capture detail** — stage timeline, Brush-metrics card, Resume button on failed runs, Add-video form
+- **Capture detail** — stage timeline, Brush-metrics card, Resume button on failed runs, Add-video form, "Free up space" button (v1.15.0+, reclaims `frames/`/`colmap/`/`training/` once exported)
 - **Jobs** — active + recent with per-job status badges (queued/running/done/failed/cancelled)
 - **Viewer** — SuperSplat iframe embed for finished splats, three-state fallback
+- **Publish quality gate** (v1.15.0+) — a capture must be reviewed once in the SuperSplat viewer (upload a cleaned `.ply` or confirm unchanged) before its first share; auto-invalidates when the capture is rebuilt
 - **`/source`** — AGPL §13 compliance route
 
 <p align="center">
