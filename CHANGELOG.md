@@ -14,6 +14,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.14.3] — 2026-07-19 — WebUI captures/detail papercut cleanup
+
+### Fixed
+
+- **`pipeline/` only this release** — share/_tmp compression leftover
+  cleaned up, `finished_at` survives a WebUI restart for successful jobs
+  too, COLMAP mapper no longer false-positives the liveness warning. See
+  [`pipeline/CHANGELOG.md`](pipeline/CHANGELOG.md#v1143--2026-07-19--webui-capturesdetail-papercut-cleanup)
+  for details.
+
+### Added
+
+- **`pipeline/` only this release** — captures list gets a per-row delete
+  action and click-to-sort columns.
+
+---
+
 ## [v1.14.2] — 2026-07-15 — Fix downloads in the desktop app window
 
 ### Fixed

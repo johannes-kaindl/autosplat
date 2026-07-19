@@ -11,6 +11,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.14.3] — 2026-07-19 — WebUI captures/detail papercut cleanup
+
+### Fixed
+
+- **Share-bundle compression left `share/_tmp/scene.sog` behind.** The
+  intermediate `.sog` produced while assembling a share bundle is now
+  removed once the bundle is built (`ShareJobRunner._run`).
+- **`finished_at` was lost for successfully-finished WebUI jobs after a
+  server restart**, misordering the captures list (only failed jobs had a
+  durable fallback). `state.list_captures` now reconstructs `finished_at`
+  for `done` jobs from `runs.jsonl` too.
+- **COLMAP's mapper stage falsely triggered the "quiet — may be stuck"
+  liveness warning.** The heuristic only watched `pipeline.log` mtime, but
+  COLMAP's own subprocesses (feature_extractor/matcher/mapper) never touch
+  that log. `last_activity_age_s` now also considers
+  `colmap/database.db`/`colmap/sparse/**` mtime.
+
+### Added
+
+- **Delete action in the captures list.** Each row gets a delete button
+  (reuses the existing `/captures/{id}/delete` route) with the same
+  confirm-dialog pattern as the detail page's "Erase capture".
+- **Click-to-sort captures list columns** (id/status/stage/created/ply),
+  toggling ascending/descending; the sort survives the list's 3s HTMX poll.
+
+---
+
 ## [v1.14.2] — 2026-07-15 — Fix downloads in the desktop app window
 
 ### Fixed
