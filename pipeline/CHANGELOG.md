@@ -9,6 +9,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Publish quality gate — captures must be reviewed before their first share.**
+  Before a capture can be shared via the WebUI, it must be reviewed once in the
+  SuperSplat viewer: either upload a cleaned `.ply` (e.g. exported from
+  SuperSplat's own export UI) or confirm the scene unchanged. The gate is tracked
+  per-capture and auto-invalidates when the capture is rebuilt (detected via
+  `scene.ply` mtime), requiring a fresh review.
+
 ---
 
 ## [v1.14.3] — 2026-07-19 — WebUI captures/detail papercut cleanup
