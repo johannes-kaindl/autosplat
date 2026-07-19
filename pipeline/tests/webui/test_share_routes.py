@@ -104,3 +104,11 @@ def test_post_share_redirects_to_view_when_unreviewed(app: FastAPI, tmp_path: Pa
     assert r.headers["location"] == "/captures/2026-07-10_lgs/view"
     # no share job was started
     assert app.state.share_runner.get("2026-07-10_lgs") is None
+
+
+def test_detail_page_shows_review_prompt_when_unreviewed(app: FastAPI, tmp_path: Path) -> None:
+    _install(app, tmp_path, reviewed=False)
+    with TestClient(app) as client:
+        body = client.get("/captures/2026-07-10_lgs").text
+    assert "Review &amp; Share" in body or "Review & Share" in body
+    assert 'action="/captures/2026-07-10_lgs/share"' not in body

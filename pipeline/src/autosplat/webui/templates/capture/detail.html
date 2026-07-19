@@ -211,6 +211,11 @@
             and package a self-contained viewer you can host anywhere.
             <strong>Anyone with this link can view this model</strong> — it is unlisted, not access-controlled.
           </p>
+          {% if capture.review_status == 'unreviewed' %}
+          <a href="/captures/{{ capture.id }}/view" class="as-btn sm" style="text-decoration:none;display:inline-flex">
+            {{ icon('eye', 12) }} Review &amp; Share
+          </a>
+          {% else %}
           <div id="as-share-region"
                hx-get="/partials/capture/{{ capture.id }}/share"
                hx-trigger="load"
@@ -219,6 +224,7 @@
               <button type="submit" class="as-btn sm">{{ icon('external', 12) }} Create share bundle</button>
             </form>
           </div>
+          {% endif %}
         </div>
       </div>
       {% endif %}
