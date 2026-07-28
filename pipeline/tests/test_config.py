@@ -282,3 +282,15 @@ def test_apply_override_can_enable_plateau() -> None:
     assert new_cfg.brush.plateau_patience == 5
     # Other brush fields untouched
     assert new_cfg.brush.max_steps == cfg.brush.max_steps
+
+
+def test_lifecycle_defaults_to_30_day_grace() -> None:
+    cfg = load_config(include_xdg=False)
+
+    assert cfg.lifecycle.unreviewed_grace_days == 30
+
+
+def test_copy_to_outputs_defaults_to_false() -> None:
+    cfg = load_config(include_xdg=False)
+
+    assert cfg.export.copy_to_outputs is False

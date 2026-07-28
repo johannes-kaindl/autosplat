@@ -410,6 +410,19 @@ class ShareConfig(BaseModel):
     )
 
 
+class LifecycleConfig(BaseModel):
+    """Retention policy for capture working dirs (see lifecycle.py)."""
+
+    unreviewed_grace_days: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "Days after which an unreviewed capture's intermediates are reclaimed "
+            "anyway. 0 disables the grace sweep entirely."
+        ),
+    )
+
+
 class Config(BaseModel):
     paths: PathsConfig
     preprocess: PreprocessConfig
@@ -427,6 +440,7 @@ class Config(BaseModel):
     compress: CompressConfig = Field(default_factory=CompressConfig)
     # WebUI web-export share bundles
     share: ShareConfig = Field(default_factory=ShareConfig)
+    lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

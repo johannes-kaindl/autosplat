@@ -42,7 +42,7 @@ plateau_min_delta_psnr = 0.05   # ε in dB — Δ below this counts as flat
 
 [export]
 formats = ["ply"]               # future: ["ply", "splat", "spz"]
-copy_to_outputs = true
+copy_to_outputs = false         # DEPRECATED — outputs_dir is no longer written; see docs/CONFIGURATION.md
 outputs_dir = "~/AutoSplat/outputs"
 
 [viewer]
@@ -123,3 +123,10 @@ quality = "medium"         # low | medium | high — controls SOG iterations + S
 # config.py's _default_embed_src()). Only set it if your embed/ checkout
 # lives somewhere unusual.
 base_url = ""
+
+[lifecycle]
+# Retention policy. Intermediates (frames/, colmap/, training/, brush_dataset/,
+# rescue/, share/_tmp/) are reclaimed once a capture is reviewed via the publish
+# quality gate. A capture that is never reviewed is reclaimed anyway after this
+# many days, announced in the captures list beforehand. 0 disables that fallback.
+unreviewed_grace_days = 30
