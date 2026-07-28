@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from autosplat import cleanup
 from autosplat.cleanup import NotExported, prune_intermediates
 
 
@@ -67,3 +68,69 @@ def test_prune_intermediates_nothing_to_remove(tmp_path: Path) -> None:
 
     assert result.removed == []
     assert result.bytes_reclaimed == 0
+
+
+def test_prune_removes_rescue_and_brush_dataset(tmp_path: Path) -> None:
+    # Regression: INTERMEDIATE_SUBDIRS listed only frames/colmap/training, so
+    # 11,2 GB of bisection-rescue leftovers were never reclaimed.
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    for sub in ("frames", "colmap", "rescue", "brush_dataset"):
+        (capture / sub).mkdir()
+        (capture / sub / "blob").write_bytes(b"x" * 10)
+
+    result = prune_intermediates(capture)
+
+    assert {p.name for p in result.removed} == {"frames", "colmap", "rescue", "brush_dataset"}
+    assert result.bytes_reclaimed == 40
+    assert not (capture / "rescue").exists()
+    assert not (capture / "brush_dataset").exists()
+    assert (capture / "output" / "scene.ply").exists()
+
+
+def test_prune_removes_share_tmp_but_keeps_bundles(tmp_path: Path) -> None:
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    (capture / "share" / "_tmp").mkdir(parents=True)
+    (capture / "share" / "tok").mkdir()
+
+    prune_intermediates(capture)
+
+    assert not (capture / "share" / "_tmp").exists()
+    assert (capture / "share" / "tok").exists()
+
+
+def test_prune_is_idempotent(tmp_path: Path) -> None:
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    (capture / "colmap").mkdir()
+
+    prune_intermediates(capture)
+    second = prune_intermediates(capture)
+
+    assert second.removed == []
+    assert second.bytes_reclaimed == 0
+
+
+def test_sweep_expired_reclaims_only_past_grace(tmp_path: Path) -> None:
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    for name, age in (("2026-07-01_fresh", 2), ("2026-06-01_old", 40)):
+        capture = tmp_path / name
+        (capture / "output").mkdir(parents=True)
+        (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+        (capture / "colmap").mkdir()
+        (capture / "colmap" / "blob").write_bytes(b"x" * 5)
+        mtime = (now - timedelta(days=age)).timestamp()
+        os.utime(capture / "output" / "scene.ply", (mtime, mtime))
+
+    results = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
+
+    assert len(results) == 1
+    assert (tmp_path / "2026-07-01_fresh" / "colmap").exists()
+    assert not (tmp_path / "2026-06-01_old" / "colmap").exists()
