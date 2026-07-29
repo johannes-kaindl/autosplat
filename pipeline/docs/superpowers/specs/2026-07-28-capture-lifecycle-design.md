@@ -325,7 +325,7 @@ any UI can display.
 A published bundle has no link back to its capture: no revocation, no update after a
 rebuild, no list of what is currently public. Plus the storage duplication deliberately
 excluded above (unpacked bundle beside its zip). Seed for the upload automation exists at
-`/Users/Shared/code/jkaindl.de/seeds/2026-07-11-autosplat-splat-hosting.md`.
+`seeds/2026-07-11-autosplat-splat-hosting.md` in the sister repo `jkaindl.de`.
 
 **4 — Input-Seite.** Watch folder `inbox/`, `import/`, the WebUI file picker and
 `add-video` are four entries with differing behaviour. `source/` is empty in every

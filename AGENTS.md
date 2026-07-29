@@ -1,10 +1,8 @@
 # AGENTS.md
 
-> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
-> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
-> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — das ist kein Teil
-> dieses Repos und existiert in einem frischen Klon nicht. Modell comply-or-explain für
-> ihn selbst; für andere Contributor irrelevant.
+> **Workspace-Standards (maintainer-lokal):** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
+> im Multi-Projekt-Workspace des Maintainers, `../_docs` relativ zu diesem Repo — nicht Teil dieses Repos,
+> ignorieren falls im Klon nicht vorhanden. Modell comply-or-explain.
 
 Guidance for AI coding agents working in this monorepo.
 
@@ -37,16 +35,24 @@ die Produkt-Ebene darüber.
 - **Pages-Deploy des Viewers:** `scripts/deploy-pages.sh` (subtree split `viewer/` →
   `pages`-Branch). Live: `https://jkaindl.codeberg.page/autosplat/`.
 
-## Memory + session state
+## Memory
 
 > Dieser Abschnitt beschreibt das persönliche Claude-Code-Setup des Maintainers
-> (`johannes`) auf seiner eigenen Maschine — für andere Klone/Contributor irrelevant,
+> auf seiner eigenen Maschine — für andere Klone/Contributor irrelevant,
 > einfach überspringen.
 
+- **SDD-Artefakte (seit 2026-07-16): Cockpit, nicht Repo** — Specs/Plans/Task-Reports leben im
+  Coding-Cockpit des Maintainers (`$VAULT/25_Coding/autosplat/_SDD/`, CORE-META-14, maintainer-lokal).
+  Sie tragen Arbeitskontext (Vault-Pfade, Schwester-Repo-Interna), der in einem public Repo niemandem nützt.
+  Das Repo behält die Design-Essenz in dieser Datei + `CHANGELOG.md`.
+- **Alt-Bestand:** `pipeline/docs/superpowers/{specs,plans}/` und `viewer/docs/superpowers/plans/`
+  sind eingefroren — nichts Neues dort ablegen.
+- **Nie im Repo:** absolute Pfade außerhalb des Repos (`/Users/…`, Vault-Pfade) — Platzhalter nutzen
+  (`$VAULT/…`, `~/…`, repo-relativ). Herkunftsnachweise als Repo-Name + `Datei:Zeile` sind dagegen erwünscht.
 - **Session-Handoff** (sessionübergreifend, in diesem Repo): `.remember/` — `remember.md`
   (Handoff), `now.md` (Buffer), `today-*.md`, `recent.md`, `archive.md`, `core-memories.md`.
   `.remember/` ist Arbeitspuffer und gitignored.
 - **Persistentes Memory** (außerhalb des Repos, nur auf der Maintainer-Maschine vorhanden):
   `~/.claude/projects/-Users-Shared-code-autosplat/memory/`
 - **Coding-Cockpit** (Status/Tasks/History) im privaten Obsidian-Vault des Maintainers:
-  `10_Pallas/25_Coding/autosplat/autosplat.md`.
+  `$VAULT/25_Coding/autosplat/autosplat.md`.

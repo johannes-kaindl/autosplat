@@ -538,7 +538,7 @@ Expected: all green. `tests/test_export.py` may now fail on the `copy_to_outputs
 - [ ] **Step 10: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/lifecycle.py pipeline/src/autosplat/config.py pipeline/config/default.toml pipeline/tests/test_lifecycle.py pipeline/tests/test_config.py
 git commit -m "$(cat <<'EOF'
 feat(pipeline): derive capture lifecycle state from the filesystem
@@ -782,7 +782,7 @@ Expected: PASS. If `test_cli_cleanup_intermediates.py` asserts on the old three-
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/cleanup.py pipeline/tests/test_cleanup.py pipeline/tests/test_cli_cleanup_intermediates.py
 git commit -m "$(cat <<'EOF'
 fix(pipeline): reclaim rescue/ and brush_dataset/, not just frames/colmap
@@ -986,7 +986,7 @@ Expected: PASS
 - [ ] **Step 10: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/state.py pipeline/src/autosplat/webui/routes/ pipeline/src/autosplat/webui/templates/ pipeline/tests/webui/test_captures.py
 git commit -m "$(cat <<'EOF'
 refactor(webui): derive review + retention state from lifecycle
@@ -1134,7 +1134,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/routes/captures.py pipeline/tests/webui/test_review_routes.py
 git commit -m "$(cat <<'EOF'
 feat(webui): review sign-off reclaims a capture's intermediates
@@ -1294,7 +1294,7 @@ Expected: all green
 - [ ] **Step 8: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/export.py pipeline/src/autosplat/config.py pipeline/src/autosplat/doctor.py pipeline/docs/CONFIGURATION.md pipeline/tests/test_export.py pipeline/tests/test_doctor.py
 git commit -m "$(cat <<'EOF'
 feat(pipeline): deprecate copy_to_outputs, stop duplicating every PLY
@@ -1505,7 +1505,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/share_runner.py pipeline/tests/webui/test_share_runner.py
 git commit -m "$(cat <<'EOF'
 feat(webui): keep the compressed SOG in output/ and reuse it
@@ -1676,7 +1676,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/app.py pipeline/tests/webui/test_app.py
 git commit -m "$(cat <<'EOF'
 feat(webui): reclaim captures past their unreviewed grace period on startup
@@ -1936,7 +1936,7 @@ and that failed captures are deliberately left alone.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/cli.py pipeline/tests/test_cli_migrate_storage.py pipeline/README.md pipeline/docs/CAPTURE-GUIDE.md
 git commit -m "$(cat <<'EOF'
 feat(pipeline): add migrate-storage to reclaim the existing backlog

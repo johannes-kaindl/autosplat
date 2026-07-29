@@ -1058,7 +1058,7 @@ Switched from MIT to AGPL-3.0-or-later (code) + CC BY-SA 4.0 (documentation). Se
 
 ### Release Polish (Burst C.1)
 
-- PII strip: `/Users/johannes/` paths replaced with `~/` (docs) and `Path.home()` (Python)
+- PII strip: `/Users/<name>/` home paths replaced with `~/` (docs) and `Path.home()` (Python)
 - examples/ generalized: location-specific capture names replaced with generic identifiers
 - `*.sog` added to `.gitignore`
 - pyproject.toml: version bump 0.1.0 → 0.9.0, author identity updated, AGPL-3.0 license-id set

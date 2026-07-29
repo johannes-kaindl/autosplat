@@ -16,7 +16,7 @@
 - 2-Space-Indent, LF (Root-`.editorconfig`).
 - Conventional Commits mit Trailer `Co-Authored-By: Claude <noreply@anthropic.com>` (bzw. dem Modell-spezifischen Trailer der ausführenden Session).
 - **`cd embed && ./tests/run.sh` muss vor jedem Commit grün sein** (ab Task 1).
-- Alle Pfade unten relativ zum Repo-Root `/Users/Shared/code/autosplat`.
+- Alle Pfade und `cd`-Kommandos unten relativ zum Repo-Root.
 
 ---
 
@@ -987,7 +987,7 @@ git commit -m "feat(embed): embed page — click-to-load gate, minimal chrome, e
 # AGENTS.md
 
 > **Workspace-Standards:** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
-> (am Workspace-Root `/Users/Shared/code/`), Modell comply-or-explain.
+> (im Multi-Projekt-Workspace des Maintainers, maintainer-lokal), Modell comply-or-explain.
 
 Conventions for AI assistants working in `embed/`.
 
@@ -1134,8 +1134,8 @@ git commit -m "docs: embed/ component — AGENTS, park notes for viewer/, change
 - [ ] **Step 1: Alle Testsuiten**
 
 ```bash
-cd /Users/Shared/code/autosplat/embed && ./tests/run.sh
-cd /Users/Shared/code/autosplat/viewer && ./tests/run.sh
+cd embed && ./tests/run.sh
+cd viewer && ./tests/run.sh
 ```
 
 Expected: beide komplett PASS (`viewer/` wurde nur in Doku-Zeilen angefasst — seine Tests müssen unverändert grün sein).
@@ -1151,14 +1151,14 @@ Expected: `OK: keine CDN-Referenzen im Runtime-Code` (Treffer in `embed/vendor/R
 - [ ] **Step 3: Manueller Smoke (echtes Rendering — vom User oder mit Browser-Tools)**
 
 ```bash
-cd /Users/Shared/code/autosplat/embed && ./serve.sh
+cd embed && ./serve.sh
 ```
 
 Dann im Browser: `http://localhost:8130/?src=../viewer/assets/demo/scene.sog` — hier schlägt der Load fehl (Pfad außerhalb des Server-Roots), daher stattdessen die Demo-Szene einmalig für den Smoke kopieren:
 
 ```bash
-mkdir -p /Users/Shared/code/autosplat/embed/c
-cp /Users/Shared/code/autosplat/viewer/assets/demo/scene.sog /Users/Shared/code/autosplat/embed/c/scene.sog
+mkdir -p embed/c
+cp viewer/assets/demo/scene.sog embed/c/scene.sog
 ```
 
 Checkliste im Browser unter `http://localhost:8130/?src=c/scene.sog`:
@@ -1171,7 +1171,7 @@ Checkliste im Browser unter `http://localhost:8130/?src=c/scene.sog`:
 Danach die Smoke-Kopie wieder entfernen (sie ist nicht Teil der Komponente — `embed/c/` bleibt die Konvention für DEPLOYTE Szenen am Hosting-Ort):
 
 ```bash
-rm -rf /Users/Shared/code/autosplat/embed/c
+rm -rf embed/c
 git status --short   # muss leer sein
 ```
 

@@ -20,7 +20,7 @@
   Python-Default sonst wieder überschreiben.
 - DMG neu bauen/signieren/releasen ist **nicht** Teil dieses Plans (Task 6 ist
   reine Doku- und Test-Verifikation, kein Rebuild).
-- Alle Pfade unten relativ zum Repo-Root `/Users/Shared/code/autosplat`.
+- Alle Pfade und `cd`-Kommandos unten relativ zum Repo-Root.
 
 ---
 
@@ -860,8 +860,8 @@ git commit -m "docs(pipeline): share-bundle embed/ migration changelog + scope u
 - [ ] **Step 1: Volle Testsuite**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline && uv run pytest -q
-cd /Users/Shared/code/autosplat/embed && ./tests/run.sh
+cd pipeline && uv run pytest -q
+cd embed && ./tests/run.sh
 ```
 
 Expected: beide komplett PASS (`embed/` selbst wurde in diesem Plan nicht
@@ -879,7 +879,7 @@ migriert).
 - [ ] **Step 3: Manueller Smoke (WebUI im Dev-Checkout)**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline && uv run autosplat webui
+cd pipeline && uv run autosplat webui
 ```
 
 Dann im Browser (`http://localhost:8000` o. ä., siehe Terminal-Ausgabe):

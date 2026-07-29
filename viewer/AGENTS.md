@@ -1,10 +1,9 @@
 # AGENTS.md
 
-> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
-> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
-> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — kein Teil dieses
-> Repos, existiert in einem frischen Klon nicht. Offene Punkte fuer dieses Repo siehe
-> Abschnitt "Offene Konventions-Punkte" unten.
+> **Workspace-Standards (maintainer-lokal):** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
+> im Multi-Projekt-Workspace des Maintainers, `../_docs` relativ zu diesem Repo — nicht Teil dieses Repos,
+> ignorieren falls im Klon nicht vorhanden. Modell comply-or-explain. Offene Punkte fuer diese
+> Komponente siehe Abschnitt "Offene Konventions-Punkte" unten.
 
 Conventions for AI assistants working in this repo.
 

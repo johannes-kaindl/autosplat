@@ -18,7 +18,7 @@
 - Conventional Commits mit Trailer `Co-Authored-By: Claude <noreply@anthropic.com>`
   (bzw. dem Modell-spezifischen Trailer der ausführenden Session).
 - **`cd embed && ./tests/run.sh` muss vor jedem Commit grün sein.**
-- Alle Pfade unten relativ zum Repo-Root `/Users/Shared/code/autosplat`.
+- Alle Pfade und `cd`-Kommandos unten relativ zum Repo-Root.
 - Aktueller Startzustand: 19 Dateien aus dem Basis-Plan sind bereits
   implementiert und getestet (11 Unit + 5 E2E grün) auf Branch
   `feat/embed-viewer`. Diese Tasks bauen darauf auf.
@@ -738,7 +738,7 @@ git commit -m "docs(embed): pose-authoring workflow"
 - [ ] **Step 1: Alle Testsuiten**
 
 ```bash
-cd /Users/Shared/code/autosplat/embed && ./tests/run.sh
+cd embed && ./tests/run.sh
 ```
 
 Expected: 19 Unit + 7 E2E, alle PASS.
@@ -754,9 +754,9 @@ Expected: `OK: keine CDN-Referenzen im Runtime-Code`
 - [ ] **Step 3: Manueller Smoke (echtes Rendering — vom User oder mit Browser-Tools)**
 
 ```bash
-cd /Users/Shared/code/autosplat/embed && ./serve.sh
-mkdir -p /Users/Shared/code/autosplat/embed/c
-cp /Users/Shared/code/autosplat/viewer/assets/demo/scene.sog /Users/Shared/code/autosplat/embed/c/scene.sog
+cd embed && ./serve.sh
+mkdir -p embed/c
+cp viewer/assets/demo/scene.sog embed/c/scene.sog
 ```
 
 Checkliste im Browser:
@@ -775,7 +775,7 @@ Checkliste im Browser:
 Danach aufräumen:
 
 ```bash
-rm -rf /Users/Shared/code/autosplat/embed/c
+rm -rf embed/c
 git status --short   # muss leer sein
 ```
 

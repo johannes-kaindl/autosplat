@@ -31,7 +31,7 @@ Codeberg-Pages-URL des Viewers darf brechen (vom Maintainer freigegeben).
 ## Zielstruktur
 
 ```
-autosplat/                  (Codeberg: jkaindl/autosplat — lokal: /Users/Shared/code/autosplat)
+autosplat/                  (Codeberg: jkaindl/autosplat — lokaler Klon im Maintainer-Workspace)
 ├─ README.md, CHANGELOG.md, AGENTS.md          ← neu am Root (Produkt-Ebene)
 ├─ LICENSE, LICENSING.md, CLA.md, SECURITY.md,
 │  CITATION.cff, CONTRIBUTING.md               ← konsolidiert; bei Textabweichungen
@@ -89,7 +89,7 @@ Voraussetzung: `git-filter-repo` (brew).
    **archivieren** (nicht löschen), vorher Umzugshinweis ins README.
 4. Offene Issues einmalig manuell übertragen (Maintainer-Entscheidung pro Issue).
 
-Lokal wird `/Users/Shared/code/autosplat` selbst zum Monorepo (passt zum
+Lokal wird der bestehende `autosplat`-Klon selbst zum Monorepo (passt zum
 bestehenden `.remember`- und Memory-Pfad). Die alten lokalen Klone bleiben bis
 zur Verifikation als Backup liegen.
 

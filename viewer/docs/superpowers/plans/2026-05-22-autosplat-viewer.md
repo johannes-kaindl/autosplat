@@ -18,7 +18,7 @@ This is a static Vanilla-JS site with **no test framework** (per spec §11 — m
 
 ## Repo location
 
-The new repository is created at **`/Users/Shared/code/autosplat-viewer/`** (sibling of `auto-splat-pipeline`). All paths below are relative to that directory unless absolute.
+The new repository is created at **`<workspace>/autosplat-viewer/`** (sibling of `auto-splat-pipeline` in the maintainer's multi-project workspace). All paths below are relative to that directory unless absolute; `<workspace>` is a placeholder for the local workspace root.
 
 ## File Structure
 
@@ -43,16 +43,16 @@ The new repository is created at **`/Users/Shared/code/autosplat-viewer/`** (sib
 ## Task 1: Repository scaffold
 
 **Files:**
-- Create: `/Users/Shared/code/autosplat-viewer/.gitignore`
-- Create: `/Users/Shared/code/autosplat-viewer/serve.sh`
-- Create: `/Users/Shared/code/autosplat-viewer/LICENSE`
-- Create: `/Users/Shared/code/autosplat-viewer/README.md`
+- Create: `<workspace>/autosplat-viewer/.gitignore`
+- Create: `<workspace>/autosplat-viewer/serve.sh`
+- Create: `<workspace>/autosplat-viewer/LICENSE`
+- Create: `<workspace>/autosplat-viewer/README.md`
 
 - [ ] **Step 1: Create directory, init git, create folder structure**
 
 ```bash
-mkdir -p /Users/Shared/code/autosplat-viewer/{css,js,assets/demo,icons}
-cd /Users/Shared/code/autosplat-viewer
+mkdir -p <workspace>/autosplat-viewer/{css,js,assets/demo,icons}
+cd <workspace>/autosplat-viewer
 git init
 ```
 
@@ -110,7 +110,7 @@ AGPL-3.0-or-later. See [LICENSE](LICENSE).
 
 - [ ] **Step 6: Verify**
 
-Run: `cd /Users/Shared/code/autosplat-viewer && ./serve.sh`
+Run: `cd <workspace>/autosplat-viewer && ./serve.sh`
 Open `http://localhost:8123/` — expect a directory listing showing `css/`, `js/`, `assets/`, `icons/`, `serve.sh`, `README.md`, `LICENSE`. Stop the server (Ctrl-C).
 
 - [ ] **Step 7: Commit**
@@ -289,7 +289,7 @@ git commit -m "feat: static page layout (Layout A)"
 
 ```bash
 cp ~/Documents/temp/2026-05-17_scenery/scene.sog \
-   /Users/Shared/code/autosplat-viewer/assets/demo/scene.sog
+   <workspace>/autosplat-viewer/assets/demo/scene.sog
 ```
 
 - [ ] **Step 2: Verify**
@@ -657,7 +657,7 @@ Run `./serve.sh`, open the page, let the church render and orbit to a flattering
 
 ```bash
 # macOS interactive region capture (PNG), then convert to JP) :
-screencapture -i -t jpg /Users/Shared/code/autosplat-viewer/assets/og-image.jpg
+screencapture -i -t jpg <workspace>/autosplat-viewer/assets/og-image.jpg
 ```
 
 Target roughly 1200×630 (the standard OG ratio). If the capture is a different size, crop/resize with `sips`:

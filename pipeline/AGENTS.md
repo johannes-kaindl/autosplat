@@ -1,10 +1,9 @@
 # AGENTS.md
 
-> **Workspace-Standards (maintainer-lokal — ignorieren, falls nicht vorhanden):** Die
-> verbindliche Leitkonvention des Maintainers steht in `_docs/CONVENTIONS.md` am
-> Workspace-Root `/Users/Shared/code/` auf seiner eigenen Maschine — kein Teil dieses
-> Repos, existiert in einem frischen Klon nicht. Offene Punkte fuer dieses Repo siehe
-> Abschnitt "Offene Konventions-Punkte" unten.
+> **Workspace-Standards (maintainer-lokal):** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
+> im Multi-Projekt-Workspace des Maintainers, `../_docs` relativ zu diesem Repo — nicht Teil dieses Repos,
+> ignorieren falls im Klon nicht vorhanden. Modell comply-or-explain. Offene Punkte fuer diese
+> Komponente siehe Abschnitt "Offene Konventions-Punkte" unten.
 
 Guidance for AI coding agents working in this repository. Human-facing docs live in
 `README.md`, `CONTRIBUTING.md`, and `docs/`.
@@ -13,7 +12,9 @@ Guidance for AI coding agents working in this repository. Human-facing docs live
 
 - [ ] CORE-GIT-01 — GitHub-Mirror-Remote (`github`) zusaetzlich zu Codeberg-`origin` anlegen.
 - [ ] CORE-AGENT-01 — Abschnitt "Abweichungen von der Leitkonvention" in dieser AGENTS.md ergaenzen.
-- [ ] CORE-AGENT-04 — `docs/superpowers/plans/` fuer Implementierungsplaene anlegen (nur `specs/` vorhanden).
+- [x] CORE-AGENT-04 — obsolet seit 2026-07-16 (CORE-META-14): neue Specs/Plans/Task-Reports leben im
+  Coding-Cockpit des Maintainers (maintainer-lokal), nicht mehr im Repo; `docs/superpowers/{specs,plans}/`
+  ist eingefrorener Alt-Bestand.
 - [ ] PROF-NAT-02 — version-bump-Script ergaenzen, das `pyproject.toml`-Version + `Info.plist`/`AutoSplat.spec` (CFBundleShortVersionString) synct.
 - [ ] PROF-NAT-03 — `docs/MACOS-APP.md`/`MACOS-INSTALL.md` (Signing, Notarization, "Trotzdem oeffnen") anlegen; Install-Doku liegt bisher nur im README.
 
