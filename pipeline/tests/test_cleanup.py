@@ -431,3 +431,51 @@ def test_sweep_expired_still_reclaims_a_top_level_listed_capture(tmp_path: Path)
 
     assert len(cleanup.sweep_expired(tmp_path, grace_days=30, now=now)) == 1
     assert not (capture / "colmap").exists()
+
+
+# --- I4: the suite-wide safety backstop ------------------------------------
+#
+# These live in `tests/test_cleanup.py` on purpose: it is one of the files the
+# old `tests/webui/conftest.py`-scoped guard did NOT cover, and it calls
+# `sweep_expired` directly. A near-miss already occurred once (a dry-run
+# preview launched against the real $HOME).
+
+
+def test_guard_blocks_sweep_outside_the_pytest_temp_root(
+    storage_guard_violations: list[str],
+) -> None:
+    from datetime import UTC, datetime
+
+    outside = Path.home() / "AutoSplat" / "captures"
+
+    with pytest.raises(RuntimeError, match="outside the pytest temp root"):
+        cleanup.sweep_expired(outside, grace_days=30, now=datetime.now(UTC))
+
+    assert storage_guard_violations
+
+
+def test_guard_blocks_prune_intermediates_outside_the_pytest_temp_root(
+    storage_guard_violations: list[str],
+) -> None:
+    outside = Path.home() / "AutoSplat" / "captures" / "2026-05-26_max_strasse"
+
+    with pytest.raises(RuntimeError, match="outside the pytest temp root"):
+        cleanup.prune_intermediates(outside)
+
+    assert storage_guard_violations
+
+
+def test_guard_blocks_migrate_storage_rmtree_outside_the_pytest_temp_root(
+    storage_guard_violations: list[str],
+) -> None:
+    """`migrate-storage` rmtrees config-supplied `outputs/` paths directly,
+    bypassing `cleanup` entirely — `tests/test_cli_migrate_storage.py` drives
+    exactly that and was covered by nothing."""
+    from autosplat import cli
+
+    outside = Path.home() / "AutoSplat" / "outputs" / "2026-05-14_jay_1"
+
+    with pytest.raises(RuntimeError, match="outside the pytest temp root"):
+        cli.shutil.rmtree(outside)
+
+    assert storage_guard_violations
