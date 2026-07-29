@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from __future__ import annotations
+
 import json
 import shutil
 import subprocess
@@ -10,10 +12,10 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, Response, Upl
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from autosplat import __version__
-from autosplat import cleanup as cleanup_mod
+from autosplat import __version__, cleanup
 from autosplat.config import apply_override
 from autosplat.failure import classify_failure, failure_reason_from_log
+from autosplat.logging import get_logger
 from autosplat.webui.jobs_runner import JobRunner
 from autosplat.webui.state import (
     get_capture,
@@ -23,6 +25,8 @@ from autosplat.webui.state import (
     review_marker_path,
     sort_captures,
 )
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/captures")
 
@@ -263,7 +267,7 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
             "age_s": last_activity_age_s(capture.path),
             "failure": failure,
             "failure_reason": failure_reason,
-            "has_prunable": bool(cleanup_mod.prunable_targets(capture.path)),
+            "has_prunable": bool(cleanup.prunable_targets(capture.path)),
         },
     )
 
@@ -440,10 +444,30 @@ async def capture_prune(request: Request, capture_id: str) -> RedirectResponse:
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     try:
-        cleanup_mod.prune_intermediates(capture.path)
-    except cleanup_mod.NotExported as e:
+        cleanup.prune_intermediates(capture.path)
+    except cleanup.NotExported as e:
         raise HTTPException(status_code=409, detail="Capture hasn't finished exporting yet") from e
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
+
+
+def _prune_after_review(capture_dir: Path, job_runner: JobRunner | None) -> None:
+    """Reclaim intermediates once a human has signed the capture off.
+
+    Deferred while a job is live: `resume`/`add-video` need colmap/ and
+    frames/, and reclaiming underneath them would make the run unrecoverable.
+    A prune failure never invalidates the review — unreclaimed space is
+    cosmetic, a discarded sign-off is lost manual work.
+    """
+    job = job_runner.get_job(capture_dir.name) if job_runner is not None else None
+    if job is not None and job.status in ("running", "queued"):
+        logger.info("review.prune_deferred", capture=capture_dir.name)
+        return
+    try:
+        result = cleanup.prune_intermediates(capture_dir)
+    except (cleanup.NotExported, OSError) as e:
+        logger.error("review.prune_failed", capture=capture_dir.name, error=str(e))
+        return
+    logger.info("review.pruned", capture=capture_dir.name, bytes_reclaimed=result.bytes_reclaimed)
 
 
 def _write_review_marker(capture_dir: Path) -> None:
@@ -477,6 +501,7 @@ async def capture_review_confirm(request: Request, capture_id: str) -> RedirectR
     reviewed = capture.path / "output" / "scene_reviewed.ply"
     reviewed.unlink(missing_ok=True)
     _write_review_marker(capture.path)
+    _prune_after_review(capture.path, _job_runner(request))
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
 
@@ -524,6 +549,7 @@ async def capture_review_upload(
 
     (capture.path / "output" / "scene_reviewed.ply").write_bytes(content)
     _write_review_marker(capture.path)
+    _prune_after_review(capture.path, _job_runner(request))
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
 

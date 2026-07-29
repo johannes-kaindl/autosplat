@@ -20,9 +20,7 @@ def test_confirm_writes_review_marker(app: FastAPI, tmp_path: Path) -> None:
     app.state.cfg.paths.captures_dir = tmp_path
 
     with TestClient(app) as client:
-        r = client.post(
-            "/captures/2026-07-19_lgs/review/confirm", follow_redirects=False
-        )
+        r = client.post("/captures/2026-07-19_lgs/review/confirm", follow_redirects=False)
 
     assert r.status_code == 303
     assert r.headers["location"] == "/captures/2026-07-19_lgs"
@@ -121,7 +119,9 @@ def test_upload_valid_ply_saves_reviewed_file_and_marker(app: FastAPI, tmp_path:
     with TestClient(app) as client:
         r = client.post(
             "/captures/2026-07-19_lgs/review/upload",
-            files={"reviewed_ply": ("cleaned.ply", b"ply\ncleaned-data", "application/octet-stream")},
+            files={
+                "reviewed_ply": ("cleaned.ply", b"ply\ncleaned-data", "application/octet-stream")
+            },
             follow_redirects=False,
         )
 
@@ -206,3 +206,54 @@ def test_view_page_hides_review_panel_when_reviewed(app: FastAPI, tmp_path: Path
         body = client.get("/captures/2026-07-19_lgs/view").text
 
     assert 'action="/captures/2026-07-19_lgs/review/upload"' not in body
+
+
+def test_confirm_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = _make_capture(tmp_path)
+    (capture_dir / "colmap").mkdir()
+    (capture_dir / "rescue").mkdir()
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post("/captures/2026-07-19_lgs/review/confirm", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert not (capture_dir / "colmap").exists()
+    assert not (capture_dir / "rescue").exists()
+    assert (capture_dir / "output" / ".review.json").exists()
+
+
+def test_confirm_does_not_reclaim_while_job_runs(app: FastAPI, tmp_path: Path) -> None:
+    # resume/add-video need colmap/ and frames/ — reclaiming underneath a live
+    # job would make it unrecoverable.
+    capture_dir = _make_capture(tmp_path)
+    (capture_dir / "colmap").mkdir()
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    class _LiveJob:
+        status = "running"
+
+    app.state.job_runner.get_job = lambda _id: _LiveJob()
+
+    with TestClient(app) as client:
+        r = client.post("/captures/2026-07-19_lgs/review/confirm", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert (capture_dir / "colmap").exists()  # deferred, not lost
+    assert (capture_dir / "output" / ".review.json").exists()  # the sign-off still counts
+
+
+def test_upload_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
+    capture_dir = _make_capture(tmp_path)
+    (capture_dir / "colmap").mkdir()
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/captures/2026-07-19_lgs/review/upload",
+            files={"reviewed_ply": ("clean.ply", b"ply\ncleaned", "application/octet-stream")},
+            follow_redirects=False,
+        )
+
+    assert r.status_code == 303
+    assert not (capture_dir / "colmap").exists()
