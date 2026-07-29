@@ -226,7 +226,18 @@ def inspect(capture_dir: Path, *, now: datetime, grace_days: int) -> Lifecycle:
     )
 
 
-def _looks_like_capture(path: Path) -> bool:
+def is_capture_dir(path: Path) -> bool:
+    """True if `path` itself has the shape of a capture directory.
+
+    Either it has already exported (`output/scene.ply`, or a legacy
+    top-level `scene.ply`), or it looks like one still in progress (both
+    `frames/` and `colmap/` present, no PLY yet). Public: shared with
+    `migrate-storage`'s nested-capture protection, which needs this exact
+    signature to tell a genuinely nested capture (protect it, whole) apart
+    from a loose stray PLY file sitting directly in an intermediate dir
+    (e.g. a Brush checkpoint copy in `training/` — not a capture, must stay
+    reclaimable).
+    """
     if (path / "output" / "scene.ply").exists() or (path / "scene.ply").exists():
         return True
     return (path / "frames").is_dir() and (path / "colmap").is_dir()
@@ -249,7 +260,7 @@ def find_capture_dirs(root: Path) -> list[Path]:
             continue
         if entry.name in RECLAIMABLE_SUBDIRS or entry.name == "output":
             continue
-        if _looks_like_capture(entry):
+        if is_capture_dir(entry):
             found.append(entry)
         else:
             found.extend(find_capture_dirs(entry))

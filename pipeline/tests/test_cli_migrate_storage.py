@@ -26,9 +26,10 @@ import time
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
-from autosplat.cli import EXIT_USER_ERROR, app
+from autosplat.cli import EXIT_USER_ERROR, _refuse_if_unsafe_storage_layout, app
 
 runner = CliRunner()
 
@@ -59,14 +60,28 @@ def _snapshot(root: Path) -> list[tuple[str, int, float]]:
 
 
 def _legacy_tree(root: Path) -> Path:
-    """Mirrors the real backlog: a nested pre-Phase-9 capture with a PLY."""
+    """Mirrors the real backlog: a nested pre-Phase-9 capture with a PLY.
+
+    `training/scene.ply` (not a plain `blob`) mirrors real data on purpose:
+    Brush writes its checkpoint into `training/`, and `export.py` *copies*
+    it to `output/scene.ply` rather than moving it — the training/ copy is
+    left behind, same mtime as the one in output/ once `_backdate` ages
+    everything uniformly. Task-8 round-2 finding: a fixture using a
+    plain-named file here (as the original brief had it) cannot catch a
+    predicate that treats "any .ply anywhere in the target" as protected,
+    because the bug only manifests on a target holding a *loose* PLY, not a
+    nested capture.
+    """
     captures = root / "captures"
     inner = captures / "2026-05-25_max_strasse_rescue" / "2026-05-25_A_vor1"
     (inner / "output").mkdir(parents=True)
     (inner / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
-    for sub in ("frames", "colmap", "training"):
-        (inner / sub).mkdir()
-        (inner / sub / "blob").write_bytes(b"x" * 100)
+    (inner / "frames").mkdir()
+    (inner / "frames" / "blob").write_bytes(b"x" * 100)
+    (inner / "colmap").mkdir()
+    (inner / "colmap" / "blob").write_bytes(b"x" * 100)
+    (inner / "training").mkdir()
+    (inner / "training" / "scene.ply").write_bytes(b"ply\nend_header\n")
     _backdate(captures)
     return captures
 
@@ -112,14 +127,38 @@ def test_apply_reclaims_nested_legacy_capture(tmp_path: Path) -> None:
     assert (inner / "output" / "scene.ply").exists()
 
 
+def test_training_scene_ply_duplicate_is_reclaimed_not_protected(tmp_path: Path) -> None:
+    """Regression guard (task-8 round-2 finding): a loose `training/scene.ply`
+    — a Brush checkpoint `export.py` already copied to `output/scene.ply`,
+    a pure duplicate, same mtime — must NOT protect `training/` from
+    reclaim. The old `_contains_ply` predicate ("any .ply anywhere in the
+    target") caught this and silently excluded the entire `training/` dir
+    from the plan, with no "kept" label or footnote at all — on the
+    maintainer's real machine this alone hid ~1.8 GB, and it made
+    `migrate-storage` disagree with `cleanup-intermediates`/`sweep_expired`
+    about the very same directory. Fixed by `_contains_nested_capture`,
+    which only protects a target holding a directory that is itself a
+    capture — a loose file directly inside `training/` doesn't qualify.
+    """
+    captures = _legacy_tree(tmp_path)
+    inner = captures / "2026-05-25_max_strasse_rescue" / "2026-05-25_A_vor1"
+    cfg = _config_for(captures, tmp_path)
+
+    result = runner.invoke(app, ["migrate-storage", "--config", str(cfg), "--apply"])
+
+    assert result.exit_code == 0
+    assert not (inner / "training").exists()
+    assert (inner / "output" / "scene.ply").exists()
+
+
 def test_never_touches_a_reclaimable_dir_holding_a_nested_ply(tmp_path: Path) -> None:
     """Constructed hazard: `rescue/` looks like an ordinary reclaimable
     subdir of `2026-07-01_x`, but a probe buried inside it holds its own
     exported PLY. `find_capture_dirs` deliberately does not surface that
     nested PLY as a separate capture (recursion stops once `2026-07-01_x`
     itself is recognised as a capture) — so the only thing that can protect
-    it is treating any target that contains a PLY anywhere within it as
-    off-limits, in its entirety.
+    it is treating a target that holds a directory which is itself a
+    capture as off-limits, in its entirety.
 
     This replaces the brief's original test, which never actually exercised
     the guard: its `scene.ply` sat under a `rescue/` with no sibling capture
@@ -146,6 +185,49 @@ def test_never_touches_a_reclaimable_dir_holding_a_nested_ply(tmp_path: Path) ->
     assert nested_ply.exists()
     assert (capture / "rescue").exists()
     assert not (capture / "colmap").exists()
+
+
+def test_capture_with_every_target_protected_is_listed_as_kept(tmp_path: Path) -> None:
+    """A capture whose *only* reclaimable subdir is entirely protected (here:
+    `rescue/` buries a nested capture) must not just vanish from the table —
+    the docstring promises every capture is listed, and previously this case
+    hit a bare `continue` with no row and no `skipped` increment."""
+    captures = tmp_path / "captures"
+    capture = captures / "2026-07-15_all_protected"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
+    nested = capture / "rescue" / "probe_0"
+    (nested / "output").mkdir(parents=True)
+    (nested / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
+    _backdate(captures)
+    cfg = _config_for(captures, tmp_path)
+
+    result = runner.invoke(app, ["migrate-storage", "--config", str(cfg)])
+
+    assert result.exit_code == 0
+    assert "2026-07-15_all_protected" in result.stdout
+    assert "kept" in result.stdout.lower()
+
+
+def test_duplicate_capture_basenames_produce_a_warning(tmp_path: Path) -> None:
+    """The real backlog has repeated basenames (`2026-05-25_A_vor1` appears
+    under more than one parent). `capture_by_name` is last-wins by design,
+    but a collision must be surfaced, not silent — otherwise an
+    outputs/<name> entry could be judged redundant on the strength of the
+    wrong same-named capture."""
+    captures = tmp_path / "captures"
+    for group in ("group_a", "group_b"):
+        inner = captures / group / "2026-05-25_A_vor1"
+        (inner / "output").mkdir(parents=True)
+        (inner / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
+    _backdate(captures)
+    cfg = _config_for(captures, tmp_path)
+
+    result = runner.invoke(app, ["migrate-storage", "--config", str(cfg)])
+
+    assert result.exit_code == 0
+    assert "warning" in result.stdout.lower()
+    assert "2026-05-25_A_vor1" in result.stdout
 
 
 def test_orphaned_outputs_dir_is_never_deleted(tmp_path: Path) -> None:
@@ -341,10 +423,21 @@ def test_refuses_when_captures_dir_is_inside_outputs_dir(tmp_path: Path) -> None
     assert "Refusing" in result.output
 
 
-def test_refuses_when_outputs_dir_is_home_directory(tmp_path: Path) -> None:
+def test_refuses_when_outputs_dir_is_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`Path.home()` is monkeypatched to a tmp_path-rooted fake — round-2
+    review finding: the original version of this test wrote the *real*
+    `Path.home()` into the config. It only passed because the refusal fired
+    before any enumeration; weaken that guard clause even slightly and
+    `uv run pytest` would walk the developer's entire real home directory.
+    """
+    fake_home = tmp_path / "fake_home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
     captures = tmp_path / "captures"
     captures.mkdir()
-    cfg = _config_for(captures, tmp_path, outputs=Path.home())
+    cfg = _config_for(captures, tmp_path, outputs=fake_home)
 
     result = runner.invoke(app, ["migrate-storage", "--config", str(cfg)])
 
@@ -352,16 +445,74 @@ def test_refuses_when_outputs_dir_is_home_directory(tmp_path: Path) -> None:
     assert "Refusing" in result.output
 
 
-def test_refuses_when_outputs_dir_is_filesystem_root(tmp_path: Path) -> None:
+def test_refuses_when_outputs_dir_is_case_varied_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Case-insensitive-filesystem bypass (round-2 review finding):
+    `Path.resolve()` does not case-normalise on macOS APFS's default
+    case-insensitive-but-case-preserving mode, so a config typo like
+    `outputs_dir = "/Users/Johannes"` against a real `/Users/johannes` used
+    to compare unequal as strings while being the exact same directory on
+    disk. The refusal now compares filesystem identity (`os.path.samefile`)
+    instead, which this test exercises with a case-swapped path to a fake
+    (tmp_path-rooted) home directory — never a real one."""
+    fake_home = tmp_path / "fake_home"
+    fake_home.mkdir()
+    case_varied = Path(str(fake_home).swapcase())
+    if not case_varied.is_dir():
+        pytest.skip("filesystem here is case-sensitive — no bypass exists to test")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
     captures = tmp_path / "captures"
     captures.mkdir()
-    root = Path(tmp_path.anchor)  # e.g. "/" — a real filesystem root, portable
-    cfg = _config_for(captures, tmp_path, outputs=root)
+    cfg = _config_for(captures, tmp_path, outputs=case_varied)
 
     result = runner.invoke(app, ["migrate-storage", "--config", str(cfg)])
 
     assert result.exit_code == EXIT_USER_ERROR
     assert "Refusing" in result.output
+
+
+def test_refuse_if_unsafe_storage_layout_detects_filesystem_root(tmp_path: Path) -> None:
+    """Filesystem-root refusal, exercised directly against the helper with a
+    fake object instead of a real `/`. Round-2 review finding: the original
+    version of this test wrote the real filesystem root into the config —
+    checking it out against `9daf213` (this command's pre-fix ancestor) to
+    hunt for RED evidence once already hung for 2 minutes walking a real
+    root/home via an unguarded preview (see the task-8 report's Critical-2
+    section). A fake object that only *behaves* like a root (its `.parent`
+    is itself) reproduces the refusal condition without ever touching real
+    filesystem structure — constructed here, in a tmp_path-scoped test, per
+    the "no real roots" instruction that finding left behind."""
+    captures = tmp_path / "captures"
+    captures.mkdir()
+
+    class _FakeFilesystemRoot:
+        """Mimics a real root's defining property (`path.parent == path`)
+        without ever touching one. `__fspath__` points at a nonexistent
+        tmp_path-rooted name so `os.path.samefile` (used internally) always
+        falls back to identity comparison rather than statting anything
+        real."""
+
+        def resolve(self) -> _FakeFilesystemRoot:
+            return self
+
+        @property
+        def parent(self) -> _FakeFilesystemRoot:
+            return self
+
+        def __eq__(self, other: object) -> bool:
+            return isinstance(other, _FakeFilesystemRoot)
+
+        def __hash__(self) -> int:
+            return 0
+
+        def __fspath__(self) -> str:
+            return str(tmp_path / "unrelated-fake-root-path")
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _refuse_if_unsafe_storage_layout(captures, _FakeFilesystemRoot())  # type: ignore[arg-type]
+
+    assert exc_info.value.exit_code == EXIT_USER_ERROR
 
 
 def test_bad_config_path_is_a_clean_error_not_a_traceback(tmp_path: Path) -> None:

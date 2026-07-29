@@ -262,3 +262,33 @@ def test_sweep_expired_handles_enumeration_failure(
     result = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
 
     assert result == []
+
+
+def test_prune_intermediates_rejects_target_outside_capture_dir(tmp_path: Path) -> None:
+    """Round-2 review finding: `targets=` was accepted verbatim with no
+    check it actually sits under `capture_dir` — an unvalidated deletion
+    parameter on a function that calls `shutil.rmtree` on its contents. A
+    caller mistake (or a future refactor) handing in an unrelated path
+    would rmtree it without complaint."""
+    capture_dir = _make_done_capture(tmp_path)
+    outside = tmp_path / "not-part-of-this-capture"
+    outside.mkdir()
+    (outside / "precious.txt").write_bytes(b"do not delete me")
+
+    with pytest.raises(ValueError, match="not inside capture_dir"):
+        prune_intermediates(capture_dir, targets=[outside])
+
+    assert outside.exists()
+    assert (outside / "precious.txt").exists()
+
+
+def test_prune_intermediates_accepts_target_nested_under_capture_dir(tmp_path: Path) -> None:
+    """The containment check must not reject legitimate nested targets —
+    only `capture_dir` itself and anything outside it."""
+    capture_dir = _make_done_capture(tmp_path)
+    nested = capture_dir / "colmap" / "sparse" / "0"
+
+    result = prune_intermediates(capture_dir, targets=[nested])
+
+    assert result.removed == [nested]
+    assert not nested.exists()

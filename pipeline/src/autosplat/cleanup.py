@@ -54,10 +54,13 @@ def prune_intermediates(
 
     `targets`, when given, is used verbatim instead of being re-derived from
     the filesystem. This matters to callers (e.g. `migrate-storage`) that
-    filter the derived list for their own safety reasons — a nested PLY
+    filter the derived list for their own safety reasons — a nested capture
     buried inside what is otherwise a reclaimable subdir, for example — and
     need that filtering to actually hold at the point of deletion rather
     than being silently discarded by a fresh `prunable_targets` call here.
+    Each supplied target must resolve to somewhere inside `capture_dir` —
+    this function calls `shutil.rmtree` on them, so an unvalidated caller
+    mistake here would delete whatever path was handed in, verbatim.
 
     Partial failures are reported rather than raised: unreclaimed space is
     cosmetic, and because targets are derived from the filesystem the next
@@ -68,6 +71,17 @@ def prune_intermediates(
 
     if targets is None:
         targets = prunable_targets(capture_dir)
+    else:
+        capture_resolved = capture_dir.resolve()
+        for target in targets:
+            target_resolved = target.resolve()
+            if (
+                target_resolved == capture_resolved
+                or capture_resolved not in target_resolved.parents
+            ):
+                raise ValueError(
+                    f"prune_intermediates: target {target} is not inside capture_dir {capture_dir}"
+                )
     removed: list[Path] = []
     failed: list[Path] = []
     total_bytes = 0

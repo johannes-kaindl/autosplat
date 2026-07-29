@@ -14,6 +14,7 @@ Commands (spec §7):
 
 from __future__ import annotations
 
+import os
 import shutil
 import webbrowser
 from datetime import UTC, datetime
@@ -586,7 +587,18 @@ def migrate_storage(
     planned: list[tuple[Path, list[Path]]] = []
 
     capture_dirs = lifecycle.find_capture_dirs(captures_dir)
-    capture_by_name = {c.name: c for c in capture_dirs}
+
+    # Deliberate last-wins on a basename collision (the real backlog has
+    # repeated names, e.g. two unrelated captures both called
+    # "2026-05-25_A_vor1" under different parents) — flagged below rather
+    # than silently letting an outputs/<name> match resolve against
+    # whichever capture happened to be enumerated last.
+    capture_by_name: dict[str, Path] = {}
+    duplicate_names: set[str] = set()
+    for c in capture_dirs:
+        if c.name in capture_by_name:
+            duplicate_names.add(c.name)
+        capture_by_name[c.name] = c
 
     for capture_dir in capture_dirs:
         rel = capture_dir.relative_to(captures_dir)
@@ -599,9 +611,20 @@ def migrate_storage(
             table.add_row(str(rel), "[dim]failed — kept (no scene.ply)[/dim]", "—")
             continue
 
-        targets = [t for t in lifecycle.reclaimable_targets(capture_dir) if not _contains_ply(t)]
+        raw_targets = lifecycle.reclaimable_targets(capture_dir)
+        if not raw_targets:
+            continue  # genuinely nothing there — nothing to explain
+        targets = [
+            t for t in raw_targets if not _holds_ply(t, ply) and not _contains_nested_capture(t)
+        ]
         if not targets:
-            continue  # nothing reclaimable and nothing to explain
+            # Something was there, but every single target is protected
+            # (e.g. a nested capture buried in rescue/) — list it as kept
+            # instead of letting the capture vanish from the table with no
+            # explanation.
+            skipped += 1
+            table.add_row(str(rel), "[dim]kept — every target is protected[/dim]", "—")
+            continue
         size = lifecycle.bytes_in(targets)
 
         if lifecycle.recently_active(capture_dir, now=now):
@@ -642,6 +665,13 @@ def migrate_storage(
             "[dim]Sizes shown for kept/skipped rows above are informational only — "
             "they are excluded from Reclaimable.[/dim]"
         )
+    if duplicate_names:
+        console.print(
+            f"[yellow]Warning:[/yellow] {len(duplicate_names)} capture name(s) appear more than "
+            f"once under captures/ ({', '.join(sorted(duplicate_names))}) — outputs/ matching by "
+            "name used whichever one was found last. An outputs/<name> entry may have been "
+            "judged redundant (or kept) on the strength of the wrong same-named capture."
+        )
 
     if not apply:
         console.print("Run again with [bold]--apply[/bold] to reclaim.")
@@ -679,6 +709,35 @@ def migrate_storage(
         raise typer.Exit(EXIT_PIPELINE_FAILURE)
 
 
+def _same_directory(a: Path, b: Path) -> bool:
+    """True if `a` and `b` refer to the same directory on disk.
+
+    Compares filesystem identity (`os.path.samefile` — device + inode)
+    rather than string equality. `Path.resolve()` does NOT case-normalise on
+    macOS's default APFS (case-insensitive but case-preserving): a config
+    typo like `outputs_dir = "/Users/Johannes"` against a real
+    `/Users/johannes` would compare unequal as strings while being the exact
+    same directory on disk — `==` (or `os.path.normcase`, which is a no-op
+    on POSIX platforms including macOS) would miss that; `samefile` doesn't.
+    Falls back to plain equality only when one side doesn't exist yet
+    (`samefile` requires both to), which is safe: there's nothing on disk
+    yet for a nonexistent path to alias with.
+    """
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return a == b
+
+
+def _is_same_or_inside(outer: Path, inner: Path) -> bool:
+    """True if `inner` is `outer` itself, or nested inside it — by
+    filesystem identity (`_same_directory`), so this holds even across a
+    case-insensitive filesystem alias."""
+    if _same_directory(outer, inner):
+        return True
+    return any(_same_directory(outer, ancestor) for ancestor in inner.parents)
+
+
 def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> None:
     """Refuse rather than let a config typo turn `--apply` into an `rm -rf`.
 
@@ -693,7 +752,7 @@ def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> N
     captures_resolved = captures_dir.resolve()
     outputs_resolved = outputs_dir.resolve()
 
-    if captures_resolved.is_relative_to(outputs_resolved):
+    if _is_same_or_inside(outputs_resolved, captures_resolved):
         err_console.print(
             "[red]Refusing:[/red] paths.captures_dir "
             f"({captures_resolved}) is the same as, or inside, export.outputs_dir "
@@ -703,7 +762,10 @@ def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> N
         raise typer.Exit(EXIT_USER_ERROR)
 
     home_resolved = Path.home().resolve()
-    if outputs_resolved == home_resolved or outputs_resolved == outputs_resolved.parent:
+    if (
+        _same_directory(outputs_resolved, home_resolved)
+        or outputs_resolved == outputs_resolved.parent
+    ):
         err_console.print(
             f"[red]Refusing:[/red] export.outputs_dir ({outputs_resolved}) resolves to your "
             "home directory or a filesystem root — deleting its children would be catastrophic."
@@ -711,19 +773,44 @@ def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> N
         raise typer.Exit(EXIT_USER_ERROR)
 
 
-def _contains_ply(target: Path) -> bool:
-    """True if `target` holds a `.ply` anywhere within it.
+def _holds_ply(target: Path, ply: Path) -> bool:
+    """True if `target` is, or contains, the capture's own published PLY.
 
-    Such a target must never be reclaimed — even a reclaimable-looking
-    subdir (`rescue/`, say) can bury a nested capture's own PLY inside it,
-    and `find_capture_dirs` deliberately does not surface that nested PLY as
-    a separate capture (its whole subtree is reclaimed as one unit for the
-    *outer* capture otherwise). This check is what actually holds at the
-    deletion site: filtering `reclaimable_targets` by it, then passing the
-    filtered list through to `cleanup.prune_intermediates(..., targets=...)`
-    instead of letting that function re-derive an unfiltered list.
+    Structurally this can't currently happen — `lifecycle.find_ply` only
+    ever returns `output/scene.ply`, a top-level `scene.ply`, or a glob
+    match directly in `capture_dir`, none of which sit inside a named
+    `RECLAIMABLE_SUBDIRS` target — but the capture's own PLY is exactly the
+    one thing this command must never delete, so the check stays explicit
+    rather than resting entirely on that structural coincidence.
     """
-    return any(target.rglob("*.ply"))
+    return ply == target or target in ply.parents
+
+
+def _contains_nested_capture(target: Path) -> bool:
+    """True if `target` holds a directory that is itself a capture.
+
+    NOT "contains a .ply anywhere" — that was too broad and caught the
+    common case of a Brush training checkpoint (`training/scene.ply`) that
+    `export.py` has already *copied* to `output/scene.ply`: a pure duplicate,
+    which must stay reclaimable, exactly like `cleanup-intermediates` and
+    `sweep_expired` already treat it.
+
+    What must actually stay protected is a genuinely nested capture — a
+    complete sub-reconstruction with its own directory structure buried one
+    or more levels inside what is otherwise a reclaimable subdir of some
+    *other* capture (e.g. a probe under `rescue/`). `find_capture_dirs`
+    deliberately does not surface that nested capture on its own (its whole
+    subtree is reclaimed as one unit for the *outer* capture otherwise), so
+    this is what actually holds at the deletion site: filtering
+    `reclaimable_targets` by it, then passing the filtered list through to
+    `cleanup.prune_intermediates(..., targets=...)` instead of letting that
+    function re-derive an unfiltered list. Reuses `lifecycle.is_capture_dir`
+    — the same capture signature `find_capture_dirs` itself uses — rather
+    than reimplementing it here.
+    """
+    from autosplat import lifecycle
+
+    return any(p.is_dir() and lifecycle.is_capture_dir(p) for p in target.rglob("*"))
 
 
 def _human_bytes(n: int) -> str:
