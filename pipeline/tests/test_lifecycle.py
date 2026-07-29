@@ -305,3 +305,43 @@ def test_rescue_clips_are_kept_while_probes_are_reclaimed(tmp_path: Path) -> Non
 
     assert [p.relative_to(capture).as_posix() for p in result.reclaimable] == ["rescue/probes"]
     assert result.reclaimable_bytes == 60
+
+
+def test_reclaimable_targets_withholds_a_target_burying_an_export(tmp_path: Path) -> None:
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    (capture / "colmap").mkdir()
+    nested = capture / "rescue" / "probes" / "probe_0" / "output"
+    nested.mkdir(parents=True)
+    (nested / "scene.ply").write_bytes(b"ply\n")
+
+    assert [p.name for p in lifecycle.reclaimable_targets(capture)] == ["colmap"]
+    assert [p.name for p in lifecycle.protected_targets(capture)] == ["probes"]
+
+
+def test_loose_ply_directly_in_a_target_does_not_protect_it(tmp_path: Path) -> None:
+    """A Brush checkpoint `export.py` already copied to `output/scene.ply` is
+    a duplicate, not a nested capture — protecting it hid 1,8 GB on the real
+    tree and made migrate-storage disagree with the automatic paths."""
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    (capture / "training").mkdir()
+    (capture / "training" / "scene.ply").write_bytes(b"ply\n")
+
+    assert [p.name for p in lifecycle.reclaimable_targets(capture)] == ["training"]
+    assert lifecycle.protected_targets(capture) == []
+
+
+def test_holds_exported_result_tolerates_unreadable_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable directory must not abort a `migrate-storage` preview (or
+    the dashboard's per-capture sizing) with a traceback — the same OSError
+    tolerance `bytes_in` and `recently_active` already have."""
+    target = tmp_path / "rescue" / "probes"
+    (target / "probe_0").mkdir(parents=True)
+
+    def exploding_is_dir(self: Path) -> bool:
+        raise PermissionError(self)
+
+    monkeypatch.setattr(Path, "is_dir", exploding_is_dir)
+
+    assert lifecycle.holds_exported_result(target) is False

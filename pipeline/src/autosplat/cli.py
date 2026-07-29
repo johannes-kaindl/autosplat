@@ -611,11 +611,13 @@ def migrate_storage(
             table.add_row(str(rel), "[dim]failed — kept (no scene.ply)[/dim]", "—")
             continue
 
-        raw_targets = lifecycle.reclaimable_targets(capture_dir)
-        if not raw_targets:
+        # The safety rule itself lives in `lifecycle.reclaimable_targets`, so
+        # every deletion path inherits it (C3). All that is left here is
+        # naming what was kept, which `protected_targets` answers.
+        targets = lifecycle.reclaimable_targets(capture_dir)
+        protected = lifecycle.protected_targets(capture_dir)
+        if not targets and not protected:
             continue  # genuinely nothing there — nothing to explain
-        protected = [t for t in raw_targets if _holds_ply(t, ply) or _contains_nested_export(t)]
-        targets = [t for t in raw_targets if t not in protected]
         protected_note = (
             f" (kept: {_target_labels(capture_dir, protected)} — holds a nested capture)"
             if protected
@@ -785,55 +787,6 @@ def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> N
             "home directory or a filesystem root — deleting its children would be catastrophic."
         )
         raise typer.Exit(EXIT_USER_ERROR)
-
-
-def _holds_ply(target: Path, ply: Path) -> bool:
-    """True if `target` is, or contains, the capture's own published PLY.
-
-    Structurally this can't currently happen — `lifecycle.find_ply` only
-    ever returns `output/scene.ply`, a top-level `scene.ply`, or a glob
-    match directly in `capture_dir`, none of which sit inside a named
-    `RECLAIMABLE_SUBDIRS` target — but the capture's own PLY is exactly the
-    one thing this command must never delete, so the check stays explicit
-    rather than resting entirely on that structural coincidence.
-    """
-    return ply == target or target in ply.parents
-
-
-def _contains_nested_export(target: Path) -> bool:
-    """True if `target` holds a directory that has produced an exported
-    result of its own — `output/scene.ply`, or a top-level `scene.ply`.
-
-    Deliberately NOT `lifecycle.is_capture_dir`'s full signature (which also
-    matches a directory holding just `frames/` + `colmap/`, no PLY) — that
-    is exactly the shape `bisection._probe_workspace_for` writes for every
-    bisection probe, and an abandoned probe workspace is pure intermediate,
-    not a result worth protecting. Round 2 reused `is_capture_dir` wholesale
-    and it silently withheld 3.1 GB of probe workspaces under `rescue/`,
-    diverging from `cleanup-intermediates`/`sweep_expired` (which still
-    reclaim them) exactly the way a loose `training/scene.ply` diverged
-    before that. `lifecycle.is_capture_dir` itself is intentionally left
-    alone here — it answers a different question (what `find_capture_dirs`
-    should treat as a capture) and `find_capture_dirs` needs its current,
-    broader behaviour (an unfinished capture still counts, for `resume`).
-
-    What must actually stay protected is a genuinely nested capture that
-    produced a real result — a complete sub-reconstruction buried one or
-    more levels inside what is otherwise a reclaimable subdir of some
-    *other* capture (e.g. a successful rescue probe under `rescue/`).
-    `find_capture_dirs` deliberately does not surface that nested capture on
-    its own (its whole subtree is reclaimed as one unit for the *outer*
-    capture otherwise), so this is what actually holds at the deletion
-    site: filtering `reclaimable_targets` by it, then passing the filtered
-    list through to `cleanup.prune_intermediates(..., targets=...)` instead
-    of letting that function re-derive an unfiltered list.
-    """
-    for p in target.rglob("*"):
-        if not p.is_dir():
-            continue
-        if (p / "output" / "scene.ply").exists() or (p / "scene.ply").exists():
-            return True
-    return False
 
 
 def _target_labels(capture_dir: Path, targets: list[Path]) -> str:

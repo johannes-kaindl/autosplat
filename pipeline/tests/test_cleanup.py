@@ -316,3 +316,54 @@ def test_prune_intermediates_accepts_target_nested_under_capture_dir(tmp_path: P
 
     assert result.removed == [nested]
     assert not nested.exists()
+
+
+def test_prune_never_deletes_a_target_burying_a_nested_export(tmp_path: Path) -> None:
+    """C3: the spec's hard safety rule ("a directory containing the only PLY
+    of a capture is never touched") was enforced only in `migrate-storage`,
+    which spent three fix rounds getting it right. `prune_intermediates` — used
+    by `sweep_expired`, the review-triggered prune and `cleanup-intermediates`
+    — applied no such filter, so a shape `migrate-storage` protects was
+    destroyed by "Confirm review" or by waiting 30 days."""
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    nested_ply = capture / "rescue" / "probes" / "probe_0" / "output" / "scene.ply"
+    nested_ply.parent.mkdir(parents=True)
+    nested_ply.write_bytes(b"ply\n")
+    (capture / "colmap").mkdir()
+    (capture / "colmap" / "blob").write_bytes(b"x" * 100)
+
+    result = prune_intermediates(capture)
+
+    assert nested_ply.exists()
+    assert (capture / "rescue" / "probes").exists()
+    # Targeted filter, not a blanket refusal: colmap/ holds no result of its
+    # own and is reclaimed normally alongside it.
+    assert not (capture / "colmap").exists()
+    assert [p.name for p in result.removed] == ["colmap"]
+
+
+def test_sweep_expired_never_deletes_a_target_burying_a_nested_export(tmp_path: Path) -> None:
+    """Same rule, via the automatic grace sweep — the path that reaches a
+    capture with no human in the loop at all."""
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    capture = tmp_path / "2026-06-01_old"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    nested_ply = capture / "rescue" / "probes" / "probe_0" / "output" / "scene.ply"
+    nested_ply.parent.mkdir(parents=True)
+    nested_ply.write_bytes(b"ply\n")
+    (capture / "colmap").mkdir()
+    (capture / "colmap" / "blob").write_bytes(b"x" * 5)
+    old = (now - timedelta(days=40)).timestamp()
+    for p in [capture, *capture.rglob("*")]:
+        os.utime(p, (old, old))
+
+    cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
+
+    assert nested_ply.exists()
+    assert not (capture / "colmap").exists()

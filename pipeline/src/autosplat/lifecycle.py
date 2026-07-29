@@ -122,11 +122,94 @@ def resolve_publish_ply(capture_dir: Path, status: ReviewStatus) -> Path | None:
     return find_ply(capture_dir)
 
 
-def reclaimable_targets(capture_dir: Path) -> list[Path]:
-    """Existing working dirs of `capture_dir`, regardless of lifecycle state."""
+def _candidate_targets(capture_dir: Path) -> list[Path]:
+    """Existing working dirs of `capture_dir`, before the safety filter."""
     targets = [capture_dir / sub for sub in RECLAIMABLE_SUBDIRS]
     targets += [capture_dir.joinpath(*parts) for parts in _EXTRA_RECLAIMABLE]
     return [t for t in targets if t.is_dir()]
+
+
+def holds_exported_result(target: Path) -> bool:
+    """True if `target` is, or buries, a directory that produced an exported
+    result of its own — `output/scene.ply`, or a top-level `scene.ply`.
+
+    This is the spec's hard safety rule ("a directory containing the only PLY
+    of a capture is never touched") in its one and only implementation. It
+    lives here rather than in `migrate-storage` because it must hold for
+    every deletion path: the review-triggered prune, the grace sweep and
+    `cleanup-intermediates` reach the same shapes with no human in the loop.
+
+    Deliberately NOT `is_capture_dir`'s full signature (which also matches a
+    directory holding just `frames/` + `colmap/`, no PLY) — that is exactly
+    what `bisection._probe_workspace_for` writes for every probe, and an
+    abandoned probe workspace is pure intermediate, not a result worth
+    protecting. Equally, a loose `training/scene.ply` (a Brush checkpoint
+    `export.py` already copied to `output/`) is a duplicate, not a nested
+    capture: only a *directory* that exported qualifies.
+
+    Only *subdirectories* are inspected, never `target` itself: a PLY sitting
+    loose directly in the target (`training/scene.ply`) is a Brush checkpoint
+    `export.py` already copied to `output/` — a duplicate, and protecting it
+    hid 1,8 GB on the real tree. The capture's own published PLY is handled
+    separately, by `protected_targets`.
+
+    Tolerant of unreadable or vanishing entries, like `bytes_in` and
+    `recently_active`: this runs inside `migrate-storage`'s preview and the
+    dashboard's per-capture sizing, where an OSError must not abort the
+    whole listing with a traceback. An entry that cannot be read cannot be
+    shown to hold a result, so it does not protect the target — the walk
+    simply continues.
+    """
+    try:
+        walker = target.rglob("*")
+    except OSError:
+        return False
+    while True:
+        try:
+            p = next(walker)
+        except StopIteration:
+            break
+        except OSError:
+            # A directory vanished or is unreadable mid-walk — nothing more
+            # to inspect down this branch.
+            continue
+        try:
+            if not p.is_dir():
+                continue
+            if (p / "output" / "scene.ply").exists() or (p / "scene.ply").exists():
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def protected_targets(capture_dir: Path) -> list[Path]:
+    """Candidate targets withheld from reclaim because they bury a result.
+
+    The complement of `reclaimable_targets` over the same candidate list.
+    Exists so `migrate-storage` can *name* what it kept in its report without
+    re-deriving the rule — display logic only; the rule itself is enforced by
+    `reclaimable_targets`, which every deletion path goes through.
+    """
+    ply = find_ply(capture_dir)
+    return [
+        t
+        for t in _candidate_targets(capture_dir)
+        if holds_exported_result(t) or (ply is not None and (ply == t or t in ply.parents))
+    ]
+
+
+def reclaimable_targets(capture_dir: Path) -> list[Path]:
+    """Existing working dirs of `capture_dir`, regardless of lifecycle state.
+
+    Never includes a target that is, or buries, an exported result — see
+    `holds_exported_result`. Every deletion path (`cleanup.prune_intermediates`
+    and therefore `sweep_expired`, the review-triggered prune,
+    `cleanup-intermediates`, and `migrate-storage`) derives its targets from
+    here, so the safety rule cannot hold in one path and not another.
+    """
+    protected = protected_targets(capture_dir)
+    return [t for t in _candidate_targets(capture_dir) if t not in protected]
 
 
 def bytes_in(targets: list[Path]) -> int:
@@ -251,12 +334,14 @@ def is_capture_dir(path: Path) -> bool:
 
     Either it has already exported (`output/scene.ply`, or a legacy
     top-level `scene.ply`), or it looks like one still in progress (both
-    `frames/` and `colmap/` present, no PLY yet). Public: shared with
-    `migrate-storage`'s nested-capture protection, which needs this exact
-    signature to tell a genuinely nested capture (protect it, whole) apart
-    from a loose stray PLY file sitting directly in an intermediate dir
-    (e.g. a Brush checkpoint copy in `training/` — not a capture, must stay
-    reclaimable).
+    `frames/` and `colmap/` present, no PLY yet) — the in-progress half is
+    what `resume` needs it to keep matching.
+
+    Answers only "where should `find_capture_dirs` stop recursing", which is
+    its sole caller. It is deliberately NOT the retention safety predicate:
+    reusing it as one cost a full fix round, because an abandoned bisection
+    probe workspace has exactly the frames+colmap shape and is pure
+    intermediate. That question is `holds_exported_result`'s.
     """
     if (path / "output" / "scene.ply").exists() or (path / "scene.ply").exists():
         return True
