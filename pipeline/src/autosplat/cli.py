@@ -14,7 +14,9 @@ Commands (spec §7):
 
 from __future__ import annotations
 
+import shutil
 import webbrowser
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -441,8 +443,6 @@ def cleanup_rescue(
         console.print(f"[dim]No rescue/ directory in {capture_dir} — nothing to clean.[/dim]")
         return
 
-    import shutil
-
     targets: list[Path] = []
     probes_dir = rescue_dir / "probes"
     if probes_dir.is_dir():
@@ -530,6 +530,119 @@ def cleanup_intermediates(
 
     cleanup_mod.prune_intermediates(capture_dir)
     console.print(f"[green]Done.[/green] Reclaimed ~{mb:.1f} MB.")
+
+
+@app.command("migrate-storage")
+def migrate_storage(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Actually reclaim. Without this flag, only a preview is printed."
+    ),
+) -> None:
+    """Bring an existing captures/ + outputs/ tree onto the lifecycle retention policy.
+
+    Relaxed rule for the backlog: a finished PLY is enough — review status is
+    not required, otherwise no legacy capture would ever qualify.
+
+    Skips a capture that looks like it has an in-flight `add-video`/`resume`
+    run — a reclaimable target or pipeline.log touched within the last hour
+    (see `lifecycle.recently_active`). The old `output/scene.ply` keeps its
+    stale mtime for the whole duration of such a rebuild while frames/colmap
+    are rewritten from scratch, so reclaim eligibility alone can't tell a
+    finished capture from one mid-rebuild. Skipped captures are still listed
+    in the preview, marked as such, rather than silently disappearing.
+    """
+    from autosplat import cleanup as cleanup_mod
+    from autosplat import lifecycle
+
+    cfg = load_config(config)
+    captures_dir = cfg.paths.captures_dir
+    outputs_dir = cfg.export.outputs_dir
+    now = datetime.now(UTC)
+
+    # Fixed, generous width rather than the ambient terminal size: capture
+    # paths are long (nested legacy layouts especially) and truncating them
+    # with an ellipsis defeats the point of a report the user must be able
+    # to read in full. A real terminal narrower than this just soft-wraps.
+    table_console = Console(width=200)
+    table = Table(title="migrate-storage" + ("" if apply else " — preview (nothing is deleted)"))
+    table.add_column("Path")
+    table.add_column("What")
+    table.add_column("Size", justify="right")
+
+    total = 0
+    planned: list[Path] = []
+
+    for capture_dir in lifecycle.find_capture_dirs(captures_dir):
+        ply = lifecycle.find_ply(capture_dir)
+        if ply is None:
+            continue  # failed capture — keeps everything for diagnosis
+        targets = [t for t in lifecycle.reclaimable_targets(capture_dir) if not _holds_ply(t, ply)]
+        if not targets:
+            continue
+        size = lifecycle.bytes_in(targets)
+        rel = capture_dir.relative_to(captures_dir)
+        if lifecycle.recently_active(capture_dir, now=now):
+            table.add_row(str(rel), "[yellow]active — skipped[/yellow]", _human_bytes(size))
+            continue
+        total += size
+        planned.append(capture_dir)
+        table.add_row(str(rel), ", ".join(t.name for t in targets), _human_bytes(size))
+
+    orphans: list[Path] = []
+    if outputs_dir.is_dir():
+        capture_names = {c.name for c in lifecycle.find_capture_dirs(captures_dir)}
+        for entry in sorted(outputs_dir.iterdir()):
+            if not entry.is_dir():
+                continue
+            size = lifecycle.bytes_in([entry])
+            total += size
+            orphans.append(entry)
+            note = "duplicate" if entry.name in capture_names else "orphaned"
+            table.add_row(f"outputs/{entry.name}", note, _human_bytes(size))
+
+    table_console.print(table)
+    console.print(f"[bold]Reclaimable: {_human_bytes(total)}[/bold]")
+
+    if not apply:
+        console.print("Run again with [bold]--apply[/bold] to reclaim.")
+        return
+
+    reclaimed = 0
+    failures = 0
+    for capture_dir in planned:
+        try:
+            result = cleanup_mod.prune_intermediates(capture_dir)
+        except Exception as e:  # one failure must not stop the rest of the sweep
+            console.print(f"[red]failed:[/red] {capture_dir} — {e}")
+            failures += 1
+            continue
+        reclaimed += result.bytes_reclaimed
+    for entry in orphans:
+        try:
+            size = lifecycle.bytes_in([entry])
+            shutil.rmtree(entry)
+        except OSError as e:
+            console.print(f"[red]failed:[/red] {entry} — {e}")
+            failures += 1
+            continue
+        reclaimed += size
+
+    console.print(f"[green]Reclaimed {_human_bytes(reclaimed)}[/green], {failures} failure(s).")
+
+
+def _holds_ply(target: Path, ply: Path) -> bool:
+    """True if `target` contains the capture's only PLY — never reclaim those."""
+    return ply == target or target in ply.parents
+
+
+def _human_bytes(n: int) -> str:
+    size = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
 
 
 @app.command()

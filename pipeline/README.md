@@ -192,6 +192,7 @@ autosplat config show | init
 autosplat doctor                                              # ffmpeg / colmap / brush / compress
 autosplat compress <ply> [--format sog|spz|ksplat]
 autosplat cleanup-intermediates <capture-dir> [--dry-run]           # v1.15.0+
+autosplat migrate-storage [--config PATH] [--apply]
 autosplat version
 ```
 

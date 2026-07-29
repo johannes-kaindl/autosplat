@@ -218,6 +218,23 @@ Refuses (non-zero exit) if `output/scene.ply` is missing — the same capture di
 still mid-run or failed before exporting. The WebUI's capture-detail page has an equivalent
 "Free up space" button for captures that are `done` and still have something to reclaim.
 
+### Bringing an existing backlog onto the retention policy
+
+`autosplat migrate-storage` sweeps your whole `captures/` tree (including nested pre-Phase-9
+rescue layouts) plus the deprecated `outputs/` copies and reports everything reclaimable in one
+table — by default a **preview only**, nothing is deleted:
+
+```bash
+uv run autosplat migrate-storage
+# reclaim what the preview reported:
+uv run autosplat migrate-storage --apply
+```
+
+Failed captures (no exported `scene.ply`) are deliberately left alone, exactly like
+`cleanup-intermediates` — they still need `colmap/`/`rescue/` for diagnosis or `resume`. A
+capture that looks mid-rebuild (a working dir touched within the last hour) is listed but
+marked as skipped rather than reclaimed, to avoid destroying an in-flight `add-video`/`resume`.
+
 ---
 
 ## Reference cases that worked
