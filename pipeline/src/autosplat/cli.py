@@ -764,6 +764,15 @@ def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> N
     deprecated export copies. `config.py` documents "distinct from
     captures_dir" as an invariant on `export.outputs_dir`, but nothing
     enforced it before this check.
+
+    Both nesting directions are refused, because both are destructive:
+    - captures inside outputs — every capture becomes a deletion candidate;
+    - outputs inside captures — `find_capture_dirs` descends into `outputs/`
+      and registers each `outputs/<name>` as a capture of its own (a
+      top-level `scene.ply` satisfies the signature), so the outputs loop
+      then matches an entry against *itself*, sees "a capture of that name
+      exists and has a PLY", and deletes the orphan — the one thing this
+      command must never delete.
     """
     captures_resolved = captures_dir.resolve()
     outputs_resolved = outputs_dir.resolve()
@@ -774,6 +783,17 @@ def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> N
             f"({captures_resolved}) is the same as, or inside, export.outputs_dir "
             f"({outputs_resolved}). migrate-storage would delete the captures tree "
             "itself while treating it as deprecated 'outputs/' copies."
+        )
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    if _is_same_or_inside(captures_resolved, outputs_resolved):
+        err_console.print(
+            "[red]Refusing:[/red] export.outputs_dir "
+            f"({outputs_resolved}) is inside paths.captures_dir "
+            f"({captures_resolved}). migrate-storage would scan its entries as "
+            "captures in their own right and then delete them as redundant "
+            "copies of themselves — including orphans, which are the last "
+            "surviving copy of their scene."
         )
         raise typer.Exit(EXIT_USER_ERROR)
 

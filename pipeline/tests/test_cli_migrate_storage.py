@@ -489,6 +489,32 @@ def test_refuses_when_captures_dir_is_inside_outputs_dir(tmp_path: Path) -> None
     assert "Refusing" in result.output
 
 
+def test_refuses_when_outputs_dir_is_inside_captures_dir(tmp_path: Path) -> None:
+    """I2: the guard checked only "captures inside outputs". The other
+    direction is just as destructive: `find_capture_dirs` descends into
+    `outputs/`, registers each `outputs/<name>` as a capture (a top-level
+    `scene.ply` satisfies the signature), and the outputs loop then finds a
+    name match *with* a PLY — matching the entry against itself — and queues
+    the orphan for deletion. That destroys exactly what the maintainer ruled
+    must never be deleted: the last surviving copy of a scene.
+
+    CAPTURE-GUIDE already claimed both directions were refused.
+    """
+    captures = tmp_path / "captures"
+    outputs = captures / "outputs"
+    orphan = outputs / "2026-05-14_jay_1"
+    orphan.mkdir(parents=True)
+    (orphan / "scene.ply").write_bytes(b"ply\nend_header\n")
+    _backdate(captures)
+    cfg = _config_for(captures, tmp_path, outputs=outputs)
+
+    result = runner.invoke(app, ["migrate-storage", "--config", str(cfg), "--apply"])
+
+    assert result.exit_code == EXIT_USER_ERROR
+    assert "Refusing" in result.output
+    assert (orphan / "scene.ply").exists()
+
+
 def test_refuses_when_outputs_dir_is_home_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -565,6 +591,11 @@ def test_refuse_if_unsafe_storage_layout_detects_filesystem_root(tmp_path: Path)
         @property
         def parent(self) -> _FakeFilesystemRoot:
             return self
+
+        @property
+        def parents(self) -> tuple[()]:
+            # `Path("/").parents` is empty — a root has no ancestors.
+            return ()
 
         def __eq__(self, other: object) -> bool:
             return isinstance(other, _FakeFilesystemRoot)
