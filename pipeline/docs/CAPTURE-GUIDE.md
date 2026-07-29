@@ -234,6 +234,17 @@ Failed captures (no exported `scene.ply`) are deliberately left alone, exactly l
 `cleanup-intermediates` — they still need `colmap/`/`rescue/` for diagnosis or `resume`. A
 capture that looks mid-rebuild (a working dir touched within the last hour) is listed but
 marked as skipped rather than reclaimed, to avoid destroying an in-flight `add-video`/`resume`.
+Every one of these kept/skipped rows still appears in the table, labelled with why, instead of
+silently disappearing.
+
+An `outputs/<name>` entry is only ever deleted when a capture of that name still exists **and**
+that capture has its own exported `scene.ply` — that's the genuinely redundant case. An
+`outputs/<name>` entry with no matching capture (an **orphan**) is the last surviving copy of
+that scene and is never deleted, no matter how old it is; the same holds for a name match whose
+capture hasn't exported yet. Refuses outright (before touching anything) if `export.outputs_dir`
+and `paths.captures_dir` resolve to the same directory, one nests inside the other, or
+`outputs_dir` resolves to your home directory or a filesystem root — a config typo there would
+otherwise turn `--apply` into a much larger deletion than intended.
 
 ---
 

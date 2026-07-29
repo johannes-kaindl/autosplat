@@ -549,16 +549,27 @@ def migrate_storage(
     (see `lifecycle.recently_active`). The old `output/scene.ply` keeps its
     stale mtime for the whole duration of such a rebuild while frames/colmap
     are rewritten from scratch, so reclaim eligibility alone can't tell a
-    finished capture from one mid-rebuild. Skipped captures are still listed
-    in the preview, marked as such, rather than silently disappearing.
+    finished capture from one mid-rebuild.
+
+    An `outputs/<name>` entry is only ever deleted when a capture of that
+    name still exists AND that capture has its own exported PLY — otherwise
+    it is the last surviving copy of a scene whose capture directory is gone
+    (or never finished), and is kept, unconditionally, no matter how long it
+    has sat there.
+
+    Every capture and outputs entry this command looked at and chose not to
+    touch is still listed in the preview, with a label saying why, rather
+    than silently disappearing.
     """
     from autosplat import cleanup as cleanup_mod
     from autosplat import lifecycle
 
-    cfg = load_config(config)
+    cfg = _load_or_die(config)
     captures_dir = cfg.paths.captures_dir
     outputs_dir = cfg.export.outputs_dir
     now = datetime.now(UTC)
+
+    _refuse_if_unsafe_storage_layout(captures_dir, outputs_dir)
 
     # Fixed, generous width rather than the ambient terminal size: capture
     # paths are long (nested legacy layouts especially) and truncating them
@@ -571,38 +582,66 @@ def migrate_storage(
     table.add_column("Size", justify="right")
 
     total = 0
-    planned: list[Path] = []
+    skipped = 0  # deliberately-kept rows: active/failed captures, protected outputs/
+    planned: list[tuple[Path, list[Path]]] = []
 
-    for capture_dir in lifecycle.find_capture_dirs(captures_dir):
+    capture_dirs = lifecycle.find_capture_dirs(captures_dir)
+    capture_by_name = {c.name: c for c in capture_dirs}
+
+    for capture_dir in capture_dirs:
+        rel = capture_dir.relative_to(captures_dir)
         ply = lifecycle.find_ply(capture_dir)
         if ply is None:
-            continue  # failed capture — keeps everything for diagnosis
-        targets = [t for t in lifecycle.reclaimable_targets(capture_dir) if not _holds_ply(t, ply)]
+            # Failed/unfinished capture — colmap/rescue are still needed for
+            # diagnosis or `resume`. Listed (not skipped silently) so the
+            # user can see why it's absent from the reclaim total.
+            skipped += 1
+            table.add_row(str(rel), "[dim]failed — kept (no scene.ply)[/dim]", "—")
+            continue
+
+        targets = [t for t in lifecycle.reclaimable_targets(capture_dir) if not _contains_ply(t)]
         if not targets:
-            continue
+            continue  # nothing reclaimable and nothing to explain
         size = lifecycle.bytes_in(targets)
-        rel = capture_dir.relative_to(captures_dir)
+
         if lifecycle.recently_active(capture_dir, now=now):
-            table.add_row(str(rel), "[yellow]active — skipped[/yellow]", _human_bytes(size))
+            skipped += 1
+            table.add_row(
+                str(rel), "[yellow]active — skipped (in-flight run)[/yellow]", _human_bytes(size)
+            )
             continue
+
         total += size
-        planned.append(capture_dir)
+        planned.append((capture_dir, targets))
         table.add_row(str(rel), ", ".join(t.name for t in targets), _human_bytes(size))
 
-    orphans: list[Path] = []
+    to_delete: list[Path] = []
     if outputs_dir.is_dir():
-        capture_names = {c.name for c in lifecycle.find_capture_dirs(captures_dir)}
         for entry in sorted(outputs_dir.iterdir()):
-            if not entry.is_dir():
+            if entry.is_symlink() or not entry.is_dir():
                 continue
             size = lifecycle.bytes_in([entry])
-            total += size
-            orphans.append(entry)
-            note = "duplicate" if entry.name in capture_names else "orphaned"
-            table.add_row(f"outputs/{entry.name}", note, _human_bytes(size))
+            owning_capture = capture_by_name.get(entry.name)
+            if owning_capture is not None and lifecycle.find_ply(owning_capture) is not None:
+                total += size
+                to_delete.append(entry)
+                table.add_row(f"outputs/{entry.name}", "duplicate — reclaimed", _human_bytes(size))
+                continue
+            skipped += 1
+            reason = (
+                "orphaned — kept (no capture holds this scene)"
+                if owning_capture is None
+                else "duplicate — kept (capture has no scene.ply yet)"
+            )
+            table.add_row(f"outputs/{entry.name}", f"[dim]{reason}[/dim]", _human_bytes(size))
 
     table_console.print(table)
     console.print(f"[bold]Reclaimable: {_human_bytes(total)}[/bold]")
+    if skipped:
+        console.print(
+            "[dim]Sizes shown for kept/skipped rows above are informational only — "
+            "they are excluded from Reclaimable.[/dim]"
+        )
 
     if not apply:
         console.print("Run again with [bold]--apply[/bold] to reclaim.")
@@ -610,15 +649,19 @@ def migrate_storage(
 
     reclaimed = 0
     failures = 0
-    for capture_dir in planned:
+    for capture_dir, targets in planned:
         try:
-            result = cleanup_mod.prune_intermediates(capture_dir)
+            result = cleanup_mod.prune_intermediates(capture_dir, targets=targets)
         except Exception as e:  # one failure must not stop the rest of the sweep
             console.print(f"[red]failed:[/red] {capture_dir} — {e}")
             failures += 1
             continue
         reclaimed += result.bytes_reclaimed
-    for entry in orphans:
+        if result.failed:
+            failures += len(result.failed)
+            for failed_target in result.failed:
+                console.print(f"[red]failed:[/red] {failed_target}")
+    for entry in to_delete:
         try:
             size = lifecycle.bytes_in([entry])
             shutil.rmtree(entry)
@@ -628,18 +671,65 @@ def migrate_storage(
             continue
         reclaimed += size
 
-    console.print(f"[green]Reclaimed {_human_bytes(reclaimed)}[/green], {failures} failure(s).")
+    console.print(
+        f"[green]Reclaimed {_human_bytes(reclaimed)}[/green], "
+        f"{skipped} skipped, {failures} failure(s)."
+    )
+    if failures:
+        raise typer.Exit(EXIT_PIPELINE_FAILURE)
 
 
-def _holds_ply(target: Path, ply: Path) -> bool:
-    """True if `target` contains the capture's only PLY — never reclaim those."""
-    return ply == target or target in ply.parents
+def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> None:
+    """Refuse rather than let a config typo turn `--apply` into an `rm -rf`.
+
+    Every direct child of `outputs_dir` is a deletion candidate once it
+    matches a fully-exported capture name, so a config where `outputs_dir`
+    resolves to `captures_dir` itself (or an ancestor of it), to $HOME, or to
+    a filesystem root would make this command delete far more than
+    deprecated export copies. `config.py` documents "distinct from
+    captures_dir" as an invariant on `export.outputs_dir`, but nothing
+    enforced it before this check.
+    """
+    captures_resolved = captures_dir.resolve()
+    outputs_resolved = outputs_dir.resolve()
+
+    if captures_resolved.is_relative_to(outputs_resolved):
+        err_console.print(
+            "[red]Refusing:[/red] paths.captures_dir "
+            f"({captures_resolved}) is the same as, or inside, export.outputs_dir "
+            f"({outputs_resolved}). migrate-storage would delete the captures tree "
+            "itself while treating it as deprecated 'outputs/' copies."
+        )
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    home_resolved = Path.home().resolve()
+    if outputs_resolved == home_resolved or outputs_resolved == outputs_resolved.parent:
+        err_console.print(
+            f"[red]Refusing:[/red] export.outputs_dir ({outputs_resolved}) resolves to your "
+            "home directory or a filesystem root — deleting its children would be catastrophic."
+        )
+        raise typer.Exit(EXIT_USER_ERROR)
+
+
+def _contains_ply(target: Path) -> bool:
+    """True if `target` holds a `.ply` anywhere within it.
+
+    Such a target must never be reclaimed — even a reclaimable-looking
+    subdir (`rescue/`, say) can bury a nested capture's own PLY inside it,
+    and `find_capture_dirs` deliberately does not surface that nested PLY as
+    a separate capture (its whole subtree is reclaimed as one unit for the
+    *outer* capture otherwise). This check is what actually holds at the
+    deletion site: filtering `reclaimable_targets` by it, then passing the
+    filtered list through to `cleanup.prune_intermediates(..., targets=...)`
+    instead of letting that function re-derive an unfiltered list.
+    """
+    return any(target.rglob("*.ply"))
 
 
 def _human_bytes(n: int) -> str:
     size = float(n)
-    for unit in ("B", "KB", "MB", "GB"):
-        if size < 1024 or unit == "GB":
+    for unit in ("B", "KB", "MB"):
+        if size < 1024:
             return f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} GB"

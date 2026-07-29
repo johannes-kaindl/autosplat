@@ -41,11 +41,23 @@ def prunable_targets(capture_dir: Path) -> list[Path]:
     return lifecycle.reclaimable_targets(capture_dir)
 
 
-def prune_intermediates(capture_dir: Path, *, dry_run: bool = False) -> PruneResult:
+def prune_intermediates(
+    capture_dir: Path,
+    *,
+    dry_run: bool = False,
+    targets: list[Path] | None = None,
+) -> PruneResult:
     """Delete the working dirs of a capture that finished exporting.
 
     Raises `NotExported` if no PLY exists — an unfinished capture still needs
     these for `autosplat resume`, and a failed one needs them for diagnosis.
+
+    `targets`, when given, is used verbatim instead of being re-derived from
+    the filesystem. This matters to callers (e.g. `migrate-storage`) that
+    filter the derived list for their own safety reasons — a nested PLY
+    buried inside what is otherwise a reclaimable subdir, for example — and
+    need that filtering to actually hold at the point of deletion rather
+    than being silently discarded by a fresh `prunable_targets` call here.
 
     Partial failures are reported rather than raised: unreclaimed space is
     cosmetic, and because targets are derived from the filesystem the next
@@ -54,7 +66,8 @@ def prune_intermediates(capture_dir: Path, *, dry_run: bool = False) -> PruneRes
     if not is_exported(capture_dir):
         raise NotExported(capture_dir)
 
-    targets = prunable_targets(capture_dir)
+    if targets is None:
+        targets = prunable_targets(capture_dir)
     removed: list[Path] = []
     failed: list[Path] = []
     total_bytes = 0
