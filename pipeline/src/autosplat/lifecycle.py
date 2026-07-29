@@ -367,15 +367,24 @@ def list_capture_dirs(captures_dir: Path) -> list[Path]:
     an explicit, previewable command is the right instrument for a
     non-conforming or nested layout, not a silent daemon thread.
 
-    Symlinks are skipped — a symlinked capture dir would otherwise let the
-    sweep `rmtree` through the link into a tree it was never pointed at.
+    Deliberately does NOT skip symlinks, unlike `find_capture_dirs` — a
+    symlinked capture dir is a plausible pattern for offloading a large
+    capture to an external disk, and this helper is shared with
+    `webui.state.list_captures`. A symlink filter here previously made an
+    offloaded capture vanish from the captures list and its detail page
+    404 — right instinct, wrong function: `find_capture_dirs` skips symlinks
+    to guard against loops during its *recursive* descent, a hazard this
+    non-recursive, top-level-only scan never has. Reclaiming through the
+    symlink is safe: `prune_intermediates` resolves both `capture_dir` and
+    its targets before checking containment, so the real, offloaded location
+    is what gets reclaimed — the intended behaviour, not an escape hatch.
     """
     if not captures_dir.is_dir():
         return []
     return sorted(
         entry
         for entry in captures_dir.iterdir()
-        if entry.is_dir() and not entry.is_symlink() and CAPTURE_DIR_RE.match(entry.name)
+        if entry.is_dir() and CAPTURE_DIR_RE.match(entry.name)
     )
 
 

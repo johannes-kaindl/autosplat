@@ -156,6 +156,28 @@ def test_grace_disabled_never_expires(tmp_path: Path) -> None:
     assert result.reclaimable == []
 
 
+def test_list_capture_dirs_includes_symlinked_capture(tmp_path: Path) -> None:
+    """P1 (final review of feat/capture-lifecycle): a symlinked capture dir —
+    a plausible pattern for offloading a large capture to an external disk —
+    must appear in `list_capture_dirs`, the same helper `webui.state` uses for
+    the captures list. Filtering it out here (right for `find_capture_dirs`,
+    which guards against symlink loops during recursion) silently vanished
+    the capture from the UI and 404'd its detail page."""
+    real_root = tmp_path / "external_disk"
+    real_capture = real_root / "2026-07-01_offloaded"
+    (real_capture / "output").mkdir(parents=True)
+    (real_capture / "output" / "scene.ply").write_bytes(b"ply\n")
+
+    captures_dir = tmp_path / "captures"
+    captures_dir.mkdir()
+    link = captures_dir / "2026-07-01_offloaded"
+    link.symlink_to(real_capture, target_is_directory=True)
+
+    found = lifecycle.list_capture_dirs(captures_dir)
+
+    assert link in found
+
+
 def test_find_capture_dirs_finds_nested_legacy_layout(tmp_path: Path) -> None:
     # Reproduces 2026-05-25_max_strasse_rescue/2026-05-25_A_vor1 (8,1 GB on disk)
     outer = tmp_path / "2026-05-25_max_strasse_rescue"

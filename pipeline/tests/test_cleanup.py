@@ -139,6 +139,36 @@ def test_prune_is_idempotent(tmp_path: Path) -> None:
     assert second.bytes_reclaimed == 0
 
 
+def test_sweep_expired_reclaims_through_a_symlinked_capture(tmp_path: Path) -> None:
+    """P1: `list_capture_dirs` no longer filters symlinks, so a symlinked
+    capture (offloaded to an external disk) must be swept just like a
+    regular one. Containment holds because `prune_intermediates` resolves
+    both `capture_dir` (the symlink) and its targets before comparing."""
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    real_capture = tmp_path / "external_disk" / "2026-06-01_offloaded"
+    (real_capture / "output").mkdir(parents=True)
+    (real_capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    (real_capture / "colmap").mkdir()
+    (real_capture / "colmap" / "blob").write_bytes(b"x" * 5)
+    old = (now - timedelta(days=40)).timestamp()
+    for p in [real_capture, *real_capture.rglob("*")]:
+        os.utime(p, (old, old))
+
+    captures_dir = tmp_path / "captures"
+    captures_dir.mkdir()
+    link = captures_dir / "2026-06-01_offloaded"
+    link.symlink_to(real_capture, target_is_directory=True)
+
+    results = cleanup.sweep_expired(captures_dir, grace_days=30, now=now)
+
+    assert len(results) == 1
+    assert not (real_capture / "colmap").exists()
+    assert (real_capture / "output" / "scene.ply").exists()
+
+
 def test_sweep_expired_reclaims_only_past_grace(tmp_path: Path) -> None:
     import os
     from datetime import UTC, datetime, timedelta

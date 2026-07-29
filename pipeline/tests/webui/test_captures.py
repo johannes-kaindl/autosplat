@@ -34,6 +34,26 @@ def test_list_captures_with_fixture(tmp_path: Path) -> None:
     assert captures[0].ply_size_bytes == 4
 
 
+def test_list_captures_includes_symlinked_capture(tmp_path: Path) -> None:
+    """P1 (final review of feat/capture-lifecycle): `lifecycle.list_capture_dirs`
+    used to filter out symlinked capture dirs — right for the startup sweep,
+    wrong for the UI, since offloading a large capture to a symlinked external
+    disk is a plausible pattern. That made the capture vanish from the list."""
+    real_capture = tmp_path / "external_disk" / "2026-05-16_offloaded"
+    (real_capture / "output").mkdir(parents=True)
+    (real_capture / "output" / "scene.ply").write_bytes(b"ply\n")
+
+    captures_dir = tmp_path / "captures"
+    captures_dir.mkdir()
+    (captures_dir / "2026-05-16_offloaded").symlink_to(real_capture, target_is_directory=True)
+
+    captures = list_captures(captures_dir)
+
+    assert len(captures) == 1
+    assert captures[0].id == "2026-05-16_offloaded"
+    assert captures[0].has_ply is True
+
+
 def test_list_captures_propagates_in_progress_detail(tmp_path: Path) -> None:
     """v1.4.1: when WatcherState.in_progress carries a detail string (set by
     bisect_recursively per-clip), list_captures surfaces it on CaptureInfo
@@ -236,6 +256,27 @@ def test_capture_detail_route_returns_200(app: FastAPI, tmp_path: Path) -> None:
         response = client.get("/captures/2026-05-16_smoke")
     assert response.status_code == 200
     assert "2026-05-16_smoke" in response.text
+
+
+def test_capture_detail_route_returns_200_for_symlinked_capture(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    """P1: before the fix, the symlink filter in `list_capture_dirs` made
+    `get_capture` return None for a symlinked capture dir, 404ing this route."""
+    real_capture = tmp_path / "external_disk" / "2026-05-16_offloaded"
+    (real_capture / "output").mkdir(parents=True)
+    (real_capture / "output" / "scene.ply").write_bytes(b"ply\n")
+
+    captures_dir = tmp_path / "captures"
+    captures_dir.mkdir()
+    (captures_dir / "2026-05-16_offloaded").symlink_to(real_capture, target_is_directory=True)
+
+    app.state.cfg.paths.captures_dir = captures_dir
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-05-16_offloaded")
+    assert response.status_code == 200
+    assert "2026-05-16_offloaded" in response.text
 
 
 def test_capture_new_form_returns_200(app: FastAPI) -> None:
