@@ -246,6 +246,16 @@ and `paths.captures_dir` resolve to the same directory, one nests inside the oth
 `outputs_dir` resolves to your home directory or a filesystem root — a config typo there would
 otherwise turn `--apply` into a much larger deletion than intended.
 
+A reclaimable-looking subdir (`rescue/`, most often) can bury a **nested capture that produced its
+own result** — a bisection probe that succeeded, say, sitting next to abandoned ones. That specific
+directory is protected and reclaimed as a whole: the signature is an exported PLY of its own
+(`output/scene.ply`, or a top-level `scene.ply`), not merely `frames/` + `colmap/` — an *abandoned*
+probe workspace has exactly that shape with no PLY, and is reclaimed normally, same as
+`cleanup-intermediates`/the background grace sweep already treat it. A protected target is always
+named in its capture's row (e.g. `brush_dataset (kept: rescue — holds a nested capture)`), even
+when the rest of that same capture is reclaimed normally — it never just silently disappears from
+the list.
+
 ---
 
 ## Reference cases that worked

@@ -136,9 +136,10 @@ def test_training_scene_ply_duplicate_is_reclaimed_not_protected(tmp_path: Path)
     from the plan, with no "kept" label or footnote at all — on the
     maintainer's real machine this alone hid ~1.8 GB, and it made
     `migrate-storage` disagree with `cleanup-intermediates`/`sweep_expired`
-    about the very same directory. Fixed by `_contains_nested_capture`,
-    which only protects a target holding a directory that is itself a
-    capture — a loose file directly inside `training/` doesn't qualify.
+    about the very same directory. Fixed by `_contains_nested_export`,
+    which only protects a target holding a directory that has produced an
+    exported result of its own — a loose file directly inside `training/`
+    doesn't qualify.
     """
     captures = _legacy_tree(tmp_path)
     inner = captures / "2026-05-25_max_strasse_rescue" / "2026-05-25_A_vor1"
@@ -157,8 +158,8 @@ def test_never_touches_a_reclaimable_dir_holding_a_nested_ply(tmp_path: Path) ->
     exported PLY. `find_capture_dirs` deliberately does not surface that
     nested PLY as a separate capture (recursion stops once `2026-07-01_x`
     itself is recognised as a capture) — so the only thing that can protect
-    it is treating a target that holds a directory which is itself a
-    capture as off-limits, in its entirety.
+    it is treating a target that holds a directory which has produced its
+    own exported result as off-limits, in its entirety.
 
     This replaces the brief's original test, which never actually exercised
     the guard: its `scene.ply` sat under a `rescue/` with no sibling capture
@@ -185,6 +186,65 @@ def test_never_touches_a_reclaimable_dir_holding_a_nested_ply(tmp_path: Path) ->
     assert nested_ply.exists()
     assert (capture / "rescue").exists()
     assert not (capture / "colmap").exists()
+
+
+def test_probe_workspace_without_ply_is_reclaimed_not_protected(tmp_path: Path) -> None:
+    """Regression guard (task-8 round-3 finding): an abandoned bisection
+    probe workspace has exactly `frames/` + `colmap/` (see
+    `bisection._probe_workspace_for`) and NO PLY — that shape also satisfies
+    `lifecycle.is_capture_dir`, which round 2 reused wholesale for the
+    nested-capture guard. On the maintainer's real machine,
+    `2026-05-26_max_strasse/rescue/` held only such probe workspaces and was
+    3.1 GB — round 2's predicate wrongly protected the entire tree, the same
+    cross-command divergence (vs. `cleanup-intermediates`/`sweep_expired`,
+    which still reclaim it) that a loose `training/scene.ply` caused before.
+    A probe workspace that never produced a PLY produced no result and must
+    be reclaimed like any other abandoned intermediate.
+    """
+    captures = tmp_path / "captures"
+    capture = captures / "2026-05-26_max_strasse"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
+    probe = capture / "rescue" / "probes" / "0"
+    (probe / "frames").mkdir(parents=True)
+    (probe / "frames" / "frame_0001.jpg").write_bytes(b"x" * 100)
+    (probe / "colmap").mkdir()
+    (probe / "colmap" / "database.db").write_bytes(b"x" * 100)
+    _backdate(captures)
+    cfg = _config_for(captures, tmp_path)
+
+    result = runner.invoke(app, ["migrate-storage", "--config", str(cfg), "--apply"])
+
+    assert result.exit_code == 0
+    assert not (capture / "rescue").exists()
+
+
+def test_partially_protected_capture_labels_the_protected_target(tmp_path: Path) -> None:
+    """Round-3 'also fix': when only SOME of a capture's targets are
+    protected (a nested capture that DID produce its own scene.ply under
+    rescue/) while another target on the same capture (brush_dataset) is
+    reclaimed normally, the protected target must still be named in that
+    capture's row — not simply absent, which is exactly the silent-exclusion
+    symptom that hid the round-2 over-protection regression until real data
+    surfaced it."""
+    captures = tmp_path / "captures"
+    capture = captures / "2026-05-26_max_strasse"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
+    (capture / "brush_dataset").mkdir()
+    (capture / "brush_dataset" / "blob").write_bytes(b"x" * 100)
+    nested = capture / "rescue" / "probes" / "0"
+    (nested / "output").mkdir(parents=True)
+    (nested / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
+    _backdate(captures)
+    cfg = _config_for(captures, tmp_path)
+
+    result = runner.invoke(app, ["migrate-storage", "--config", str(cfg)])
+
+    assert result.exit_code == 0
+    assert "brush_dataset" in result.stdout
+    assert "rescue" in result.stdout
+    assert "kept" in result.stdout.lower()
 
 
 def test_capture_with_every_target_protected_is_listed_as_kept(tmp_path: Path) -> None:
