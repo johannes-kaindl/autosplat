@@ -301,7 +301,7 @@
 
       {% if capture.status == 'done' and has_prunable %}
       <form method="post" action="/captures/{{ capture.id }}/prune"
-            onsubmit="return confirm('Delete frames/colmap/training for this capture? The exported scene.ply is kept — this only removes rebuildable working data.')"
+            onsubmit="return confirm('Delete this capture\'s working dirs (frames, colmap, training, brush_dataset, rescue/probes, share/_tmp)? Everything in output/ is kept, along with the logs, finished share bundles and rescue/clips — this only removes rebuildable working data.')"
             style="margin-bottom:var(--space-2)">
         <button type="submit" class="as-btn ghost" style="width:100%">
           {{ icon('trash', 13) }} Free up space
