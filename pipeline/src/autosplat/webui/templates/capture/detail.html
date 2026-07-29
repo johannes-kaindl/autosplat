@@ -225,6 +225,12 @@
             </form>
           </div>
           {% endif %}
+          {% if capture.reclaimable_bytes %}
+            <p class="dim" style="font-size:11px">
+              {{ '%.1f'|format(capture.reclaimable_bytes / 1073741824) }} gb of intermediates
+              can be reclaimed — this happens automatically when you complete the review.
+            </p>
+          {% endif %}
         </div>
       </div>
       {% endif %}

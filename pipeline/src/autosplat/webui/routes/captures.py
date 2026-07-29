@@ -45,6 +45,16 @@ def _job_runner(request: Request) -> JobRunner | None:
     return runner
 
 
+def _grace_days(request: Request) -> int:
+    # uvicorn --factory mode builds the app without a config until startup.
+    cfg = getattr(request.app.state, "cfg", None)
+    lifecycle_cfg = getattr(cfg, "lifecycle", None)
+    if lifecycle_cfg is None:
+        return 30
+    days: int = lifecycle_cfg.unreviewed_grace_days
+    return days
+
+
 def _share_runner(request: Request):  # type: ignore[no-untyped-def]
     return getattr(request.app.state, "share_runner", None)
 
@@ -54,7 +64,15 @@ async def captures_list(
     request: Request, sort: str | None = None, dir: str = "desc"
 ) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    captures = sort_captures(list_captures(captures_dir, _job_runner(request)), sort, dir)
+    captures = sort_captures(
+        list_captures(
+            captures_dir,
+            _job_runner(request),
+            grace_days=_grace_days(request),
+        ),
+        sort,
+        dir,
+    )
     active = next((c for c in captures if c.status == "running"), None)
     stats = {
         "total": len(captures),
@@ -262,7 +280,9 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
 
-    supersplat_available, embed_url = _supersplat_embed_context(request, capture_id, capture.has_ply)
+    supersplat_available, embed_url = _supersplat_embed_context(
+        request, capture_id, capture.has_ply
+    )
 
     return _templates(request).TemplateResponse(
         request,

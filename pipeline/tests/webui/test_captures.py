@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -962,3 +963,46 @@ def test_new_form_has_browse_button(app: FastAPI) -> None:
 
     assert response.status_code == 200
     assert "/captures/pick-file" in response.text
+
+
+# ── v1.16.0 — lifecycle-derived reclaim state ────────────────────────────────
+
+
+def test_capture_info_carries_reclaimable_bytes(tmp_path: Path) -> None:
+    from autosplat.webui import state as state_mod
+
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    ply = capture / "output" / "scene.ply"
+    ply.write_bytes(b"ply\n")
+    (capture / "colmap").mkdir()
+    (capture / "colmap" / "blob").write_bytes(b"x" * 64)
+    (capture / "output" / ".review.json").write_text(
+        json.dumps({"source_ply_mtime": ply.stat().st_mtime}), encoding="utf-8"
+    )
+
+    captures = state_mod.list_captures(tmp_path)
+
+    assert len(captures) == 1
+    assert captures[0].review_status == "reviewed"
+    assert captures[0].reclaimable_bytes == 64
+    assert captures[0].grace_days_left is None
+
+
+def test_list_warns_before_grace_expiry(app: FastAPI, tmp_path: Path) -> None:
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    ply = capture / "output" / "scene.ply"
+    ply.write_bytes(b"ply\n")
+    (capture / "colmap").mkdir()
+    mtime = (datetime.now(UTC) - timedelta(days=25)).timestamp()
+    os.utime(ply, (mtime, mtime))
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        body = client.get("/captures").text
+
+    assert "5 days" in body  # 30-day grace, 25 days old

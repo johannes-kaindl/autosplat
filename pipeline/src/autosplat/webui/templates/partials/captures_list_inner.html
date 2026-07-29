@@ -66,6 +66,12 @@
             {% if c.has_ply %}
               {% if c.ply_size_bytes %}{{ '%.0f'|format(c.ply_size_bytes / 1048576) }} mb{% else %}✓{% endif %}
             {% else %}— —{% endif %}
+            {% if c.grace_days_left is not none and c.grace_days_left <= 7 %}
+              <div class="dim" style="font-size:10px;color:var(--stage-failed)"
+                   title="Unreviewed. Intermediates are reclaimed automatically once the grace period ends — review the capture to keep control.">
+                cleanup in {{ c.grace_days_left }} days
+              </div>
+            {% endif %}
           </td>
           <td class="actions">
             {% if c.has_ply %}

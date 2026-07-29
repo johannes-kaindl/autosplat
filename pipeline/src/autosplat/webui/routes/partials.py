@@ -39,10 +39,20 @@ def _job_runner(request: Request) -> JobRunner | None:
     return runner
 
 
+def _grace_days(request: Request) -> int:
+    # uvicorn --factory mode builds the app without a config until startup.
+    cfg = getattr(request.app.state, "cfg", None)
+    lifecycle_cfg = getattr(cfg, "lifecycle", None)
+    if lifecycle_cfg is None:
+        return 30
+    days: int = lifecycle_cfg.unreviewed_grace_days
+    return days
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_partial(request: Request) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    captures = list_captures(captures_dir, _job_runner(request))
+    captures = list_captures(captures_dir, _job_runner(request), grace_days=_grace_days(request))
     active = next((c for c in captures if c.status == "running"), None)
     queued = [c for c in captures if c.status == "queued"]
     recent = [c for c in captures if c.status in ("done", "failed")][:10]
@@ -80,7 +90,11 @@ async def captures_list_partial(
     request: Request, sort: str | None = None, dir: str = "desc"
 ) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    captures = sort_captures(list_captures(captures_dir, _job_runner(request)), sort, dir)
+    captures = sort_captures(
+        list_captures(captures_dir, _job_runner(request), grace_days=_grace_days(request)),
+        sort,
+        dir,
+    )
     return _templates(request).TemplateResponse(
         request,
         "partials/captures_list_inner.html",

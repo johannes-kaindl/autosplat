@@ -20,7 +20,11 @@ async def dashboard(request: Request) -> HTMLResponse:
     templates = _get_templates(request)
     cfg = request.app.state.cfg
     job_runner = getattr(request.app.state, "job_runner", None)
-    captures = list_captures(cfg.paths.captures_dir, job_runner) if cfg else []
+    lifecycle_cfg = getattr(cfg, "lifecycle", None)
+    grace_days = lifecycle_cfg.unreviewed_grace_days if lifecycle_cfg is not None else 30
+    captures = (
+        list_captures(cfg.paths.captures_dir, job_runner, grace_days=grace_days) if cfg else []
+    )
     active = next((c for c in captures if c.status == "running"), None)
     queued = [c for c in captures if c.status == "queued"]
     recent = [c for c in captures if c.status in ("done", "failed")][:10]

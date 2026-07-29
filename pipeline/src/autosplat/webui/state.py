@@ -5,20 +5,26 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import re
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from autosplat import lifecycle
+from autosplat.lifecycle import ReviewStatus as ReviewStatus
+from autosplat.lifecycle import resolve_publish_ply as resolve_publish_ply
+from autosplat.lifecycle import review_marker_path as review_marker_path
 from autosplat.watcher import WatcherState
+
+_find_ply = lifecycle.find_ply
+_review_status = lifecycle.review_status
 
 if TYPE_CHECKING:
     from autosplat.webui.jobs_runner import JobRunner
 
 CaptureStatus = Literal["idle", "queued", "running", "done", "failed"]
-ReviewStatus = Literal["unreviewed", "reviewed"]
 
 # Matches pipeline capture dirs: YYYY-MM-DD_<stem>
 _CAPTURE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_.+$")
@@ -42,71 +48,21 @@ class CaptureInfo:
     reason: str | None
     detail: str | None = None  # v1.4.1: stage-specific sub-info (e.g. bisect clip)
     review_status: ReviewStatus = "unreviewed"  # v1.15.0: publish quality gate
-
-
-def _find_ply(capture_dir: Path) -> Path | None:
-    for candidate in [
-        capture_dir / "output" / "scene.ply",
-        capture_dir / "scene.ply",
-    ]:
-        if candidate.exists():
-            return candidate
-    plys = sorted(capture_dir.glob("*.ply"))
-    return plys[0] if plys else None
-
-
-def review_marker_path(capture_dir: Path) -> Path:
-    """Where the publish-quality-gate review marker lives for a capture."""
-    return capture_dir / "output" / ".review.json"
-
-
-def _review_status(capture_dir: Path) -> ReviewStatus:
-    """Compute review status from the marker file vs. output/scene.ply's mtime.
-
-    Purely mtime-based invalidation: a rebuilt scene.ply (different mtime)
-    silently reverts the capture to unreviewed, so callers that regenerate
-    scene.ply (add-video, resume) need no awareness of review state at all.
-    """
-    marker = review_marker_path(capture_dir)
-    if not marker.exists():
-        return "unreviewed"
-    try:
-        data = json.loads(marker.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return "unreviewed"
-    if not isinstance(data, dict):
-        return "unreviewed"
-    recorded_mtime = data.get("source_ply_mtime")
-    scene_ply = capture_dir / "output" / "scene.ply"
-    try:
-        current_mtime = scene_ply.stat().st_mtime
-    except OSError:
-        return "unreviewed"
-    if recorded_mtime != current_mtime:
-        return "unreviewed"
-    return "reviewed"
-
-
-def resolve_publish_ply(capture_dir: Path, status: ReviewStatus) -> Path | None:
-    """Which PLY represents this capture for viewing/sharing.
-
-    Prefers the manually-cleaned output/scene_reviewed.ply once the capture
-    is reviewed and that file exists; otherwise falls back to the normal
-    _find_ply chain. A stale scene_reviewed.ply left over from before a
-    rebuild is automatically skipped once `status` recomputes to unreviewed.
-    """
-    if status == "reviewed":
-        reviewed_ply = capture_dir / "output" / "scene_reviewed.ply"
-        if reviewed_ply.exists():
-            return reviewed_ply
-    return _find_ply(capture_dir)
+    reclaimable_bytes: int = 0  # v1.16.0: lifecycle retention
+    grace_days_left: int | None = None
 
 
 def _load_watcher_state() -> WatcherState:
     return WatcherState.load()
 
 
-def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> list[CaptureInfo]:
+def list_captures(
+    captures_dir: Path,
+    job_runner: JobRunner | None = None,
+    *,
+    grace_days: int = 30,
+    now: datetime | None = None,
+) -> list[CaptureInfo]:
     """Discover all capture directories and overlay live status.
 
     Status is resolved from two sources, JobRunner first:
@@ -137,6 +93,7 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
             continue
 
         path_str = str(entry)
+        life = lifecycle.inspect(entry, now=now or datetime.now(UTC), grace_days=grace_days)
         review_status = _review_status(entry)
         ply = resolve_publish_ply(entry, review_status)
         log_path = entry / "pipeline.log"
@@ -259,6 +216,8 @@ def list_captures(captures_dir: Path, job_runner: JobRunner | None = None) -> li
                 reason=reason,
                 detail=detail,
                 review_status=review_status,
+                reclaimable_bytes=life.reclaimable_bytes,
+                grace_days_left=life.grace_days_left,
             )
         )
 
