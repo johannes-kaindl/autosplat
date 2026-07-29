@@ -127,7 +127,11 @@ def test_sweep_expired_reclaims_only_past_grace(tmp_path: Path) -> None:
         (capture / "colmap").mkdir()
         (capture / "colmap" / "blob").write_bytes(b"x" * 5)
         mtime = (now - timedelta(days=age)).timestamp()
+        # Age the intermediates too, matching the PLY: a real capture this
+        # old has no recently-touched files either, unlike a rebuild in
+        # flight (see test_sweep_expired_skips_recently_active_capture).
         os.utime(capture / "output" / "scene.ply", (mtime, mtime))
+        os.utime(capture / "colmap" / "blob", (mtime, mtime))
 
     results = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
 
@@ -185,6 +189,57 @@ def test_prune_partial_failures_are_reported(
 
     # bytes_reclaimed should only count frames (20) + training (40), NOT colmap (30)
     assert result.bytes_reclaimed == 60
+
+
+def test_sweep_expired_skips_recently_active_capture(tmp_path: Path) -> None:
+    # Finding 1 (task 7 review): reclaim eligibility only looks at PLY mtime,
+    # which stays old for the whole duration of an add-video/resume rebuild.
+    # A capture otherwise fully past grace, but with a colmap/ file touched
+    # seconds ago (an in-flight rebuild), must survive the sweep.
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    capture = tmp_path / "2026-06-01_rebuilding"
+    (capture / "output").mkdir(parents=True)
+    ply = capture / "output" / "scene.ply"
+    ply.write_bytes(b"ply\n")
+    old = (now - timedelta(days=40)).timestamp()
+    os.utime(ply, (old, old))
+    (capture / "colmap").mkdir()
+    blob = capture / "colmap" / "blob"
+    blob.write_bytes(b"x" * 5)
+    recent = (now - timedelta(seconds=5)).timestamp()
+    os.utime(blob, (recent, recent))
+
+    results = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
+
+    assert results == []
+    assert (capture / "colmap").exists()
+
+
+def test_sweep_expired_reclaims_when_everything_aged(tmp_path: Path) -> None:
+    # Same shape of capture as above, but with the colmap/ file also aged —
+    # no rebuild in flight, so it must be reclaimed.
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    capture = tmp_path / "2026-06-01_stale"
+    (capture / "output").mkdir(parents=True)
+    ply = capture / "output" / "scene.ply"
+    ply.write_bytes(b"ply\n")
+    old = (now - timedelta(days=40)).timestamp()
+    os.utime(ply, (old, old))
+    (capture / "colmap").mkdir()
+    blob = capture / "colmap" / "blob"
+    blob.write_bytes(b"x" * 5)
+    os.utime(blob, (old, old))
+
+    results = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
+
+    assert len(results) == 1
+    assert not (capture / "colmap").exists()
 
 
 def test_sweep_expired_handles_enumeration_failure(

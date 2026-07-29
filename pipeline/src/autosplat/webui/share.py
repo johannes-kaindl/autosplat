@@ -71,9 +71,7 @@ class BundlePaths:
     zip_path: Path
 
 
-def assemble_bundle(
-    sog_path: Path, embed_src: Path, share_dir: Path, token: str
-) -> BundlePaths:
+def assemble_bundle(sog_path: Path, embed_src: Path, share_dir: Path, token: str) -> BundlePaths:
     """Build ``share_dir/<token>/`` (self-contained embed viewer + splat) and its zip.
 
     Raises FileNotFoundError if ``embed_src`` is missing its ``index.html``

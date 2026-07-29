@@ -104,6 +104,13 @@ def sweep_expired(
 
     for capture_dir in capture_dirs:
         try:
+            if lifecycle.recently_active(capture_dir, now=now):
+                logger.info(
+                    "cleanup.sweep_skipped_active",
+                    capture=capture_dir.name,
+                    reason="recently_active",
+                )
+                continue
             state = lifecycle.inspect(capture_dir, now=now, grace_days=grace_days)
             if not state.reclaimable:
                 continue

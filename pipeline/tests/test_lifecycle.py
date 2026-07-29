@@ -177,3 +177,109 @@ def test_find_capture_dirs_finds_unfinished_capture(tmp_path: Path) -> None:
     (capture / "colmap").mkdir()
 
     assert lifecycle.find_capture_dirs(tmp_path) == [capture]
+
+
+def test_bytes_in_tolerates_file_vanishing_mid_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Finding 2 (task 7 review): the grace sweep can rmtree a tree while a
+    # concurrent request is sizing it via bytes_in. Simulate that race by
+    # making stat() raise for one specific file mid-walk.
+    target = tmp_path / "colmap"
+    target.mkdir()
+    (target / "keep.bin").write_bytes(b"x" * 30)
+    (target / "gone.bin").write_bytes(b"y" * 999)
+
+    original_stat = Path.stat
+
+    def flaky_stat(self: Path, *args: object, **kwargs: object) -> object:
+        if self.name == "gone.bin":
+            raise FileNotFoundError(self)
+        return original_stat(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "stat", flaky_stat)
+
+    total = lifecycle.bytes_in([target])
+
+    assert total == 30
+
+
+def test_bytes_in_tolerates_target_removed_entirely(tmp_path: Path) -> None:
+    import shutil
+
+    target = tmp_path / "colmap"
+    target.mkdir()
+    (target / "blob").write_bytes(b"x" * 10)
+    shutil.rmtree(target)  # simulate a concurrent reclaim finishing first
+
+    assert lifecycle.bytes_in([target]) == 0
+
+
+def test_recently_active_true_when_reclaimable_target_touched_recently(tmp_path: Path) -> None:
+    import os
+
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    (capture / "colmap").mkdir()
+    blob = capture / "colmap" / "blob"
+    blob.write_bytes(b"x")
+    recent = (NOW - timedelta(seconds=5)).timestamp()
+    os.utime(blob, (recent, recent))
+
+    assert lifecycle.recently_active(capture, now=NOW) is True
+
+
+def test_recently_active_true_for_recent_pipeline_log(tmp_path: Path) -> None:
+    import os
+
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    log = capture / "pipeline.log"
+    log.write_text("{}", encoding="utf-8")
+    recent = (NOW - timedelta(seconds=5)).timestamp()
+    os.utime(log, (recent, recent))
+
+    assert lifecycle.recently_active(capture, now=NOW) is True
+
+
+def test_recently_active_false_when_everything_aged(tmp_path: Path) -> None:
+    import os
+
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    (capture / "colmap").mkdir()
+    blob = capture / "colmap" / "blob"
+    blob.write_bytes(b"x")
+    old = (NOW - timedelta(days=40)).timestamp()
+    os.utime(blob, (old, old))
+
+    assert lifecycle.recently_active(capture, now=NOW) is False
+
+
+def test_recently_active_false_when_nothing_to_check(tmp_path: Path) -> None:
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+
+    assert lifecycle.recently_active(capture, now=NOW) is False
+
+
+def test_recently_active_tolerates_stat_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    (capture / "colmap").mkdir()
+    blob = capture / "colmap" / "blob"
+    blob.write_bytes(b"x")
+    recent = (NOW - timedelta(seconds=5)).timestamp()
+    os.utime(blob, (recent, recent))
+
+    original_stat = Path.stat
+
+    def flaky_stat(self: Path, *args: object, **kwargs: object) -> object:
+        if self.name == "blob":
+            raise FileNotFoundError(self)
+        return original_stat(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "stat", flaky_stat)
+
+    # The one entry with a recent mtime is unreadable — must not raise, and
+    # with nothing else to go on, must not be treated as active.
+    assert lifecycle.recently_active(capture, now=NOW) is False

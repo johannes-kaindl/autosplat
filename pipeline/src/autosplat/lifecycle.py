@@ -110,12 +110,75 @@ def reclaimable_targets(capture_dir: Path) -> list[Path]:
 
 
 def bytes_in(targets: list[Path]) -> int:
+    """Total bytes under `targets`, recursively.
+
+    Tolerant of concurrent deletion: `list_captures`/the dashboard route call
+    this per capture on every request, and the background grace sweep (or a
+    concurrent CLI run) can be removing files under the same tree at the same
+    time. A file or directory vanishing mid-walk is treated as already
+    reclaimed rather than raised.
+    """
     total = 0
     for target in targets:
-        for p in target.rglob("*"):
-            if p.is_file():
-                total += p.stat().st_size
+        try:
+            walker = target.rglob("*")
+        except OSError:
+            continue
+        while True:
+            try:
+                p = next(walker)
+            except StopIteration:
+                break
+            except OSError:
+                # A directory vanished mid-walk — nothing more to count here.
+                continue
+            try:
+                if p.is_file():
+                    total += p.stat().st_size
+            except OSError:
+                continue
     return total
+
+
+def recently_active(capture_dir: Path, *, now: datetime, within_s: float = 3600) -> bool:
+    """True if `capture_dir` shows signs of an in-flight run.
+
+    Reclaim eligibility (`inspect`) only looks at output/scene.ply's mtime,
+    which stays old for the entire duration of an `add-video`/`resume`
+    rebuild — the old PLY is still sitting there while frames/ and colmap/
+    are being rewritten. Without this check, a sweep landing mid-rebuild
+    would `rmtree` the very directories a concurrent CLI process is writing
+    to. Consulted by both the grace sweep and `migrate-storage --apply`,
+    which can equally run during a rebuild.
+
+    Looks at the newest mtime among files recursively under the capture's
+    reclaimable targets (a rewrite touches files inside colmap/, not the dir
+    itself) or its pipeline.log. Read-only and pure like the rest of this
+    module; tolerates stat failures by treating that entry as not recent
+    rather than raising.
+    """
+    newest = 0.0
+    candidates: list[Path] = []
+    for target in reclaimable_targets(capture_dir):
+        try:
+            candidates.extend(target.rglob("*"))
+        except OSError:
+            continue
+    log = capture_dir / "pipeline.log"
+    if log.exists():
+        candidates.append(log)
+
+    for p in candidates:
+        try:
+            mtime = p.stat().st_mtime
+        except OSError:
+            continue
+        if mtime > newest:
+            newest = mtime
+
+    if newest == 0.0:
+        return False
+    return (now.timestamp() - newest) < within_s
 
 
 def _days_since(path: Path, now: datetime) -> int:
