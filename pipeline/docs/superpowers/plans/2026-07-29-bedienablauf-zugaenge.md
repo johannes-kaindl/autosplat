@@ -481,19 +481,24 @@ readonly SUPERSPLAT_DIST="${REPO_ROOT}/target/supersplat/dist"
 
 - [ ] **Step 6: Verify the preflight fires and the build still works**
 
-Run: `cd pipeline && bash -n scripts/build_app.sh` (syntax) then
-`cd pipeline && SUPERSPLAT_DIST_OVERRIDE=1 bash -c 'true'` — no override exists, so
-verify manually instead:
+First a syntax check, then prove the guard fires by hiding the dist. The rename must be
+restored even if the script exits non-zero, hence the `trap`:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/pipeline"
+bash -n scripts/build_app.sh                     # syntax only
+
+trap 'mv -f target/supersplat/dist.bak target/supersplat/dist 2>/dev/null' EXIT
 mv target/supersplat/dist target/supersplat/dist.bak
-./scripts/build_app.sh 2>&1 | tail -2   # expect: the SuperSplat fail message
+./scripts/build_app.sh 2>&1 | tail -2            # expect the SuperSplat fail message
 mv target/supersplat/dist.bak target/supersplat/dist
+trap - EXIT
+ls -d target/supersplat/dist                     # must exist again
 ```
 
-Expected: the build aborts with `SuperSplat dist missing …`. Do **not** run the full build
-yet — `viewer/vendor/` arrives in Task 3.
+Expected: `bash -n` silent, then the build aborts with `SuperSplat dist missing …`, and the
+dist is back afterwards. Do **not** run the full build yet — `viewer/vendor/` arrives in
+Task 3, and its preflight would abort the build for the other reason.
 
 - [ ] **Step 7: Commit**
 
@@ -622,7 +627,9 @@ In `viewer/viewer.html`, replace the importmap (lines 24-30):
 Run: `cd viewer && ./tests/run.sh unit`
 Expected: PASS, including the pre-existing unit tests.
 
-- [ ] **Step 5: Verify the viewer still actually renders**
+- [ ] **Step 5: Verify the viewer still actually renders** — 🖐️ **HUMAN/CONTROLLER STEP,
+      not for an implementer subagent.** Report it as deferred-to-controller; do not claim
+      it as done and do not block on it.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/viewer" && ./serve.sh
@@ -1921,7 +1928,8 @@ inventing new ones.
 Run: `cd pipeline && uv run pytest tests/webui/test_walk_route.py -v`
 Expected: PASS (5 tests)
 
-- [ ] **Step 7: Verify against a real capture**
+- [ ] **Step 7: Verify against a real capture** — 🖐️ **HUMAN/CONTROLLER STEP, not for an
+      implementer subagent.** Report it as deferred-to-controller.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/pipeline" && uv run autosplat webui --port 8080
@@ -2456,7 +2464,9 @@ grep -c "geparkt" AGENTS.md viewer/AGENTS.md      # expect 0 in both
 [ -f ../_docs/readme/readme_lint.py ] && python3 ../_docs/readme/readme_lint.py autosplat
 ```
 
-- [ ] **Step 6: Build and verify the real app**
+- [ ] **Step 6: Build and verify the real app** — 🖐️ **HUMAN/CONTROLLER STEP, not for an
+      implementer subagent** (a signed build plus manual clicking). Report it as
+      deferred-to-controller.
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/pipeline"
