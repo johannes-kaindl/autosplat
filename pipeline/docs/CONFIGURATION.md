@@ -111,6 +111,17 @@ alone.
 | ----------------------- | ------- | ------------------------------------------------------------------------------------------- |
 | `unreviewed_grace_days` | `30`    | Days after which a capture that was never reviewed has its intermediates reclaimed anyway. The captures list warns from day `grace - 7` onwards, and the reclaim itself runs on the next WebUI/app start. **`0` disables the fallback entirely** — an unreviewed capture is then kept forever. Range: 0 or more. |
 
+`0` disables the *whole* startup sweep, not just the unreviewed-capture
+fallback — the sweep thread only starts when `unreviewed_grace_days > 0`. That
+also means a review sign-off whose prune was deferred (because the run looked
+live — a `resume`/`add-video` still in flight) is not retried automatically:
+the sweep is what retries it on the next start, and with `0` there is no next
+sweep. This is intended — `0` means "no automatic reclaiming," and the user
+opted into that — but reclaiming is not blocked, only automated: use "Free up
+space" on the capture's detail page in the WebUI, or `autosplat
+cleanup-intermediates <capture>` from the CLI, either of which reclaims
+on demand regardless of this setting.
+
 ### The four lifecycle states
 
 | State      | Derived from                                            | Intermediates                                     |

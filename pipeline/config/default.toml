@@ -130,5 +130,7 @@ base_url = ""
 # publish quality gate. rescue/clips/*.mp4 are NOT reclaimed — they are a
 # bisection-rescued capture's recorded origin, and resume/add-video need them.
 # A capture that is never reviewed is reclaimed anyway after this many days,
-# announced in the captures list beforehand. 0 disables that fallback.
+# announced in the captures list beforehand. 0 disables that fallback AND the
+# startup sweep entirely, so a deferred review-triggered prune is not retried
+# either — use "Free up space" (WebUI) or `cleanup-intermediates` (CLI) manually.
 unreviewed_grace_days = 30
