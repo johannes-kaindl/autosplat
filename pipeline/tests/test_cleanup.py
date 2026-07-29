@@ -472,11 +472,18 @@ def test_sweep_expired_still_reclaims_a_top_level_listed_capture(tmp_path: Path)
 
 
 def test_guard_blocks_sweep_outside_the_pytest_temp_root(
+    tmp_path_factory: pytest.TempPathFactory,
     storage_guard_violations: list[str],
 ) -> None:
+    # Synthesized nonexistent sibling of pytest's own temp root, never a real
+    # path: this test used to point at `Path.home() / "AutoSplat" / "captures"`
+    # — the maintainer's real 19 GB — and was safe only for as long as the
+    # guard fires. A test that guards deletion must not itself name live data.
     from datetime import UTC, datetime
 
-    outside = Path.home() / "AutoSplat" / "captures"
+    base_temp = tmp_path_factory.getbasetemp().resolve()
+    outside = base_temp.parent / "not-a-real-pytest-tmp-dir-captures"
+    assert not outside.exists()
 
     with pytest.raises(RuntimeError, match="outside the pytest temp root"):
         cleanup.sweep_expired(outside, grace_days=30, now=datetime.now(UTC))
@@ -502,14 +509,25 @@ def test_guard_blocks_prune_intermediates_outside_the_pytest_temp_root(
 
 
 def test_guard_blocks_migrate_storage_rmtree_outside_the_pytest_temp_root(
+    tmp_path_factory: pytest.TempPathFactory,
     storage_guard_violations: list[str],
 ) -> None:
     """`migrate-storage` rmtrees config-supplied `outputs/` paths directly,
     bypassing `cleanup` entirely — `tests/test_cli_migrate_storage.py` drives
-    exactly that and was covered by nothing."""
+    exactly that and was covered by nothing.
+
+    The path is a synthesized nonexistent sibling of pytest's temp root. It
+    used to be `Path.home() / "AutoSplat" / "outputs" / "2026-05-14_jay_1"` —
+    a real orphaned capture holding the only surviving copy of that scene
+    (678 MB), which the maintainer ruled must never be deleted. An rmtree
+    aimed at live data is not made safe by the guard that is supposed to stop
+    it; that is circular.
+    """
     from autosplat import cli
 
-    outside = Path.home() / "AutoSplat" / "outputs" / "2026-05-14_jay_1"
+    base_temp = tmp_path_factory.getbasetemp().resolve()
+    outside = base_temp.parent / "not-a-real-pytest-tmp-dir-outputs-entry"
+    assert not outside.exists()
 
     with pytest.raises(RuntimeError, match="outside the pytest temp root"):
         cli.shutil.rmtree(outside)
