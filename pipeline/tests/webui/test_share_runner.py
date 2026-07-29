@@ -21,6 +21,41 @@ def _wait(job, timeout: float = 3.0) -> None:
         time.sleep(0.02)
 
 
+def _counting_compress(calls: list[Path]):
+    """fake_compress that records which PLY it was handed."""
+
+    def fake_compress(ply: Path, out_dir: Path, *, fmt: str = "sog", quality: str = "medium"):
+        calls.append(ply)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sog = out_dir / f"{ply.stem}.sog"
+        sog.write_bytes(b"SOG" * 100)
+        return CompressResult(
+            output_path=sog,
+            backend_used="fake",
+            quality="medium",
+            duration_s=0.1,
+            input_bytes=15000,
+            output_bytes=300,
+        )
+
+    return fake_compress
+
+
+def _share_capture(tmp_path: Path) -> tuple[Path, Path]:
+    embed = _fake_embed(tmp_path)
+    capture_dir = tmp_path / "2026-07-10_lgs"
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
+    return capture_dir, embed
+
+
+def _share_runner(embed: Path, compressor) -> ShareJobRunner:
+    cfg = load_config(include_xdg=False)
+    cfg.share.base_url = "https://splat.example"
+    cfg.share.embed_src_path = embed
+    return ShareJobRunner(cfg, compressor=compressor)
+
+
 def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
     embed = _fake_embed(tmp_path)
     capture_dir = tmp_path / "2026-07-10_lgs"
@@ -147,3 +182,64 @@ def test_share_job_compresses_reviewed_ply_when_present(tmp_path: Path) -> None:
 
     assert job.status == "done"
     assert compressed_paths == [reviewed_ply]
+
+
+def test_share_writes_sog_to_output_dir(tmp_path: Path) -> None:
+    capture_dir, embed = _share_capture(tmp_path)
+    runner = _share_runner(embed, _counting_compress([]))
+
+    job = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(job)
+
+    assert job.status == "done"
+    assert (capture_dir / "output" / "scene.sog").exists()
+    assert not (capture_dir / "share" / "_tmp").exists()
+
+
+def test_second_share_reuses_existing_sog(tmp_path: Path) -> None:
+    capture_dir, embed = _share_capture(tmp_path)
+    calls: list[Path] = []
+    runner = _share_runner(embed, _counting_compress(calls))
+
+    _wait(runner.start("2026-07-10_lgs", capture_dir))
+    _wait(runner.start("2026-07-10_lgs", capture_dir))
+
+    assert len(calls) == 1  # the second share reused output/scene.sog
+
+
+def test_rebuilt_ply_forces_recompression(tmp_path: Path) -> None:
+    import os
+
+    capture_dir, embed = _share_capture(tmp_path)
+    calls: list[Path] = []
+    runner = _share_runner(embed, _counting_compress(calls))
+
+    _wait(runner.start("2026-07-10_lgs", capture_dir))
+
+    # Simulate add-video: scene.ply becomes newer than the SOG.
+    future = (capture_dir / "output" / "scene.sog").stat().st_mtime + 60
+    os.utime(capture_dir / "output" / "scene.ply", (future, future))
+
+    _wait(runner.start("2026-07-10_lgs", capture_dir))
+
+    assert len(calls) == 2
+
+
+def test_reviewed_ply_still_yields_canonical_scene_sog(tmp_path: Path) -> None:
+    import json
+
+    capture_dir, embed = _share_capture(tmp_path)
+    scene_ply = capture_dir / "output" / "scene.ply"
+    (capture_dir / "output" / "scene_reviewed.ply").write_bytes(b"PLY-CLEANED" * 5000)
+    (capture_dir / "output" / ".review.json").write_text(
+        json.dumps({"status": "reviewed", "source_ply_mtime": scene_ply.stat().st_mtime})
+    )
+    calls: list[Path] = []
+    runner = _share_runner(embed, _counting_compress(calls))
+
+    job = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(job)
+
+    assert calls == [capture_dir / "output" / "scene_reviewed.ply"]
+    assert (capture_dir / "output" / "scene.sog").exists()
+    assert not (capture_dir / "output" / "scene_reviewed.sog").exists()

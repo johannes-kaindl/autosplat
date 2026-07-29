@@ -74,21 +74,34 @@ class ShareJobRunner:
             if ply is None or not ply.exists():
                 raise FileNotFoundError(f"No output/scene.ply in {capture_dir}")
 
-            result = self._compress(
-                ply,
-                capture_dir / "share" / "_tmp",
-                fmt="sog",
-                quality=self._cfg.compress.quality,
-            )
+            # The SOG is a durable artifact under output/, not bundle scratch:
+            # it is kept per the retention policy and reused by later shares,
+            # turning a repeat share from minutes of compression into seconds.
+            sog = capture_dir / "output" / "scene.sog"
+            if sog.exists() and sog.stat().st_mtime >= ply.stat().st_mtime:
+                logger.info("share.sog_reused", capture_id=job.capture_id)
+            else:
+                result = self._compress(
+                    ply,
+                    capture_dir / "output",
+                    fmt="sog",
+                    quality=self._cfg.compress.quality,
+                )
+                # compress_ply names its output after the input stem, so a
+                # reviewed capture would yield scene_reviewed.sog. The canonical
+                # name is scene.sog regardless of which PLY was published.
+                if result.output_path != sog:
+                    result.output_path.replace(sog)
+
             token = make_share_token(job.capture_id)
             embed_src = self._resolve_embed_src()
-            paths = assemble_bundle(result.output_path, embed_src, capture_dir / "share", token)
+            paths = assemble_bundle(sog, embed_src, capture_dir / "share", token)
             shutil.rmtree(capture_dir / "share" / "_tmp", ignore_errors=True)
 
             job.token = token
             job.zip_path = paths.zip_path
-            job.output_bytes = result.output_bytes
-            job.input_bytes = result.input_bytes
+            job.output_bytes = sog.stat().st_size
+            job.input_bytes = ply.stat().st_size
             job.link = share_link(self._cfg.share.base_url, token)
             job.status = "done"
             logger.info("share.done", capture_id=job.capture_id, token=token)
