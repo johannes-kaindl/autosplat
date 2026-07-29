@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, Response, Upl
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from autosplat import __version__, cleanup
+from autosplat import __version__, cleanup, lifecycle
 from autosplat.config import apply_override
 from autosplat.failure import classify_failure, failure_reason_from_log
 from autosplat.logging import get_logger
@@ -453,14 +453,24 @@ async def capture_prune(request: Request, capture_id: str) -> RedirectResponse:
 def _prune_after_review(capture_dir: Path, job_runner: JobRunner | None) -> None:
     """Reclaim intermediates once a human has signed the capture off.
 
-    Deferred while a job is live: `resume`/`add-video` need colmap/ and
+    Deferred while a run is live: `resume`/`add-video` need colmap/ and
     frames/, and reclaiming underneath them would make the run unrecoverable.
     A prune failure never invalidates the review — unreclaimed space is
-    cosmetic, a discarded sign-off is lost manual work.
+    cosmetic, a discarded sign-off is lost manual work, and a deferred prune
+    is retried by the grace sweep on the next start anyway.
+
+    Two independent liveness signals, because neither sees the other's runs:
+    the JobRunner covers WebUI-triggered jobs, and `lifecycle.recently_active`
+    covers a CLI `resume`/`add-video`, which touches neither the JobRunner nor
+    WatcherState — so the WebUI shows such a capture as `done` and offers the
+    review button while the rebuild is mid-flight.
     """
     job = job_runner.get_job(capture_dir.name) if job_runner is not None else None
     if job is not None and job.status in ("running", "queued"):
-        logger.info("review.prune_deferred", capture=capture_dir.name)
+        logger.info("review.prune_deferred", capture=capture_dir.name, reason="live_job")
+        return
+    if lifecycle.recently_active(capture_dir, now=datetime.now(UTC)):
+        logger.info("review.prune_deferred", capture=capture_dir.name, reason="recently_active")
         return
     try:
         result = cleanup.prune_intermediates(capture_dir)

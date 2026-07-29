@@ -15,6 +15,23 @@ def _make_capture(tmp_path: Path, capture_id: str = "2026-07-19_lgs") -> Path:
     return capture_dir
 
 
+def _settle(capture_dir: Path) -> None:
+    """Age everything past `lifecycle.recently_active`'s 1h window.
+
+    A freshly-written fixture is indistinguishable from a capture with a CLI
+    `resume`/`add-video` writing into it right now, and the review-triggered
+    prune (correctly) defers on that — see
+    `test_confirm_does_not_reclaim_while_a_cli_run_is_in_flight`. Tests that
+    want the prune to actually run have to represent a settled capture.
+    """
+    import os
+    import time
+
+    ts = time.time() - 2 * 3600
+    for p in [capture_dir, *capture_dir.rglob("*")]:
+        os.utime(p, (ts, ts))
+
+
 def test_confirm_writes_review_marker(app: FastAPI, tmp_path: Path) -> None:
     capture_dir = _make_capture(tmp_path)
     app.state.cfg.paths.captures_dir = tmp_path
@@ -214,6 +231,7 @@ def test_confirm_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
     (capture_dir / "rescue" / "probes").mkdir(parents=True)
     (capture_dir / "rescue" / "clips").mkdir()
     (capture_dir / "rescue" / "clips" / "0.mp4").write_bytes(b"m" * 10)
+    _settle(capture_dir)
     app.state.cfg.paths.captures_dir = tmp_path
 
     with TestClient(app) as client:
@@ -251,6 +269,7 @@ def test_confirm_does_not_reclaim_while_job_runs(app: FastAPI, tmp_path: Path) -
 def test_upload_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
     capture_dir = _make_capture(tmp_path)
     (capture_dir / "colmap").mkdir()
+    _settle(capture_dir)
     app.state.cfg.paths.captures_dir = tmp_path
 
     with TestClient(app) as client:
@@ -262,3 +281,50 @@ def test_upload_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
 
     assert r.status_code == 303
     assert not (capture_dir / "colmap").exists()
+
+
+def test_confirm_does_not_reclaim_while_a_cli_run_is_in_flight(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    """C2: `_prune_after_review` guarded only on the JobRunner, which knows
+    nothing about CLI processes. A CLI `resume`/`add-video` touches neither
+    the JobRunner nor WatcherState, so the WebUI shows the capture as `done`
+    and offers the review button — and confirming rmtree'd frames/ and colmap/
+    out from under the running process. Task 7 fixed exactly this class of bug
+    for the grace sweep with `lifecycle.recently_active`; this route was
+    written before that helper existed and never revisited.
+
+    The review itself must still stand: a discarded sign-off is lost manual
+    work, unreclaimed space is cosmetic (and the sweep retries it later).
+    """
+    capture_dir = _make_capture(tmp_path)
+    (capture_dir / "colmap").mkdir()
+    # Fresh mtime — indistinguishable from a CLI rebuild writing right now.
+    (capture_dir / "colmap" / "blob").write_bytes(b"x" * 10)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post("/captures/2026-07-19_lgs/review/confirm", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert (capture_dir / "colmap" / "blob").exists()
+    assert (capture_dir / "output" / ".review.json").exists()
+
+
+def test_upload_does_not_reclaim_while_a_cli_run_is_in_flight(app: FastAPI, tmp_path: Path) -> None:
+    """Same guard on the other review entry point."""
+    capture_dir = _make_capture(tmp_path)
+    (capture_dir / "colmap").mkdir()
+    (capture_dir / "colmap" / "blob").write_bytes(b"x" * 10)
+    app.state.cfg.paths.captures_dir = tmp_path
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/captures/2026-07-19_lgs/review/upload",
+            files={"reviewed_ply": ("cleaned.ply", b"ply\ncleaned", "application/octet-stream")},
+            follow_redirects=False,
+        )
+
+    assert r.status_code == 303
+    assert (capture_dir / "colmap" / "blob").exists()
+    assert (capture_dir / "output" / "scene_reviewed.ply").exists()
