@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from autosplat import cleanup
-from autosplat.cleanup import NotExported, prune_intermediates
+from autosplat.cleanup import NotExported
 
 
 def _make_done_capture(tmp_path: Path) -> Path:
@@ -28,7 +28,7 @@ def _make_done_capture(tmp_path: Path) -> Path:
 def test_prune_intermediates_removes_dirs_and_reports_bytes(tmp_path: Path) -> None:
     capture_dir = _make_done_capture(tmp_path)
 
-    result = prune_intermediates(capture_dir)
+    result = cleanup.prune_intermediates(capture_dir)
 
     assert not (capture_dir / "frames").exists()
     assert not (capture_dir / "colmap").exists()
@@ -41,7 +41,7 @@ def test_prune_intermediates_removes_dirs_and_reports_bytes(tmp_path: Path) -> N
 def test_prune_intermediates_dry_run_touches_nothing(tmp_path: Path) -> None:
     capture_dir = _make_done_capture(tmp_path)
 
-    result = prune_intermediates(capture_dir, dry_run=True)
+    result = cleanup.prune_intermediates(capture_dir, dry_run=True)
 
     assert (capture_dir / "frames").is_dir()
     assert (capture_dir / "colmap").is_dir()
@@ -54,7 +54,7 @@ def test_prune_intermediates_raises_when_export_not_done(tmp_path: Path) -> None
     (capture_dir / "frames").mkdir(parents=True)
 
     with pytest.raises(NotExported):
-        prune_intermediates(capture_dir)
+        cleanup.prune_intermediates(capture_dir)
 
     assert (capture_dir / "frames").exists()
 
@@ -64,7 +64,7 @@ def test_prune_intermediates_nothing_to_remove(tmp_path: Path) -> None:
     (capture_dir / "output").mkdir(parents=True)
     (capture_dir / "output" / "scene.ply").write_bytes(b"PLY")
 
-    result = prune_intermediates(capture_dir)
+    result = cleanup.prune_intermediates(capture_dir)
 
     assert result.removed == []
     assert result.bytes_reclaimed == 0
@@ -85,7 +85,7 @@ def test_prune_removes_rescue_probes_and_brush_dataset(tmp_path: Path) -> None:
     (capture / "rescue" / "probes").mkdir(parents=True)
     (capture / "rescue" / "probes" / "blob").write_bytes(b"x" * 10)
 
-    result = prune_intermediates(capture)
+    result = cleanup.prune_intermediates(capture)
 
     assert {p.name for p in result.removed} == {"frames", "colmap", "probes", "brush_dataset"}
     assert result.bytes_reclaimed == 40
@@ -107,7 +107,7 @@ def test_prune_keeps_rescue_clips(tmp_path: Path) -> None:
     (capture / "rescue" / "probes" / "0").mkdir(parents=True)
     (capture / "rescue" / "probes" / "0" / "blob").write_bytes(b"x" * 10)
 
-    prune_intermediates(capture)
+    cleanup.prune_intermediates(capture)
 
     assert (capture / "rescue" / "clips" / "0.mp4").exists()
     assert not (capture / "rescue" / "probes").exists()
@@ -120,7 +120,7 @@ def test_prune_removes_share_tmp_but_keeps_bundles(tmp_path: Path) -> None:
     (capture / "share" / "_tmp").mkdir(parents=True)
     (capture / "share" / "tok").mkdir()
 
-    prune_intermediates(capture)
+    cleanup.prune_intermediates(capture)
 
     assert not (capture / "share" / "_tmp").exists()
     assert (capture / "share" / "tok").exists()
@@ -132,8 +132,8 @@ def test_prune_is_idempotent(tmp_path: Path) -> None:
     (capture / "output" / "scene.ply").write_bytes(b"ply\n")
     (capture / "colmap").mkdir()
 
-    prune_intermediates(capture)
-    second = prune_intermediates(capture)
+    cleanup.prune_intermediates(capture)
+    second = cleanup.prune_intermediates(capture)
 
     assert second.removed == []
     assert second.bytes_reclaimed == 0
@@ -223,7 +223,7 @@ def test_prune_partial_failures_are_reported(
 
     monkeypatch.setattr(shutil, "rmtree", rmtree_with_failure)
 
-    result = prune_intermediates(capture)
+    result = cleanup.prune_intermediates(capture)
 
     # colmap should be in failed, not in removed
     assert capture / "colmap" in result.failed
@@ -330,7 +330,7 @@ def test_prune_intermediates_rejects_target_outside_capture_dir(tmp_path: Path) 
     (outside / "precious.txt").write_bytes(b"do not delete me")
 
     with pytest.raises(ValueError, match="not inside capture_dir"):
-        prune_intermediates(capture_dir, targets=[outside])
+        cleanup.prune_intermediates(capture_dir, targets=[outside])
 
     assert outside.exists()
     assert (outside / "precious.txt").exists()
@@ -342,7 +342,7 @@ def test_prune_intermediates_accepts_target_nested_under_capture_dir(tmp_path: P
     capture_dir = _make_done_capture(tmp_path)
     nested = capture_dir / "colmap" / "sparse" / "0"
 
-    result = prune_intermediates(capture_dir, targets=[nested])
+    result = cleanup.prune_intermediates(capture_dir, targets=[nested])
 
     assert result.removed == [nested]
     assert not nested.exists()
@@ -364,7 +364,7 @@ def test_prune_never_deletes_a_target_burying_a_nested_export(tmp_path: Path) ->
     (capture / "colmap").mkdir()
     (capture / "colmap" / "blob").write_bytes(b"x" * 100)
 
-    result = prune_intermediates(capture)
+    result = cleanup.prune_intermediates(capture)
 
     assert nested_ply.exists()
     assert (capture / "rescue" / "probes").exists()
@@ -507,5 +507,35 @@ def test_guard_blocks_migrate_storage_rmtree_outside_the_pytest_temp_root(
 
     with pytest.raises(RuntimeError, match="outside the pytest temp root"):
         cli.shutil.rmtree(outside)
+
+    assert storage_guard_violations
+
+
+def test_guard_covers_prune_intermediates_called_through_the_module_attribute(
+    tmp_path_factory: pytest.TempPathFactory,
+    storage_guard_violations: list[str],
+) -> None:
+    """P2 (final review of feat/capture-lifecycle): this file used to bind
+    `prune_intermediates` at import time via
+    `from autosplat.cleanup import ... prune_intermediates` and call that
+    name directly in ~15 places. The guard above patches the *module
+    attribute* `cleanup.prune_intermediates`, so the directly-imported name
+    still pointed at the pre-patch function object and every one of those
+    calls silently bypassed the guard — this test's own self-test sibling
+    (`test_guard_blocks_prune_intermediates_outside_the_pytest_temp_root`)
+    already called through `cleanup.prune_intermediates` and so passed,
+    masking the hole. Every call in this file now goes through the module
+    attribute, closing it.
+
+    The offending path is a nonexistent sibling of pytest's own temp root —
+    never `Path.home()` or `/` — so even if the guard failed to fire, this
+    test alone could not touch a real path.
+    """
+    base_temp = tmp_path_factory.getbasetemp().resolve()
+    outside = base_temp.parent / "not-a-real-pytest-tmp-dir-this-should-never-exist"
+    assert not outside.exists()
+
+    with pytest.raises(RuntimeError, match="outside the pytest temp root"):
+        cleanup.prune_intermediates(outside)
 
     assert storage_guard_violations
