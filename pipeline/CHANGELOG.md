@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [v1.16.0] — 2026-07-29 — Capture lifecycle & storage retention
+
 ### Changed
 
 - **Completing a review now reclaims that capture's intermediates.** Signing a

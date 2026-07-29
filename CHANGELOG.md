@@ -14,6 +14,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [v1.16.0] — 2026-07-29 — Capture lifecycle & storage retention
+
+### Changed
+
+- **`pipeline/` only this release** — a capture now has an explicit, derived
+  lifecycle (`failed` / `done` / `reviewed` / `archived`) and storage retention
+  hangs off it: completing the publish-quality-gate review reclaims that
+  capture's working directories, and a capture never reviewed is reclaimed after
+  30 days on the next start (`[lifecycle] unreviewed_grace_days`, `0` disables).
+  `rescue/clips/*.mp4` are always kept — they are a bisection-rescued capture's
+  recorded origin, without which `resume`/`add-video` cannot work.
+- **`export.copy_to_outputs` deprecated, now `false` by default** — `outputs_dir`
+  was an unmanaged second copy of every PLY that nothing reclaimed.
+- Compressed SOGs are kept at `output/scene.sog` and reused, turning a repeat
+  share of an unchanged capture from minutes into seconds.
+
+### Added
+
+- **`autosplat migrate-storage`** — brings an existing backlog onto the retention
+  policy. Preview by default, `--apply` executes. Never deletes an orphaned
+  `outputs/` entry (the only surviving copy of a capture that was removed), a
+  failed capture, or a directory burying a nested capture's only PLY — each is
+  listed as kept with its reason. On the maintainer's machine: 27,8 GB → 13,1 GB.
+
+See [`pipeline/CHANGELOG.md`](pipeline/CHANGELOG.md) for the full entry.
+
+---
+
 ## [v1.15.0] — 2026-07-19 — Publish quality gate + capture cleanup
 
 ### Added
