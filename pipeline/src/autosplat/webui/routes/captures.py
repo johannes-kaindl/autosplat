@@ -235,7 +235,12 @@ async def capture_new_submit(
 @router.get("/{capture_id}", response_class=HTMLResponse)
 async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)
-    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    capture = get_capture(
+        captures_dir,
+        capture_id,
+        _job_runner(request),
+        grace_days=_grace_days(request),
+    )
     if capture is None:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     log_lines: list[str] = []

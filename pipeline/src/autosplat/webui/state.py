@@ -253,14 +253,18 @@ def sort_captures(
 
 
 def get_capture(
-    captures_dir: Path, capture_id: str, job_runner: JobRunner | None = None
+    captures_dir: Path,
+    capture_id: str,
+    job_runner: JobRunner | None = None,
+    *,
+    grace_days: int = 30,
 ) -> CaptureInfo | None:
     """Return a single CaptureInfo by id, or None if not found."""
     capture_path = captures_dir / capture_id
     if not capture_path.is_dir() or not _CAPTURE_DIR_RE.match(capture_id):
         return None
 
-    all_captures = list_captures(captures_dir, job_runner)
+    all_captures = list_captures(captures_dir, job_runner, grace_days=grace_days)
     for c in all_captures:
         if c.id == capture_id:
             return c

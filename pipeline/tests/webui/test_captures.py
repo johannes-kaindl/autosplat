@@ -1006,3 +1006,31 @@ def test_list_warns_before_grace_expiry(app: FastAPI, tmp_path: Path) -> None:
         body = client.get("/captures").text
 
     assert "5 days" in body  # 30-day grace, 25 days old
+
+
+def test_capture_detail_respects_configured_grace_period(app: FastAPI, tmp_path: Path) -> None:
+    """The detail page must use cfg.lifecycle.unreviewed_grace_days, not the
+    list_captures default of 30 — otherwise it disagrees with the list page
+    about whether/when intermediates get reclaimed. A capture 10 days past
+    its (unreviewed) PLY is already past a 5-day configured grace period but
+    NOT past the 30-day default, so this only passes once get_capture is
+    threaded with the configured grace_days."""
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    capture_dir = tmp_path / "2026-07-01_grace_cfg"
+    (capture_dir / "output").mkdir(parents=True)
+    ply = capture_dir / "output" / "scene.ply"
+    ply.write_bytes(b"ply\n")
+    (capture_dir / "colmap").mkdir()
+    (capture_dir / "colmap" / "blob").write_bytes(b"x" * 64)
+    mtime = (datetime.now(UTC) - timedelta(days=10)).timestamp()
+    os.utime(ply, (mtime, mtime))
+    app.state.cfg.paths.captures_dir = tmp_path
+    app.state.cfg.lifecycle.unreviewed_grace_days = 5
+
+    with TestClient(app) as client:
+        response = client.get("/captures/2026-07-01_grace_cfg")
+
+    assert response.status_code == 200
+    assert "gb of intermediates" in response.text
