@@ -51,7 +51,7 @@ def test_done_when_ply_but_no_marker(tmp_path: Path) -> None:
 def test_reviewed_exposes_reclaimable_targets(tmp_path: Path) -> None:
     capture = _make_capture(tmp_path, "2026-07-01_x")
     (capture / "colmap").mkdir()
-    (capture / "rescue").mkdir()
+    (capture / "rescue" / "probes").mkdir(parents=True)
     (capture / "brush_dataset").mkdir()
     (capture / "colmap" / "db.bin").write_bytes(b"x" * 100)
     _mark_reviewed(capture)
@@ -59,7 +59,7 @@ def test_reviewed_exposes_reclaimable_targets(tmp_path: Path) -> None:
     result = lifecycle.inspect(capture, now=NOW, grace_days=30)
 
     assert result.state == "reviewed"
-    assert {p.name for p in result.reclaimable} == {"colmap", "rescue", "brush_dataset"}
+    assert {p.name for p in result.reclaimable} == {"colmap", "probes", "brush_dataset"}
     assert result.reclaimable_bytes == 100
 
 
@@ -283,3 +283,25 @@ def test_recently_active_tolerates_stat_failure(
     # The one entry with a recent mtime is unreadable — must not raise, and
     # with nothing else to go on, must not be treated as active.
     assert lifecycle.recently_active(capture, now=NOW) is False
+
+
+def test_rescue_clips_are_kept_while_probes_are_reclaimed(tmp_path: Path) -> None:
+    """C1: `rescue/` as a whole was reclaimable, which destroyed
+    `rescue/clips/*.mp4` — the leaf-clip sources a bisected capture records in
+    pipeline.log as its origin. Without them `add-video`/`resume` fail with
+    "cannot extend a capture whose origin is unknown", recoverable only by
+    re-running bisection (5h36m on the documented max_strasse case) against an
+    original video that may no longer exist. `cleanup-rescue` already keeps
+    them by default; the lifecycle must not silently override that.
+    """
+    capture = _make_capture(tmp_path, "2026-07-01_x")
+    (capture / "rescue" / "clips").mkdir(parents=True)
+    (capture / "rescue" / "clips" / "0.mp4").write_bytes(b"m" * 40)
+    (capture / "rescue" / "probes" / "0" / "colmap").mkdir(parents=True)
+    (capture / "rescue" / "probes" / "0" / "colmap" / "db").write_bytes(b"p" * 60)
+    _mark_reviewed(capture)
+
+    result = lifecycle.inspect(capture, now=NOW, grace_days=30)
+
+    assert [p.relative_to(capture).as_posix() for p in result.reclaimable] == ["rescue/probes"]
+    assert result.reclaimable_bytes == 60

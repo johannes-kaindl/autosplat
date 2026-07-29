@@ -617,7 +617,7 @@ def migrate_storage(
         protected = [t for t in raw_targets if _holds_ply(t, ply) or _contains_nested_export(t)]
         targets = [t for t in raw_targets if t not in protected]
         protected_note = (
-            f" (kept: {', '.join(t.name for t in protected)} — holds a nested capture)"
+            f" (kept: {_target_labels(capture_dir, protected)} — holds a nested capture)"
             if protected
             else ""
         )
@@ -649,7 +649,7 @@ def migrate_storage(
         # exactly what hid the round-2 regression until real data surfaced
         # it.
         table.add_row(
-            str(rel), f"{', '.join(t.name for t in targets)}{protected_note}", _human_bytes(size)
+            str(rel), f"{_target_labels(capture_dir, targets)}{protected_note}", _human_bytes(size)
         )
 
     to_delete: list[Path] = []
@@ -834,6 +834,17 @@ def _contains_nested_export(target: Path) -> bool:
         if (p / "output" / "scene.ply").exists() or (p / "scene.ply").exists():
             return True
     return False
+
+
+def _target_labels(capture_dir: Path, targets: list[Path]) -> str:
+    """Name reclaim targets by their path relative to the capture.
+
+    A bare `.name` is ambiguous now that targets can be nested: `share/_tmp`
+    and `rescue/probes` would both read as a single opaque leaf ("_tmp",
+    "probes") in a table whose whole purpose is telling the user exactly what
+    is about to be deleted.
+    """
+    return ", ".join(t.relative_to(capture_dir).as_posix() for t in targets)
 
 
 def _human_bytes(n: int) -> str:

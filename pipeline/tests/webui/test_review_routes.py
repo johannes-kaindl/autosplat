@@ -211,7 +211,9 @@ def test_view_page_hides_review_panel_when_reviewed(app: FastAPI, tmp_path: Path
 def test_confirm_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
     capture_dir = _make_capture(tmp_path)
     (capture_dir / "colmap").mkdir()
-    (capture_dir / "rescue").mkdir()
+    (capture_dir / "rescue" / "probes").mkdir(parents=True)
+    (capture_dir / "rescue" / "clips").mkdir()
+    (capture_dir / "rescue" / "clips" / "0.mp4").write_bytes(b"m" * 10)
     app.state.cfg.paths.captures_dir = tmp_path
 
     with TestClient(app) as client:
@@ -219,7 +221,10 @@ def test_confirm_reclaims_intermediates(app: FastAPI, tmp_path: Path) -> None:
 
     assert r.status_code == 303
     assert not (capture_dir / "colmap").exists()
-    assert not (capture_dir / "rescue").exists()
+    assert not (capture_dir / "rescue" / "probes").exists()
+    # C1: the leaf-clip sources a bisected capture was rebuilt from survive —
+    # add-video/resume re-extract from them.
+    assert (capture_dir / "rescue" / "clips" / "0.mp4").exists()
     assert (capture_dir / "output" / ".review.json").exists()
 
 

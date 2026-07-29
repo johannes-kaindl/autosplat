@@ -20,19 +20,39 @@ LifecycleState = Literal["failed", "done", "reviewed", "archived"]
 ReviewStatus = Literal["unreviewed", "reviewed"]
 
 # Working dirs that hold nothing worth keeping once the scene is signed off.
-# `training` predates the current pipeline but still exists in legacy captures.
-# `source` is deliberately absent — see the design doc: sub-project 4 decides
-# whether the source video belongs in a capture at all.
+# `training` predates the current pipeline but is still written every run
+# (`train.py` points Brush's `--export-path` at it) and exists in legacy
+# captures too. `source` is deliberately absent — see the design doc:
+# sub-project 4 decides whether the source video belongs in a capture at all.
+#
+# `rescue` is deliberately NOT here: `rescue/clips/*.mp4` are the leaf-clip
+# sources a bisection-rescued capture records in pipeline.log as its origin,
+# and `add-video`/`resume` re-extract from them. Deleting them makes
+# `add-video` fail with "cannot extend a capture whose origin is unknown",
+# recoverable only by re-running bisection (5h36m on the documented
+# max_strasse case) against an original video that may no longer exist.
+# `cleanup-rescue` keeps them by default for exactly that reason; the probe
+# workspaces underneath `rescue/probes/` — where the mass actually sits
+# (3,1 GB on the maintainer's tree) — are reclaimed instead, see below.
 RECLAIMABLE_SUBDIRS: tuple[str, ...] = (
     "frames",
     "colmap",
     "training",
     "brush_dataset",
-    "rescue",
 )
 
 # Reclaimable paths that are not top-level subdirs of the same shape.
-_EXTRA_RECLAIMABLE: tuple[tuple[str, ...], ...] = (("share", "_tmp"),)
+_EXTRA_RECLAIMABLE: tuple[tuple[str, ...], ...] = (
+    ("share", "_tmp"),
+    ("rescue", "probes"),
+)
+
+# Directory names that are never a capture in their own right — recursion in
+# `find_capture_dirs` stops at them. Kept separate from RECLAIMABLE_SUBDIRS:
+# `rescue/` is no longer reclaimable wholesale, but it is still a working dir
+# of its capture, and descending into it would register every bisection probe
+# workspace (`frames/` + `colmap/`, no PLY) as a capture of its own.
+_NON_CAPTURE_SUBDIRS: tuple[str, ...] = (*RECLAIMABLE_SUBDIRS, "rescue", "output")
 
 
 @dataclass(frozen=True)
@@ -258,7 +278,7 @@ def find_capture_dirs(root: Path) -> list[Path]:
     for entry in sorted(root.iterdir()):
         if not entry.is_dir() or entry.is_symlink():
             continue
-        if entry.name in RECLAIMABLE_SUBDIRS or entry.name == "output":
+        if entry.name in _NON_CAPTURE_SUBDIRS:
             continue
         if is_capture_dir(entry):
             found.append(entry)

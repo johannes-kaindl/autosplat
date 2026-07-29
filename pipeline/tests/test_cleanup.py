@@ -70,23 +70,47 @@ def test_prune_intermediates_nothing_to_remove(tmp_path: Path) -> None:
     assert result.bytes_reclaimed == 0
 
 
-def test_prune_removes_rescue_and_brush_dataset(tmp_path: Path) -> None:
+def test_prune_removes_rescue_probes_and_brush_dataset(tmp_path: Path) -> None:
     # Regression: INTERMEDIATE_SUBDIRS listed only frames/colmap/training, so
-    # 11,2 GB of bisection-rescue leftovers were never reclaimed.
+    # 11,2 GB of bisection-rescue leftovers were never reclaimed. C1: the
+    # rescue *probes* are where that mass sits — `rescue/clips/*.mp4` are the
+    # bisected capture's recorded origin and are kept (see
+    # test_prune_keeps_rescue_clips).
     capture = tmp_path / "2026-07-01_x"
     (capture / "output").mkdir(parents=True)
     (capture / "output" / "scene.ply").write_bytes(b"ply\n")
-    for sub in ("frames", "colmap", "rescue", "brush_dataset"):
+    for sub in ("frames", "colmap", "brush_dataset"):
         (capture / sub).mkdir()
         (capture / sub / "blob").write_bytes(b"x" * 10)
+    (capture / "rescue" / "probes").mkdir(parents=True)
+    (capture / "rescue" / "probes" / "blob").write_bytes(b"x" * 10)
 
     result = prune_intermediates(capture)
 
-    assert {p.name for p in result.removed} == {"frames", "colmap", "rescue", "brush_dataset"}
+    assert {p.name for p in result.removed} == {"frames", "colmap", "probes", "brush_dataset"}
     assert result.bytes_reclaimed == 40
-    assert not (capture / "rescue").exists()
+    assert not (capture / "rescue" / "probes").exists()
     assert not (capture / "brush_dataset").exists()
     assert (capture / "output" / "scene.ply").exists()
+
+
+def test_prune_keeps_rescue_clips(tmp_path: Path) -> None:
+    """C1: `rescue/clips/*.mp4` are the leaf-clip sources a bisected capture
+    records in pipeline.log as its origin — `add-video`/`resume` re-extract
+    from them. `cleanup-rescue` keeps them by default and CAPTURE-GUIDE says
+    dropping them breaks both; the automatic paths must not override that."""
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    (capture / "rescue" / "clips").mkdir(parents=True)
+    (capture / "rescue" / "clips" / "0.mp4").write_bytes(b"m" * 10)
+    (capture / "rescue" / "probes" / "0").mkdir(parents=True)
+    (capture / "rescue" / "probes" / "0" / "blob").write_bytes(b"x" * 10)
+
+    prune_intermediates(capture)
+
+    assert (capture / "rescue" / "clips" / "0.mp4").exists()
+    assert not (capture / "rescue" / "probes").exists()
 
 
 def test_prune_removes_share_tmp_but_keeps_bundles(tmp_path: Path) -> None:

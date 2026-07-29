@@ -172,7 +172,7 @@ def test_never_touches_a_reclaimable_dir_holding_a_nested_ply(tmp_path: Path) ->
     capture = captures / "2026-07-01_x"
     (capture / "output").mkdir(parents=True)
     (capture / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
-    nested_ply = capture / "rescue" / "probe_0" / "output" / "scene.ply"
+    nested_ply = capture / "rescue" / "probes" / "probe_0" / "output" / "scene.ply"
     nested_ply.parent.mkdir(parents=True)
     nested_ply.write_bytes(b"ply\nend_header\n")
     (capture / "colmap").mkdir()
@@ -184,7 +184,7 @@ def test_never_touches_a_reclaimable_dir_holding_a_nested_ply(tmp_path: Path) ->
 
     assert result.exit_code == 0
     assert nested_ply.exists()
-    assert (capture / "rescue").exists()
+    assert (capture / "rescue" / "probes").exists()
     assert not (capture / "colmap").exists()
 
 
@@ -200,6 +200,9 @@ def test_probe_workspace_without_ply_is_reclaimed_not_protected(tmp_path: Path) 
     which still reclaim it) that a loose `training/scene.ply` caused before.
     A probe workspace that never produced a PLY produced no result and must
     be reclaimed like any other abandoned intermediate.
+
+    C1: the reclaim target is `rescue/probes`, not `rescue` — the sibling
+    `rescue/clips/*.mp4` are the capture's recorded origin and must survive.
     """
     captures = tmp_path / "captures"
     capture = captures / "2026-05-26_max_strasse"
@@ -210,13 +213,16 @@ def test_probe_workspace_without_ply_is_reclaimed_not_protected(tmp_path: Path) 
     (probe / "frames" / "frame_0001.jpg").write_bytes(b"x" * 100)
     (probe / "colmap").mkdir()
     (probe / "colmap" / "database.db").write_bytes(b"x" * 100)
+    (capture / "rescue" / "clips").mkdir()
+    (capture / "rescue" / "clips" / "0.mp4").write_bytes(b"m" * 100)
     _backdate(captures)
     cfg = _config_for(captures, tmp_path)
 
     result = runner.invoke(app, ["migrate-storage", "--config", str(cfg), "--apply"])
 
     assert result.exit_code == 0
-    assert not (capture / "rescue").exists()
+    assert not (capture / "rescue" / "probes").exists()
+    assert (capture / "rescue" / "clips" / "0.mp4").exists()
 
 
 def test_partially_protected_capture_labels_the_protected_target(tmp_path: Path) -> None:
@@ -256,7 +262,7 @@ def test_capture_with_every_target_protected_is_listed_as_kept(tmp_path: Path) -
     capture = captures / "2026-07-15_all_protected"
     (capture / "output").mkdir(parents=True)
     (capture / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
-    nested = capture / "rescue" / "probe_0"
+    nested = capture / "rescue" / "probes" / "probe_0"
     (nested / "output").mkdir(parents=True)
     (nested / "output" / "scene.ply").write_bytes(b"ply\nend_header\n")
     _backdate(captures)
