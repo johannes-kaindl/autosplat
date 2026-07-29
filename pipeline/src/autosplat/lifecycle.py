@@ -11,6 +11,7 @@ alone, with no bookkeeping to keep in sync — and this module preserves it.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +54,9 @@ _EXTRA_RECLAIMABLE: tuple[tuple[str, ...], ...] = (
 # of its capture, and descending into it would register every bisection probe
 # workspace (`frames/` + `colmap/`, no PLY) as a capture of its own.
 _NON_CAPTURE_SUBDIRS: tuple[str, ...] = (*RECLAIMABLE_SUBDIRS, "rescue", "output")
+
+# The pipeline's capture-directory naming scheme: YYYY-MM-DD_<stem>.
+CAPTURE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_.+$")
 
 
 @dataclass(frozen=True)
@@ -346,6 +350,33 @@ def is_capture_dir(path: Path) -> bool:
     if (path / "output" / "scene.ply").exists() or (path / "scene.ply").exists():
         return True
     return (path / "frames").is_dir() and (path / "colmap").is_dir()
+
+
+def list_capture_dirs(captures_dir: Path) -> list[Path]:
+    """The captures the UI lists — top-level, `YYYY-MM-DD_<stem>`, no recursion.
+
+    THE definition of "a capture the user can see", shared by
+    `webui.state.list_captures` and `cleanup.sweep_expired` so the two cannot
+    drift. They did: the sweep enumerated via `find_capture_dirs` (recursive,
+    no name filter) and so reclaimed captures the UI never showed and never
+    counted down a grace period for — including the 6,4 GB nested legacy
+    layout, and, because every existing capture is already past 30 days, most
+    of the backlog on the very first launch after upgrading.
+
+    Anything this does not return is deliberately left to `migrate-storage`:
+    an explicit, previewable command is the right instrument for a
+    non-conforming or nested layout, not a silent daemon thread.
+
+    Symlinks are skipped — a symlinked capture dir would otherwise let the
+    sweep `rmtree` through the link into a tree it was never pointed at.
+    """
+    if not captures_dir.is_dir():
+        return []
+    return sorted(
+        entry
+        for entry in captures_dir.iterdir()
+        if entry.is_dir() and not entry.is_symlink() and CAPTURE_DIR_RE.match(entry.name)
+    )
 
 
 def find_capture_dirs(root: Path) -> list[Path]:

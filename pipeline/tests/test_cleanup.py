@@ -367,3 +367,67 @@ def test_sweep_expired_never_deletes_a_target_burying_a_nested_export(tmp_path: 
 
     assert nested_ply.exists()
     assert not (capture / "colmap").exists()
+
+
+def test_sweep_expired_only_touches_captures_the_ui_lists(tmp_path: Path) -> None:
+    """I1: the startup sweep enumerated via `find_capture_dirs` — no name
+    filter, and recursive — while the UI lists only top-level dirs matching
+    `YYYY-MM-DD_*`. So `2026-05-25_max_strasse_rescue/2026-05-25_A_vor1`
+    (6,4 GB on the real tree) was swept though the UI never showed it, and
+    never warned "cleanup in N days" for it. Worse: every existing capture is
+    already past 30 days, so the first `autosplat webui` launch after merge
+    would have reclaimed ~9,6 GB in a daemon thread with only log lines,
+    pre-empting `migrate-storage` — the explicit, previewable command built
+    for exactly that backlog.
+
+    The sweep is now bounded to what the UI lists. Anything else is left to
+    `migrate-storage`, which still finds it.
+    """
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    from autosplat import lifecycle
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    nested = tmp_path / "2026-05-25_max_strasse_rescue" / "2026-05-25_A_vor1"
+    (nested / "output").mkdir(parents=True)
+    (nested / "output" / "scene.ply").write_bytes(b"ply\n")
+    (nested / "colmap").mkdir()
+    (nested / "colmap" / "blob").write_bytes(b"x" * 100)
+    unconventional = tmp_path / "scratch_no_date_prefix"
+    (unconventional / "output").mkdir(parents=True)
+    (unconventional / "output" / "scene.ply").write_bytes(b"ply\n")
+    (unconventional / "colmap").mkdir()
+    (unconventional / "colmap" / "blob").write_bytes(b"x" * 100)
+    old = (now - timedelta(days=40)).timestamp()
+    for p in [tmp_path, *tmp_path.rglob("*")]:
+        os.utime(p, (old, old))
+
+    results = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
+
+    assert results == []
+    assert (nested / "colmap").exists()
+    assert (unconventional / "colmap").exists()
+    # ...but migrate-storage's recursive enumeration still sees them.
+    assert nested in lifecycle.find_capture_dirs(tmp_path)
+    assert unconventional in lifecycle.find_capture_dirs(tmp_path)
+
+
+def test_sweep_expired_still_reclaims_a_top_level_listed_capture(tmp_path: Path) -> None:
+    """The bound must not shrink the sweep to nothing: a conforming top-level
+    capture — exactly what the UI lists and warns about — is still swept."""
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+    capture = tmp_path / "2026-06-01_old"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    (capture / "colmap").mkdir()
+    (capture / "colmap" / "blob").write_bytes(b"x" * 5)
+    old = (now - timedelta(days=40)).timestamp()
+    for p in [capture, *capture.rglob("*")]:
+        os.utime(p, (old, old))
+
+    assert len(cleanup.sweep_expired(tmp_path, grace_days=30, now=now)) == 1
+    assert not (capture / "colmap").exists()

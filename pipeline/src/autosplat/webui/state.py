@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import contextlib
-import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,8 +25,10 @@ if TYPE_CHECKING:
 
 CaptureStatus = Literal["idle", "queued", "running", "done", "failed"]
 
-# Matches pipeline capture dirs: YYYY-MM-DD_<stem>
-_CAPTURE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_.+$")
+# Matches pipeline capture dirs: YYYY-MM-DD_<stem>. Owned by `lifecycle`,
+# which shares it with the grace sweep so the set of captures the UI lists
+# and the set the sweep reclaims cannot drift apart (I1).
+_CAPTURE_DIR_RE = lifecycle.CAPTURE_DIR_RE
 
 STAGE_ORDER = ["preflight", "preprocess", "sfm", "train", "export"]
 
@@ -86,12 +87,7 @@ def list_captures(
     failed_by_path = {e.path: e for e in state.failed}
 
     captures: list[CaptureInfo] = []
-    for entry in captures_dir.iterdir():
-        if not entry.is_dir():
-            continue
-        if not _CAPTURE_DIR_RE.match(entry.name):
-            continue
-
+    for entry in lifecycle.list_capture_dirs(captures_dir):
         path_str = str(entry)
         life = lifecycle.inspect(entry, now=now or datetime.now(UTC), grace_days=grace_days)
         review_status = _review_status(entry)

@@ -112,6 +112,11 @@ def sweep_expired(
 ) -> list[PruneResult]:
     """Reclaim captures whose unreviewed grace period has run out.
 
+    Bounded to the captures the UI actually lists (`lifecycle.list_capture_dirs`
+    — top-level, `YYYY-MM-DD_*`), because those are the only ones the UI
+    counts a grace period down for. A nested or non-conforming layout is left
+    to `migrate-storage`, which previews before it deletes.
+
     Never raises: a failure on one capture must not stop the sweep, and the
     sweep must never prevent the WebUI/app from starting.
     """
@@ -120,7 +125,7 @@ def sweep_expired(
         return results
 
     try:
-        capture_dirs = lifecycle.find_capture_dirs(captures_dir)
+        capture_dirs = lifecycle.list_capture_dirs(captures_dir)
     except OSError as e:
         logger.error(
             "cleanup.sweep_enum_failed",
