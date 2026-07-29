@@ -328,3 +328,79 @@ def test_upload_does_not_reclaim_while_a_cli_run_is_in_flight(app: FastAPI, tmp_
     assert r.status_code == 303
     assert (capture_dir / "colmap" / "blob").exists()
     assert (capture_dir / "output" / "scene_reviewed.ply").exists()
+
+
+def test_confirm_unchanged_invalidates_a_sog_built_from_the_reviewed_ply(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    """I3: `share_runner` reuses `output/scene.sog` when its mtime is >= the
+    publish PLY's. mtime cannot see a *deletion*, and "Confirm unchanged"
+    deliberately unlinks `scene_reviewed.ply` so `resolve_publish_ply` stops
+    serving it. `scene.ply`'s mtime never changed, so the stale SOG — built
+    from the cleaned PLY — was reused and the bundle kept serving the cleaned
+    scene the user had just reverted.
+
+    Full sequence: review-by-upload -> share -> confirm unchanged -> share.
+    """
+    from autosplat.compress import CompressResult
+    from autosplat.webui.share_runner import ShareJobRunner
+
+    capture_id = "2026-07-19_lgs"
+    capture_dir = _make_capture(tmp_path, capture_id)
+    embed = tmp_path / "embed"
+    embed.mkdir()
+    (embed / "index.html").write_text("<html>e</html>")
+
+    compressed_from: list[Path] = []
+
+    def fake_compress(ply: Path, out_dir: Path, *, fmt: str = "sog", quality: str = "medium"):  # type: ignore[no-untyped-def]
+        compressed_from.append(ply)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sog = out_dir / f"{ply.stem}.sog"
+        sog.write_bytes(b"SOG" + ply.read_bytes())
+        return CompressResult(
+            output_path=sog,
+            backend_used="fake",
+            quality="medium",
+            duration_s=0.1,
+            input_bytes=100,
+            output_bytes=10,
+        )
+
+    app.state.cfg.paths.captures_dir = tmp_path
+    app.state.cfg.share.embed_src_path = embed
+    app.state.share_runner = ShareJobRunner(app.state.cfg, compressor=fake_compress)
+
+    def _share_and_wait(client) -> None:  # type: ignore[no-untyped-def]
+        import time
+
+        client.post(f"/captures/{capture_id}/share", follow_redirects=False)
+        job = app.state.share_runner.get(capture_id)
+        deadline = time.monotonic() + 5.0
+        while job.status == "running" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert job.status == "done", job.error
+
+    sog = capture_dir / "output" / "scene.sog"
+
+    with TestClient(app) as client:
+        client.post(
+            f"/captures/{capture_id}/review/upload",
+            files={"reviewed_ply": ("cleaned.ply", b"ply\ncleaned", "application/octet-stream")},
+            follow_redirects=False,
+        )
+        _share_and_wait(client)
+        assert compressed_from[-1].name == "scene_reviewed.ply"
+        assert sog.read_bytes() == b"SOGply\ncleaned"
+
+        # "Confirm unchanged" reverts to scene.ply — the SOG made from the
+        # cleaned PLY must not survive it.
+        client.post(f"/captures/{capture_id}/review/confirm", follow_redirects=False)
+        assert not (capture_dir / "output" / "scene_reviewed.ply").exists()
+        assert not sog.exists()
+
+        _share_and_wait(client)
+
+    assert compressed_from[-1].name == "scene.ply"
+    assert sog.read_bytes().startswith(b"SOGply\n")
+    assert b"cleaned" not in sog.read_bytes()

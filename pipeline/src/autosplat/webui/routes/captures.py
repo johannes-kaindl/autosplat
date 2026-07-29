@@ -481,8 +481,18 @@ def _prune_after_review(capture_dir: Path, job_runner: JobRunner | None) -> None
 
 
 def _write_review_marker(capture_dir: Path) -> None:
-    """Mark capture_dir as reviewed against output/scene.ply's current mtime."""
+    """Mark capture_dir as reviewed against output/scene.ply's current mtime.
+
+    Drops any existing `output/scene.sog` as part of the sign-off. The share
+    runner reuses that SOG whenever its mtime is >= the publish PLY's, and
+    mtime cannot see a *deletion*: "Confirm unchanged" unlinks
+    `scene_reviewed.ply` while `scene.ply`'s mtime never changes, so a SOG
+    built from the cleaned PLY would be reused and keep serving the very
+    scene the user just reverted. Regenerating it costs one compression on
+    the next share; serving the wrong scene is silent and unbounded.
+    """
     scene_ply = capture_dir / "output" / "scene.ply"
+    (capture_dir / "output" / "scene.sog").unlink(missing_ok=True)
     marker = review_marker_path(capture_dir)
     marker.write_text(
         json.dumps(
