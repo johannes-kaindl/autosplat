@@ -134,3 +134,76 @@ def test_sweep_expired_reclaims_only_past_grace(tmp_path: Path) -> None:
     assert len(results) == 1
     assert (tmp_path / "2026-07-01_fresh" / "colmap").exists()
     assert not (tmp_path / "2026-06-01_old" / "colmap").exists()
+
+
+def test_prune_partial_failures_are_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Finding 2: Partial failures have no test. Verify that when shutil.rmtree
+    # fails on one target, it's reported in .failed, others are still removed,
+    # and bytes_reclaimed counts only successful targets.
+    capture = tmp_path / "2026-07-01_x"
+    (capture / "output").mkdir(parents=True)
+    (capture / "output" / "scene.ply").write_bytes(b"ply\n")
+    (capture / "frames").mkdir()
+    (capture / "frames" / "blob").write_bytes(b"x" * 20)
+    (capture / "colmap").mkdir()
+    (capture / "colmap" / "blob").write_bytes(b"x" * 30)
+    (capture / "training").mkdir()
+    (capture / "training" / "blob").write_bytes(b"x" * 40)
+
+    import shutil
+
+    original_rmtree = shutil.rmtree
+
+    def rmtree_with_failure(path: str | Path) -> None:
+        path_obj = Path(path)
+        # Fail only on colmap
+        if path_obj.name == "colmap":
+            raise OSError("Permission denied")
+        original_rmtree(path_obj)
+
+    monkeypatch.setattr(shutil, "rmtree", rmtree_with_failure)
+
+    result = prune_intermediates(capture)
+
+    # colmap should be in failed, not in removed
+    assert capture / "colmap" in result.failed
+    assert capture / "colmap" not in result.removed
+
+    # frames and training should be removed
+    assert capture / "frames" not in result.failed
+    assert capture / "frames" in result.removed
+    assert capture / "training" not in result.failed
+    assert capture / "training" in result.removed
+
+    # colmap should still exist (removal failed)
+    assert (capture / "colmap").exists()
+    # frames and training should be gone
+    assert not (capture / "frames").exists()
+    assert not (capture / "training").exists()
+
+    # bytes_reclaimed should only count frames (20) + training (40), NOT colmap (30)
+    assert result.bytes_reclaimed == 60
+
+
+def test_sweep_expired_handles_enumeration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Finding 1: sweep_expired must never raise, even if find_capture_dirs fails.
+    # Verify it returns [] and logs the error instead of propagating OSError.
+    from datetime import UTC, datetime
+
+    from autosplat import lifecycle
+
+    now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
+
+    def find_capture_dirs_failing(_: Path) -> list[Path]:
+        raise OSError("Permission denied during directory enumeration")
+
+    monkeypatch.setattr(lifecycle, "find_capture_dirs", find_capture_dirs_failing)
+
+    # Should not raise, should return empty list
+    result = cleanup.sweep_expired(tmp_path, grace_days=30, now=now)
+
+    assert result == []

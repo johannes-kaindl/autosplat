@@ -92,13 +92,23 @@ def sweep_expired(
     if grace_days <= 0:
         return results
 
-    for capture_dir in lifecycle.find_capture_dirs(captures_dir):
+    try:
+        capture_dirs = lifecycle.find_capture_dirs(captures_dir)
+    except OSError as e:
+        logger.error(
+            "cleanup.sweep_enum_failed",
+            captures_dir=str(captures_dir),
+            error=str(e),
+        )
+        return results
+
+    for capture_dir in capture_dirs:
         try:
             state = lifecycle.inspect(capture_dir, now=now, grace_days=grace_days)
             if not state.reclaimable:
                 continue
             result = prune_intermediates(capture_dir)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001,RUF100
             logger.error("cleanup.sweep_failed", capture=str(capture_dir), error=str(e))
             continue
         logger.info(
