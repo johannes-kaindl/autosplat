@@ -307,7 +307,7 @@ assertion to the resolver's value (do not reintroduce the cwd-relative default).
 - [ ] **Step 8: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/resources.py pipeline/tests/test_resources.py \
         pipeline/src/autosplat/config.py pipeline/src/autosplat/webui/share_runner.py
 git commit -m "feat(pipeline): resolve bundled assets through one resolver
@@ -486,7 +486,7 @@ Run: `cd pipeline && bash -n scripts/build_app.sh` (syntax) then
 verify manually instead:
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 mv target/supersplat/dist target/supersplat/dist.bak
 ./scripts/build_app.sh 2>&1 | tail -2   # expect: the SuperSplat fail message
 mv target/supersplat/dist.bak target/supersplat/dist
@@ -498,7 +498,7 @@ yet — `viewer/vendor/` arrives in Task 3.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/packaging/AutoSplat.spec pipeline/scripts/build_app.sh \
         pipeline/tests/test_packaging.py
 git commit -m "feat(pipeline): bundle SuperSplat and the walking viewer into the app
@@ -581,7 +581,7 @@ Expected: all three FAIL — the importmap still names jsdelivr, and
 - [ ] **Step 3: Vendor the engine and remap the specifier**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 mkdir -p viewer/vendor
 cp embed/vendor/playcanvas.mjs viewer/vendor/playcanvas.mjs
 ```
@@ -625,7 +625,7 @@ Expected: PASS, including the pre-existing unit tests.
 - [ ] **Step 5: Verify the viewer still actually renders**
 
 ```bash
-cd /Users/Shared/code/autosplat/viewer && ./serve.sh
+cd "$(git rev-parse --show-toplevel)/viewer" && ./serve.sh
 ```
 
 Open `http://localhost:<port>/viewer.html`, load the demo, enter walking mode once.
@@ -635,7 +635,7 @@ here — the engine has to execute, not just exist.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add viewer/viewer.html viewer/vendor viewer/tests/unit/vendor.test.mjs
 git commit -m "feat(viewer): vendor the engine instead of loading it from a CDN
 
@@ -836,9 +836,9 @@ Expected: PASS (4 tests)
 - [ ] **Step 7: Run the full suite and commit**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 uv run pytest -q && uv run mypy src && uv run ruff check src tests
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/routes/system.py \
         pipeline/src/autosplat/webui/templates/system.html \
         pipeline/src/autosplat/webui/app.py \
@@ -1337,7 +1337,7 @@ Then the real preview, which must report nothing left to do (the sweep already r
 2026-07-29):
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline && uv run autosplat migrate-storage
+cd "$(git rev-parse --show-toplevel)/pipeline" && uv run autosplat migrate-storage
 ```
 
 Expected: a table whose *Reclaimable* total is ~0, with the 10 orphaned `outputs/`
@@ -1346,9 +1346,9 @@ entries listed as kept. **Do not pass `--apply`.**
 - [ ] **Step 8: Run the full suite and commit**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 uv run pytest -q && uv run mypy src && uv run ruff check src tests
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/migration.py pipeline/tests/test_migration.py \
         pipeline/src/autosplat/cli.py
 git commit -m "refactor(pipeline): separate the migrate-storage plan from its rendering
@@ -1733,9 +1733,9 @@ Expected: PASS (6 tests)
 - [ ] **Step 7: Run the full suite and commit**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 uv run pytest -q && uv run mypy src && uv run ruff check src tests
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/routes/storage.py \
         pipeline/src/autosplat/webui/routes/partials.py \
         pipeline/src/autosplat/webui/templates/storage.html \
@@ -1924,7 +1924,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 7: Verify against a real capture**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline && uv run autosplat webui --port 8080
+cd "$(git rev-parse --show-toplevel)/pipeline" && uv run autosplat webui --port 8080
 ```
 
 Open a finished capture, click **Walk through**, enter walking mode, move with WASD. This
@@ -1934,9 +1934,9 @@ is the step that proves the mount serves a viewer that actually runs — a 200 o
 - [ ] **Step 8: Run the full suite and commit**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 uv run pytest -q && uv run mypy src && uv run ruff check src tests
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/webui/app.py \
         pipeline/src/autosplat/webui/routes/captures.py \
         pipeline/src/autosplat/webui/templates/capture/detail.html \
@@ -2333,9 +2333,9 @@ Expected: PASS. `test_share_runner.py` exercises `_run` through the runner; if i
 - [ ] **Step 8: Run the full suite and commit**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 uv run pytest -q && uv run mypy src && uv run ruff check src tests
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add pipeline/src/autosplat/lifecycle.py \
         pipeline/src/autosplat/webui/share_runner.py \
         pipeline/src/autosplat/webui/routes/captures.py \
@@ -2448,16 +2448,18 @@ Under `## [Unreleased]` in the root `CHANGELOG.md`:
 - [ ] **Step 5: Verify the docs match the code**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
-uv run autosplat --help          # review + share appear
-grep -c "geparkt" ../AGENTS.md ../viewer/AGENTS.md   # expect 0 in both
-python3 /Users/Shared/code/_docs/readme/readme_lint.py autosplat
+cd "$(git rev-parse --show-toplevel)"
+grep -c "geparkt" AGENTS.md viewer/AGENTS.md      # expect 0 in both
+(cd pipeline && uv run autosplat --help)          # review + share appear
+# Maintainer-local: the workspace lint lives one level above the repo and is
+# absent in a fresh clone (see the AGENTS.md preamble). Skip if missing.
+[ -f ../_docs/readme/readme_lint.py ] && python3 ../_docs/readme/readme_lint.py autosplat
 ```
 
 - [ ] **Step 6: Build and verify the real app**
 
 ```bash
-cd /Users/Shared/code/autosplat/pipeline
+cd "$(git rev-parse --show-toplevel)/pipeline"
 ./scripts/build_app.sh
 du -sh dist/AutoSplat.app     # expect ~180 MB
 open dist/AutoSplat.app
@@ -2471,7 +2473,7 @@ deleting.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/Shared/code/autosplat
+cd "$(git rev-parse --show-toplevel)"   # Repo-Root
 git add AGENTS.md viewer/AGENTS.md CHANGELOG.md
 git commit -m "docs: write down the charter of doors and viewer roles
 
