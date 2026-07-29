@@ -484,7 +484,7 @@ def cleanup_intermediates(
         ...,
         exists=True,
         file_okay=False,
-        help="Capture directory whose frames/colmap/training working dirs you want to reclaim.",
+        help="Capture directory whose working dirs you want to reclaim.",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -492,16 +492,26 @@ def cleanup_intermediates(
         help="Print what would be removed without touching disk.",
     ),
 ) -> None:
-    """Delete frames/, colmap/, training/ once a capture has finished exporting.
+    """Reclaim a finished capture's working dirs.
 
-    These are the SfM/training working directories — once `output/scene.ply`
-    exists they're pure disk cost (typically 1-2 GB per capture). Nothing
-    downstream needs them: `autosplat add-video` always wipes and
-    re-extracts them from scratch from the original source videos (recorded
-    in pipeline.log), it never reuses their contents.
+    Deletes frames/, colmap/, training/, brush_dataset/, rescue/probes/ and
+    share/_tmp/ — the SfM/training/bisection working directories. Once the
+    capture has exported, they are pure disk cost (1-2 GB per capture
+    typically, more with bisection probes). Nothing downstream needs them:
+    `autosplat add-video` always wipes and re-extracts them from scratch from
+    the original source videos (recorded in pipeline.log), it never reuses
+    their contents.
 
-    Refuses when `output/scene.ply` is missing — an unfinished capture still
-    needs these for `autosplat resume`.
+    Kept: all of output/, pipeline.log, runs.jsonl, progress.json, finished
+    share bundles, and rescue/clips/*.mp4 — those are a bisection-rescued
+    capture's recorded origin, which resume/add-video re-extract from. Use
+    `cleanup-rescue --remove-clips` if you really want those gone.
+
+    A subdir burying a nested capture that exported a result of its own (a
+    bisection probe that succeeded) is kept whole, never deleted around.
+
+    Refuses when the capture has no exported PLY — an unfinished capture
+    still needs these for `autosplat resume`, and a failed one for diagnosis.
     """
     targets = cleanup_mod.prunable_targets(capture_dir)
     try:

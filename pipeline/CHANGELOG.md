@@ -9,6 +9,60 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Completing a review now reclaims that capture's intermediates.** Signing a
+  capture off in the WebUI's publish quality gate — "Confirm unchanged" or
+  uploading a cleaned PLY — deletes `frames/`, `colmap/`, `training/`,
+  `brush_dataset/`, `rescue/probes/` and `share/_tmp/` for it. Kept, as before:
+  everything in `output/`, `pipeline.log`, `runs.jsonl`, finished share bundles,
+  and `rescue/clips/*.mp4` — those are a bisection-rescued capture's recorded
+  origin and `resume`/`add-video` re-extract from them. The reclaim is deferred
+  while a run looks live (a WebUI job, or any working dir touched in the last
+  hour, which is what a CLI `resume`/`add-video` looks like from outside); the
+  sign-off itself always stands and the reclaim is retried later.
+- **A capture that is never reviewed is reclaimed after 30 days**, on the next
+  WebUI/app start. The captures list warns from day 23 onwards, and each
+  reclaimed capture gets a log line. Configurable via `[lifecycle]
+  unreviewed_grace_days`; `0` disables the fallback entirely. The sweep only
+  ever touches captures the WebUI actually lists (top-level `YYYY-MM-DD_*`
+  directories) — nested legacy layouts are left to `migrate-storage`.
+- **`export.copy_to_outputs` is deprecated and now defaults to `false`.**
+  `outputs_dir` was a second, unmanaged copy of every PLY that nothing ever
+  reclaimed (8,8 GB, 10 of 17 folders orphaned on the maintainer's machine).
+  `captures/<id>/output/` is the only location that should exist now; `doctor`
+  warns while the key is still `true`. Existing config files keep loading.
+- **Compressed SOGs are kept in `output/scene.sog` and reused.** A repeat share
+  of an unchanged capture goes from minutes of compression to seconds. A review
+  sign-off drops the SOG so the next share rebuilds it from whichever PLY is
+  actually being published.
+
+### Added
+
+- **`autosplat migrate-storage`** — brings an existing `captures/` + `outputs/`
+  backlog onto the retention policy. Scans `captures/` recursively so nested
+  pre-Phase-9 rescue layouts are found, plus the deprecated `outputs/` copies,
+  and prints one table of everything reclaimable. **Preview by default**;
+  `--apply` executes. Captures that failed, look mid-rebuild, or bury a nested
+  capture's only PLY are listed as kept with the reason, never silently
+  dropped. An `outputs/<name>` entry is deleted only when a capture of that
+  name still exists *and* has its own exported PLY; orphans are never deleted,
+  regardless of age. Refuses outright if `captures_dir` and `outputs_dir` nest
+  in either direction, or if `outputs_dir` resolves to your home directory or a
+  filesystem root.
+- **A capture lifecycle derived from the filesystem** (`lifecycle.py`) — four
+  states (`failed`, `done`, `reviewed`, `archived`), single source of truth for
+  what may be reclaimed, shared by the CLI, the WebUI and the grace sweep.
+  Nothing is stored: a rebuilt `scene.ply` invalidates the sign-off by mtime
+  alone.
+
+### Docs
+
+- `CONFIGURATION.md` documents the new `[lifecycle]` section, the four states
+  and exactly what is and is not reclaimed. `CAPTURE-GUIDE.md` gains a
+  "Reclaiming disk space" section covering both automatic triggers, the
+  `rescue/clips/` carve-out and the nested-capture protection.
+
 ---
 
 ## [v1.15.0] — 2026-07-19 — Publish quality gate + capture cleanup

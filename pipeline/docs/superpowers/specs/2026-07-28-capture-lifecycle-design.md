@@ -98,10 +98,24 @@ capture" — which is precisely what the CLI is missing.
 `progress.json`
 
 **Reclaimed on `done → reviewed`:**
-`frames/` · `colmap/` · `training/` · `brush_dataset/` · `rescue/` · `share/_tmp/`
+`frames/` · `colmap/` · `training/` · `brush_dataset/` · `rescue/probes/` · `share/_tmp/`
 
-`training/` stays in the list although the current pipeline no longer writes it — it
-exists in the nested legacy capture (1,8 GB) and costs nothing to keep covering.
+**Correction (implementation, C1): `rescue/` is NOT reclaimed as a whole.** Only
+`rescue/probes/` is. `rescue/clips/*.mp4` are kept: for a bisection-rescued capture the most
+recent `pipeline.start` in `pipeline.log` records those leaf clips as the capture's source
+list (`read_source_video_from_log`), and `add_video` wipes only frames/colmap/training, never
+`rescue/`. Deleting them makes `add-video` fail with "cannot extend a capture whose origin is
+unknown", recoverable only by re-running bisection (5h36m on the documented `max_strasse`
+case) against an original video that may no longer exist. `cleanup-rescue` already kept them
+by default; listing `rescue` here would have let four other paths silently override that
+safeguard. The probes are where the mass is (3,1 GB of the 3,1 GB `rescue/` total on the real
+tree), so the reclaim figure is unaffected.
+
+**Correction (implementation): `training/` IS still written by the current pipeline.** The
+claim that it "no longer writes it" is false — `train.py` points Brush's export path at
+`capture_dir/"training"` on every run (`pipeline.py` passes it as `output_dir`), which is also
+where `brush.stdout.log` lands. It is a live working dir, not merely a legacy leftover, and
+belongs in the list for that reason.
 
 `source/` is deliberately **not** on this list. It is empty in every existing capture, so
 reclaiming it would free nothing — but writing the rule down now would pre-empt
@@ -111,7 +125,17 @@ Whatever it decides, it can add `source/` here in one line.
 **Grace fallback.** A capture that is never reviewed would never be reclaimed. Config key
 `[lifecycle] unreviewed_grace_days` (default `30`) bounds this: the captures list warns
 from day `grace - 7` ("wird in 7 Tagen aufgeräumt"), and the reclaim runs on the next
-WebUI/app start, with a log entry per capture. Never silent, never unannounced.
+WebUI/app start, with a log entry per capture.
+
+**Correction (implementation, I1): "never silent, never unannounced" is only true for the
+captures the UI lists**, so the sweep is scoped to exactly those — top-level directories
+under `captures_dir` matching `YYYY-MM-DD_<stem>`, enumerated non-recursively, the same set
+`webui/state.py` renders and counts the grace period down for (shared helper
+`lifecycle.list_capture_dirs`, so the two cannot drift). As first written the sweep
+enumerated via `find_capture_dirs` — recursive, no name filter — and so would have reclaimed
+the 6,4 GB nested legacy capture the UI never shows, and, since every existing capture is
+already past 30 days, most of the backlog on the first launch after the merge. Nested and
+non-conforming layouts are left to `migrate-storage`, which previews before it deletes.
 
 ## Components
 
@@ -188,6 +212,18 @@ qualify: **a finished PLY is sufficient; review status is not required.**
 capture is never touched — including when it is named `output` and formally sits inside
 an intermediate.
 
+**Verified (implementation, C3): this now holds globally, as written.** It was originally
+implemented only in `migrate-storage`, while `cleanup.prune_intermediates` — and therefore
+`sweep_expired`, the review-triggered prune and `cleanup-intermediates` — applied no such
+filter, so a shape `migrate-storage` protected was destroyed by "Confirm review" or by
+waiting 30 days. The predicate lives in `lifecycle.holds_exported_result` and is applied by
+`lifecycle.reclaimable_targets`, which every deletion path derives its targets from.
+The enclosing target is kept **whole**, abandoned sibling probes included — deleting *around*
+a surviving reconstruction is precisely the operation that could destroy it. The signature is
+an exported PLY in a sub*directory*; a loose `training/scene.ply` (a Brush checkpoint already
+copied to `output/`) and an abandoned probe workspace (`frames/` + `colmap/`, no PLY) are
+duplicates/intermediates and stay reclaimable.
+
 ## Data flow
 
 ```
@@ -251,10 +287,18 @@ copy_to_outputs = false      # deprecated — outputs_dir is no longer written
 | | Before | After |
 |---|---|---|
 | `captures/` | 19 GB | ~9,4 GB |
-| `outputs/` | 8,8 GB | 0 |
-| total | 27,8 GB | ~9,4 GB |
+| `outputs/` | 8,8 GB | ~8 GB (the 10 orphans) |
+| total | 27,8 GB | ~17,4 GB |
 | Reclaim trigger | manual button | review sign-off, grace-bounded |
 | Sources of truth for retention | 3 (cleanup list, WebUI chain, review marker) | 1 (`lifecycle.py`) |
+
+**Correction (maintainer ruling, 2026-07-29): `outputs/ → 0` was wrong, and so was the
+total.** Of the 17 `outputs/` folders, 10 are orphaned — their capture directory is gone, so
+each is the ONLY surviving copy of that scene. Those are never deleted, no matter how old
+they are. Only genuine duplicates are reclaimed: an `outputs/<name>` whose capture still
+exists *and* has its own exported `scene.ply`. That leaves roughly 8 GB of orphans standing
+(and a name match whose capture never exported is kept on the same grounds). Consolidating
+or deleting them is a manual decision, deliberately outside this sub-project.
 
 Itemised, so the number is checkable: 6,4 GB from the nested legacy capture
 (`colmap` 3,3 + `frames` 1,3 + `training` 1,8), 3,1 GB from `2026-05-26_max_strasse/rescue`,

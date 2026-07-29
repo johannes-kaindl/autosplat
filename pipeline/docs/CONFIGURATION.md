@@ -96,8 +96,47 @@ Lifecycle (when enabled):
 | Key               | Default                     | Notes                                                              |
 | ----------------- | --------------------------- | ------------------------------------------------------------------ |
 | `formats`         | `["ply"]`                   | Phase-1: ply only. Use the `compress` subcommand for SOG/SPZ.      |
-| `copy_to_outputs` | `false`                     | **DEPRECATED.** If true, also copies the final PLY to `outputs_dir/<capture_name>/` — an unmanaged second copy that nothing ever reclaimed (8,8 GB / 10 of 17 folders orphaned on the maintainer's machine). `captures/<id>/output/` is the only location that should exist now; `doctor` warns if this is still enabled. Run `autosplat migrate-storage` to reclaim existing `outputs_dir` copies. |
+| `copy_to_outputs` | `false`                     | **DEPRECATED.** If true, also copies the final PLY to `outputs_dir/<capture_name>/` — an unmanaged second copy that nothing ever reclaimed (8,8 GB / 10 of 17 folders orphaned on the maintainer's machine). `captures/<id>/output/` is the only location that should exist now; `doctor` warns if this is still enabled. Run `autosplat migrate-storage` to reclaim the **redundant** `outputs_dir` copies — the ones whose capture still exists and has its own `scene.ply`. An entry whose capture is gone (an *orphan*) is the last surviving copy of that scene and is kept forever; migrate-storage never deletes one. |
 | `outputs_dir`     | `~/AutoSplat/outputs`       | Where the deprecated `copy_to_outputs` copy used to land.          |
+
+## `[lifecycle]` (v1.16.0 — retention)
+
+A capture's working directories are kept exactly as long as the
+reconstruction's quality is still in question, and reclaimed once a human has
+signed it off. The state is *derived* from the filesystem on every read —
+nothing is stored — so a rebuilt `scene.ply` invalidates the sign-off by mtime
+alone.
+
+| Key                     | Default | Notes                                                                                       |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| `unreviewed_grace_days` | `30`    | Days after which a capture that was never reviewed has its intermediates reclaimed anyway. The captures list warns from day `grace - 7` onwards, and the reclaim itself runs on the next WebUI/app start. **`0` disables the fallback entirely** — an unreviewed capture is then kept forever. Range: 0 or more. |
+
+### The four lifecycle states
+
+| State      | Derived from                                            | Intermediates                                     |
+| ---------- | ------------------------------------------------------- | ------------------------------------------------- |
+| `failed`   | no PLY exists                                           | **kept** — diagnosis needs `colmap/`, and `resume` needs `frames/` |
+| `done`     | a PLY exists, no valid review marker                    | kept while the grace period runs                  |
+| `reviewed` | `output/.review.json` valid against `scene.ply`'s mtime | **reclaimable**                                   |
+| `archived` | `reviewed`, and nothing reclaimable is left             | already gone                                      |
+
+`archived` is not an action anyone performs — it is the observation "already
+reclaimed". `running`/`queued` are deliberately absent: they are live job facts
+no filesystem can answer, and the WebUI composes them on top.
+
+### What gets reclaimed
+
+`frames/` · `colmap/` · `training/` · `brush_dataset/` · `rescue/probes/` ·
+`share/_tmp/`
+
+Never reclaimed: `output/` in its entirety (`scene.ply`, `scene_reviewed.ply`,
+`scene.sog`, `metadata.json`, `.review.json`), `pipeline.log`, `runs.jsonl`,
+`progress.json`, finished share bundles under `share/<token>/`, and
+`rescue/clips/*.mp4` — those are a bisection-rescued capture's recorded origin,
+and `resume`/`add-video` re-extract from them.
+
+See [`CAPTURE-GUIDE.md`](CAPTURE-GUIDE.md#reclaiming-disk-space) for when each
+trigger fires and how to reclaim manually.
 
 ## `[viewer]`
 

@@ -198,15 +198,65 @@ uv run autosplat cleanup-rescue <capture-dir> --remove-clips
 uv run autosplat cleanup-rescue <capture-dir> --dry-run
 ```
 
-The `rescue/clips/*.mp4` sub-clips are kept by default because `pipeline.log` references them — `autosplat resume` and `autosplat add-video` re-extract from them.
+The `rescue/clips/*.mp4` sub-clips are kept by default because `pipeline.log` references them — `autosplat resume` and `autosplat add-video` re-extract from them. `--remove-clips` is the *only* way they are ever deleted: the automatic reclaim paths below never touch them, and only take `rescue/probes/`.
 
-### Reclaiming disk after a successful export
+## Reclaiming disk space
 
-Every capture also leaves `frames/`, `colmap/`, and `training/` behind after it finishes —
-the SfM/training working directories, typically **~1-2 GB per capture**. Once
-`output/scene.ply` exists, nothing downstream needs them: `autosplat add-video` always wipes
-and re-extracts them from scratch from the original source videos, and `autosplat resume`
-only needs them for a capture that hasn't finished yet. Reclaim them with:
+A capture keeps its working directories exactly as long as the reconstruction's quality is
+still in question, and gives them up once a human has signed it off. Six directories are
+reclaimable:
+
+| Directory | What it is |
+| --- | --- |
+| `frames/` | extracted keyframes |
+| `colmap/` | the SfM workspace (database + sparse model) |
+| `training/` | Brush's working dir, including its checkpoint PLYs |
+| `brush_dataset/` | the dataset staged for Brush |
+| `rescue/probes/` | per-clip bisection probe workspaces (frames + COLMAP), often the largest single item |
+| `share/_tmp/` | scratch left over from assembling a share bundle |
+
+Everything else stays: all of `output/` (`scene.ply`, `scene_reviewed.ply`, `scene.sog`,
+`metadata.json`, `.review.json`), `pipeline.log`, `runs.jsonl`, `progress.json`, finished
+share bundles under `share/<token>/`, and **`rescue/clips/*.mp4`** — see the carve-out below.
+
+### Automatic reclaim
+
+Two triggers, both derived from the filesystem, neither of which needs bookkeeping to stay
+in sync:
+
+1. **Review sign-off.** Completing the publish quality gate in the WebUI — "Confirm
+   unchanged" or uploading a cleaned PLY — reclaims that capture's intermediates
+   immediately. This is the normal path.
+2. **Grace sweep.** A capture that is *never* reviewed would otherwise keep them forever, so
+   `[lifecycle] unreviewed_grace_days` (default **30**) bounds it. The captures list warns
+   from day `grace - 7` ("wird in N Tagen aufgeräumt"), and the reclaim runs on the next
+   WebUI/app start, on a background thread, one log line per capture. Set it to `0` to
+   disable the fallback entirely.
+
+Both defer when a run looks live — a WebUI job in the JobRunner, or any reclaimable
+directory (or `pipeline.log`) touched within the last hour, which is what a CLI
+`resume`/`add-video` looks like from the outside. A deferred reclaim is simply retried on
+the next occasion; the review itself always stands.
+
+The grace sweep only ever touches captures the WebUI actually lists: top-level directories
+under `captures_dir` named `YYYY-MM-DD_<stem>`. A nested legacy layout, or a directory named
+anything else, is left to `migrate-storage` — an explicit, previewable command is the right
+instrument there, not a silent background thread.
+
+**Rebuilding a capture reverts all of this.** `add-video`/`resume` write a new
+`output/scene.ply`, whose changed mtime invalidates the review marker; the capture is
+`done` again and its grace period restarts.
+
+#### `rescue/clips/` is never reclaimed automatically
+
+For a capture rescued by bisection, `pipeline.log` records the leaf clips under
+`rescue/clips/` as the capture's source list — they *are* its origin. `add-video` and
+`resume` re-extract from them, and without them `add-video` fails outright ("cannot extend a
+capture whose origin is unknown"), recoverable only by re-running bisection against an
+original video you may no longer have. No automatic path deletes them; only
+`cleanup-rescue --remove-clips` does, deliberately.
+
+### Reclaiming manually
 
 ```bash
 uv run autosplat cleanup-intermediates ~/AutoSplat/captures/<capture-name>
@@ -214,9 +264,10 @@ uv run autosplat cleanup-intermediates ~/AutoSplat/captures/<capture-name>
 uv run autosplat cleanup-intermediates <capture-dir> --dry-run
 ```
 
-Refuses (non-zero exit) if `output/scene.ply` is missing — the same capture directory that's
-still mid-run or failed before exporting. The WebUI's capture-detail page has an equivalent
-"Free up space" button for captures that are `done` and still have something to reclaim.
+Refuses (non-zero exit) if the capture has no exported PLY — the same capture directory
+that's still mid-run or failed before exporting. The WebUI's capture-detail page has an
+equivalent "Free up space" button for captures that are `done` and still have something to
+reclaim.
 
 ### Bringing an existing backlog onto the retention policy
 
@@ -246,15 +297,19 @@ and `paths.captures_dir` resolve to the same directory, one nests inside the oth
 `outputs_dir` resolves to your home directory or a filesystem root — a config typo there would
 otherwise turn `--apply` into a much larger deletion than intended.
 
-A reclaimable-looking subdir (`rescue/`, most often) can bury a **nested capture that produced its
-own result** — a bisection probe that succeeded, say, sitting next to abandoned ones. That specific
-directory is protected and reclaimed as a whole: the signature is an exported PLY of its own
-(`output/scene.ply`, or a top-level `scene.ply`), not merely `frames/` + `colmap/` — an *abandoned*
-probe workspace has exactly that shape with no PLY, and is reclaimed normally, same as
-`cleanup-intermediates`/the background grace sweep already treat it. A protected target is always
-named in its capture's row (e.g. `brush_dataset (kept: rescue — holds a nested capture)`), even
-when the rest of that same capture is reclaimed normally — it never just silently disappears from
-the list.
+A reclaimable-looking subdir (`rescue/probes/`, most often) can bury a **nested capture that
+produced its own result** — a bisection probe that succeeded, say, sitting next to abandoned ones.
+That target is then protected — **kept as a whole**. The entire enclosing target is kept, abandoned
+sibling probes included: the rule is deliberately coarse, because deleting *around* a surviving
+reconstruction is exactly the operation that could destroy it. The signature is an exported PLY of
+its own (`output/scene.ply`, or a top-level `scene.ply`) in a sub*directory*, not merely `frames/` +
+`colmap/` and not a loose `.ply` file lying in the target — an *abandoned* probe workspace has the
+frames+colmap shape with no PLY, and a `training/scene.ply` is a Brush checkpoint already copied to
+`output/`; both are reclaimed normally. This holds identically in every path that deletes:
+`cleanup-intermediates`, the review sign-off, the grace sweep and `migrate-storage`. A protected
+target is always named in its capture's row (e.g. `brush_dataset (kept: rescue/probes — holds a
+nested capture)`), even when the rest of that same capture is reclaimed normally — it never just
+silently disappears from the list.
 
 ---
 

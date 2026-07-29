@@ -126,7 +126,9 @@ base_url = ""
 
 [lifecycle]
 # Retention policy. Intermediates (frames/, colmap/, training/, brush_dataset/,
-# rescue/, share/_tmp/) are reclaimed once a capture is reviewed via the publish
-# quality gate. A capture that is never reviewed is reclaimed anyway after this
-# many days, announced in the captures list beforehand. 0 disables that fallback.
+# rescue/probes/, share/_tmp/) are reclaimed once a capture is reviewed via the
+# publish quality gate. rescue/clips/*.mp4 are NOT reclaimed — they are a
+# bisection-rescued capture's recorded origin, and resume/add-video need them.
+# A capture that is never reviewed is reclaimed anyway after this many days,
+# announced in the captures list beforehand. 0 disables that fallback.
 unreviewed_grace_days = 30

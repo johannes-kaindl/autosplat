@@ -207,7 +207,9 @@ def _check_outputs_copy(config: Config) -> CheckResult:
         detail=(
             "copy_to_outputs is deprecated — outputs_dir keeps a second, unmanaged copy "
             "of every PLY that nothing reclaims. Set it to false and run "
-            "`autosplat migrate-storage` to reclaim the existing copies."
+            "`autosplat migrate-storage` to reclaim the redundant copies (those whose "
+            "capture still exists and has its own scene.ply). Orphans — entries whose "
+            "capture is gone — are the last surviving copy of that scene and are kept."
         ),
         required=False,
     )
