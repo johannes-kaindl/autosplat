@@ -103,9 +103,11 @@ Callers: `embed` (moves out of `config.py:_default_embed_src`), `supersplat`, `v
 `config.py` keeps `share.embed_src_path` and `viewer.supersplat_dist_path` as overrides;
 only their defaults change. Their resolution stops depending on `Path.cwd()`.
 
-### `scripts/build_app.sh`
+### `packaging/AutoSplat.spec` (+ a `build_app.sh` preflight)
 
-Bundles two more trees:
+The bundle's data files are declared in the PyInstaller spec's `datas` list, not in
+`build_app.sh`; `build_app.sh` only gains the preflight that refuses to build without a
+SuperSplat dist. Two more trees are bundled:
 
 - `supersplat` — the contents of `target/supersplat/dist` **without `*.map`** (9,5 MB
   measured; 23 MB with maps). The build fails with a clear message if the dist is absent,
@@ -184,10 +186,15 @@ autosplat share  <capture_dir>
 ```
 
 `review` writes the same `output/.review.json` marker the WebUI writes, through the same
-function — mutually exclusive flags, one required. `share` builds the bundle through
-`ShareJobRunner`'s underlying call and prints the token and zip path. `share` refuses
-with a non-zero exit when no valid review exists; the gate's order is enforced in the
-shared layer, not in each surface.
+function — mutually exclusive flags, one required. `share` builds the bundle
+synchronously and prints the token and zip path.
+
+**The gate moves down a layer while this happens.** Today it lives in the route
+(`captures.py:588` redirects an unreviewed capture away), and `ShareJobRunner._run` would
+bundle an unreviewed capture without complaint — so a CLI command calling the runner
+would walk straight past the gate. The compress-and-assemble body is therefore extracted
+out of `_run` into a synchronous function that raises on an unreviewed capture; the route
+keeps its redirect for the UX, but the refusal itself sits underneath both surfaces.
 
 Neither command introduces a second code path. Both make the review gate testable
 without HTTP, which it currently is not.
