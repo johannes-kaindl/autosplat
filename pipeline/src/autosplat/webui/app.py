@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import datetime
 import sys
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,11 +17,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from autosplat import __version__
+from autosplat import __version__, cleanup
 from autosplat.config import Config
 from autosplat.failure import classify_failure
+from autosplat.logging import get_logger
 
 from .routes import captures, dashboard, health, jobs, partials, source
+
+logger = get_logger(__name__)
 
 
 def _webui_dir() -> Path:
@@ -37,6 +42,30 @@ _STATIC_DIR = _WEBUI_DIR / "static"
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Run the unreviewed-grace sweep in the background on startup.
+
+    A background thread on purpose: reclaiming must never delay or prevent the
+    UI from coming up, and a failure inside the sweep must not surface as a
+    failed start.
+    """
+    cfg: Config | None = app.state.cfg
+    if cfg is not None and cfg.lifecycle.unreviewed_grace_days > 0:
+        captures_dir = cfg.paths.captures_dir
+        grace_days = cfg.lifecycle.unreviewed_grace_days
+
+        def _sweep() -> None:
+            try:
+                results = cleanup.sweep_expired(
+                    captures_dir, grace_days=grace_days, now=datetime.datetime.now(UTC)
+                )
+            except Exception as e:  # startup must never fail here
+                logger.error("lifecycle.sweep_failed", error=str(e))
+                return
+            if results:
+                total = sum(r.bytes_reclaimed for r in results)
+                logger.info("lifecycle.sweep_done", captures=len(results), bytes_reclaimed=total)
+
+        threading.Thread(target=_sweep, name="autosplat-grace-sweep", daemon=True).start()
     yield
 
 

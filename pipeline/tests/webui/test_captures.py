@@ -1008,15 +1008,28 @@ def test_list_warns_before_grace_expiry(app: FastAPI, tmp_path: Path) -> None:
     assert "5 days" in body  # 30-day grace, 25 days old
 
 
-def test_capture_detail_respects_configured_grace_period(app: FastAPI, tmp_path: Path) -> None:
+def test_capture_detail_respects_configured_grace_period(
+    app: FastAPI, tmp_path: Path, monkeypatch
+) -> None:
     """The detail page must use cfg.lifecycle.unreviewed_grace_days, not the
     list_captures default of 30 — otherwise it disagrees with the list page
     about whether/when intermediates get reclaimed. A capture 10 days past
     its (unreviewed) PLY is already past a 5-day configured grace period but
     NOT past the 30-day default, so this only passes once get_capture is
-    threaded with the configured grace_days."""
+    threaded with the configured grace_days.
+
+    This capture is deliberately reclaim-eligible, which is exactly what the
+    startup grace sweep (see webui/app.py `_lifespan`) now looks for. Without
+    disabling it here, the sweep's background thread races the test's own GET
+    request for the same intermediates, making this test flaky. The sweep
+    itself is covered separately in test_app.py.
+    """
     import os
     from datetime import UTC, datetime, timedelta
+
+    from autosplat.webui import app as app_mod
+
+    monkeypatch.setattr(app_mod.cleanup, "sweep_expired", lambda *a, **kw: [])
 
     capture_dir = tmp_path / "2026-07-01_grace_cfg"
     (capture_dir / "output").mkdir(parents=True)
