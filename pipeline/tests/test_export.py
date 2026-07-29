@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from autosplat.config import load_config
 from autosplat.export import MIN_PLY_BYTES, validate_ply
 
 
@@ -34,3 +35,10 @@ def test_validate_ply_bad_header(tmp_path: Path) -> None:
 
 def test_validate_ply_missing(tmp_path: Path) -> None:
     assert validate_ply(tmp_path / "nope.ply") is False
+
+
+def test_export_does_not_write_outputs_dir_by_default(tmp_path: Path) -> None:
+    # outputs/ held 8,8 GB of second copies, 10 of them orphaned.
+    cfg = load_config(include_xdg=False)
+
+    assert cfg.export.copy_to_outputs is False

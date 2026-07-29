@@ -96,8 +96,8 @@ Lifecycle (when enabled):
 | Key               | Default                     | Notes                                                              |
 | ----------------- | --------------------------- | ------------------------------------------------------------------ |
 | `formats`         | `["ply"]`                   | Phase-1: ply only. Use the `compress` subcommand for SOG/SPZ.      |
-| `copy_to_outputs` | `true`                      | Also copies final ply to `outputs_dir/<capture_name>/`.            |
-| `outputs_dir`     | `~/AutoSplat/outputs`       | Where the user-facing final PLYs land.                             |
+| `copy_to_outputs` | `false`                     | **DEPRECATED.** If true, also copies the final PLY to `outputs_dir/<capture_name>/` — an unmanaged second copy that nothing ever reclaimed (8,8 GB / 10 of 17 folders orphaned on the maintainer's machine). `captures/<id>/output/` is the only location that should exist now; `doctor` warns if this is still enabled. Run `autosplat migrate-storage` to reclaim existing `outputs_dir` copies. |
+| `outputs_dir`     | `~/AutoSplat/outputs`       | Where the deprecated `copy_to_outputs` copy used to land.          |
 
 ## `[viewer]`
 

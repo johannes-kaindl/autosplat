@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from autosplat.config import load_config
-from autosplat.doctor import CheckResult, _check_supersplat, all_required_passed
+from autosplat.doctor import CheckResult, _check_supersplat, all_required_passed, run_doctor
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -95,3 +95,25 @@ def test_check_supersplat_skipped_for_remote_target(tmp_path: Path) -> None:
     cfg = _make_minimal_config(tmp_path, viewer_target="supersplat")
     result = _check_supersplat(cfg)
     assert result is None
+
+
+# ─── _check_outputs_copy ──────────────────────────────────────────────────────
+
+
+def test_doctor_warns_when_copy_to_outputs_enabled() -> None:
+    cfg = load_config(include_xdg=False)
+    cfg.export.copy_to_outputs = True
+
+    entry = next(r for r in run_doctor(cfg) if r.name == "outputs-copy")
+
+    assert not entry.ok
+    assert not entry.required  # a deprecation must never block a run
+    assert "deprecated" in entry.detail.lower()
+
+
+def test_doctor_passes_when_copy_to_outputs_disabled() -> None:
+    cfg = load_config(include_xdg=False)
+
+    entry = next(r for r in run_doctor(cfg) if r.name == "outputs-copy")
+
+    assert entry.ok

@@ -106,12 +106,16 @@ def export_capture(
     metadata_path = out_dir / "metadata.json"
     metadata_path.write_text(json.dumps(meta.to_dict(), indent=2), encoding="utf-8")
 
+    # copy_to_outputs is deprecated: outputs_dir accumulated a second, unmanaged
+    # copy of every PLY that nothing ever removed (8,8 GB, 10 of 17 folders
+    # orphaned). captures/<id>/output/ is the only location now. The key is
+    # still honoured so existing configs keep working, but doctor warns about it.
     if cfg.copy_to_outputs:
         outputs_dir = cfg.outputs_dir / capture_name
         outputs_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(target_ply, outputs_dir / "scene.ply")
         shutil.copy2(metadata_path, outputs_dir / "metadata.json")
-        logger.info("export.copied_to_outputs", dest=str(outputs_dir))
+        logger.warning("export.copied_to_outputs_deprecated", dest=str(outputs_dir))
 
     result = ExportResult(
         output_ply=target_ply,

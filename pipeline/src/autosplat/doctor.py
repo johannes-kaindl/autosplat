@@ -112,6 +112,7 @@ def run_doctor(config: Config) -> list[CheckResult]:
         _check_binary("uv", required=False),
         _check_compress_backends(),
         _check_obsidian_config(config),
+        _check_outputs_copy(config),
     ]
     supersplat = _check_supersplat(config)
     if supersplat is not None:
@@ -189,6 +190,27 @@ def _check_compress_backends() -> CheckResult:
     backend = backends[0]
     detail = f"splat-transform via {backend.via} → {','.join(backend.formats)}"
     return CheckResult(name="compress", ok=True, detail=detail, required=False)
+
+
+def _check_outputs_copy(config: Config) -> CheckResult:
+    """Deprecation notice — outputs_dir was a second, unreclaimed copy of every PLY."""
+    if not config.export.copy_to_outputs:
+        return CheckResult(
+            name="outputs-copy",
+            ok=True,
+            detail="disabled (captures/<id>/output/ is the only location)",
+            required=False,
+        )
+    return CheckResult(
+        name="outputs-copy",
+        ok=False,
+        detail=(
+            "copy_to_outputs is deprecated — outputs_dir keeps a second, unmanaged copy "
+            "of every PLY that nothing reclaims. Set it to false and run "
+            "`autosplat migrate-storage` to reclaim the existing copies."
+        ),
+        required=False,
+    )
 
 
 def all_required_passed(results: list[CheckResult]) -> bool:

@@ -213,7 +213,11 @@ class ExportConfig(BaseModel):
         description="Always includes 'ply'. Other formats handled by [compress] stage.",
     )
     copy_to_outputs: bool = Field(
-        description="If true, also copies final PLY to outputs_dir/<capture>/."
+        description=(
+            "DEPRECATED. If true, also copies the final PLY to outputs_dir/<capture>/. "
+            "Left an unmanaged second copy that nothing reclaimed; use "
+            "captures/<id>/output/ instead."
+        )
     )
     outputs_dir: Path = Field(description="User-facing output root, distinct from captures_dir.")
 
