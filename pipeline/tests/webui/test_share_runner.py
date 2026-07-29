@@ -201,8 +201,13 @@ def test_second_share_reuses_existing_sog(tmp_path: Path) -> None:
     calls: list[Path] = []
     runner = _share_runner(embed, _counting_compress(calls))
 
-    _wait(runner.start("2026-07-10_lgs", capture_dir))
-    _wait(runner.start("2026-07-10_lgs", capture_dir))
+    first = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(first)
+    assert first.status == "done", first.error
+
+    second = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(second)
+    assert second.status == "done", second.error
 
     assert len(calls) == 1  # the second share reused output/scene.sog
 
@@ -214,13 +219,17 @@ def test_rebuilt_ply_forces_recompression(tmp_path: Path) -> None:
     calls: list[Path] = []
     runner = _share_runner(embed, _counting_compress(calls))
 
-    _wait(runner.start("2026-07-10_lgs", capture_dir))
+    first = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(first)
+    assert first.status == "done", first.error
 
     # Simulate add-video: scene.ply becomes newer than the SOG.
     future = (capture_dir / "output" / "scene.sog").stat().st_mtime + 60
     os.utime(capture_dir / "output" / "scene.ply", (future, future))
 
-    _wait(runner.start("2026-07-10_lgs", capture_dir))
+    second = runner.start("2026-07-10_lgs", capture_dir)
+    _wait(second)
+    assert second.status == "done", second.error
 
     assert len(calls) == 2
 
@@ -240,6 +249,7 @@ def test_reviewed_ply_still_yields_canonical_scene_sog(tmp_path: Path) -> None:
     job = runner.start("2026-07-10_lgs", capture_dir)
     _wait(job)
 
+    assert job.status == "done", job.error
     assert calls == [capture_dir / "output" / "scene_reviewed.ply"]
     assert (capture_dir / "output" / "scene.sog").exists()
     assert not (capture_dir / "output" / "scene_reviewed.sog").exists()
