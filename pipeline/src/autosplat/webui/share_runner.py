@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from autosplat import resources
 from autosplat.compress import CompressResult, compress_ply
 from autosplat.config import Config
 from autosplat.logging import get_logger
@@ -112,4 +113,4 @@ class ShareJobRunner:
 
     def _resolve_embed_src(self) -> Path:
         p = self._cfg.share.embed_src_path
-        return p if p.is_absolute() else (Path.cwd() / p)
+        return p if p.is_absolute() else (resources.REPO_ROOT / p)

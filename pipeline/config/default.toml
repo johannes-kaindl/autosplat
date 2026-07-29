@@ -54,7 +54,11 @@ local_http_port = 8765
 # dist isn't built, the viewer prints a hint to run setup_supersplat.sh.
 target = "supersplat-local"     # supersplat-local | supersplat | playcanvas | none
 supersplat_local_port = 3000
-supersplat_dist_path = "target/supersplat/dist"
+# supersplat_dist_path is NOT set here — it defaults to resources.bundled_path
+# ("supersplat"), which is repo-root-relative in a checkout and
+# sys._MEIPASS-relative when frozen. A literal here would be cwd-relative and
+# break the Finder-launched app (no meaningful cwd). Only set it if you build
+# SuperSplat to a nonstandard location.
 notify_on_complete = false       # macOS Notification after training. Opt-in.
 
 [obsidian]
@@ -119,9 +123,8 @@ quality = "medium"         # low | medium | high — controls SOG iterations + S
 [share]
 # WebUI web-export share bundles. base_url is your public splat host; empty
 # shows a host-agnostic link template. embed_src_path is NOT set here — it
-# defaults to the monorepo's embed/ viewer sources (frozen-app aware, see
-# config.py's _default_embed_src()). Only set it if your embed/ checkout
-# lives somewhere unusual.
+# defaults to resources.bundled_path("embed") (frozen-app aware, see
+# resources.py). Only set it if your embed/ checkout lives somewhere unusual.
 base_url = ""
 
 [lifecycle]

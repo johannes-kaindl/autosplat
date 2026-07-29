@@ -21,7 +21,15 @@ def app(tmp_path_factory: pytest.TempPathFactory) -> FastAPI:
 
     Protection by convention — the structural backstop that enforces it for the
     whole suite lives in `tests/conftest.py`.
+
+    supersplat_dist_path is pointed at a stub `index.html` so the `/supersplat`
+    mount (and `supersplat_available` in the view template) is deterministic —
+    it must not depend on whether *this* machine happens to have a SuperSplat
+    dist built on disk.
     """
     cfg = load_config(include_xdg=False)
     cfg.paths.captures_dir = tmp_path_factory.mktemp("captures")
+    dist = tmp_path_factory.mktemp("supersplat_dist")
+    (dist / "index.html").write_text("<!doctype html><title>stub</title>")
+    cfg.viewer.supersplat_dist_path = dist
     return create_app(cfg)

@@ -21,6 +21,8 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
+from autosplat import resources
+
 
 def _packaged_default_config() -> Path:
     """Locate the packaged default.toml — frozen-aware.
@@ -32,18 +34,6 @@ def _packaged_default_config() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS) / "config" / "default.toml"  # type: ignore[attr-defined]
     return Path(__file__).resolve().parents[2] / "config" / "default.toml"
-
-
-def _default_embed_src() -> Path:
-    """Locate the embed/ viewer sources copied into share bundles — frozen-aware.
-
-    In a PyInstaller bundle, resolve against `sys._MEIPASS` (where build_app.sh
-    stages `embed/`); otherwise use the monorepo-relative path (config.py →
-    autosplat → src → pipeline → repo root → embed).
-    """
-    if getattr(sys, "frozen", False):
-        return Path(sys._MEIPASS) / "embed"  # type: ignore[attr-defined]
-    return Path(__file__).resolve().parents[3] / "embed"
 
 
 # Default-config path (repo-relative, or bundle-relative when frozen)
@@ -246,8 +236,10 @@ class ViewerConfig(BaseModel):
         description="Port for locally-built SuperSplat server.",
     )
     supersplat_dist_path: Path = Field(
-        default=Path("target/supersplat/dist"),
-        description="Path to built SuperSplat dist/ directory.",
+        default_factory=lambda: resources.bundled_path("supersplat"),
+        description="Path to the SuperSplat viewer/editor that drives the "
+        "review gate. Resolved via resources.bundled_path; override to point "
+        "at a locally built target/supersplat/dist instead.",
     )
     notify_on_complete: bool = Field(
         default=False,
@@ -407,10 +399,10 @@ class ShareConfig(BaseModel):
         "Empty → the UI shows a host-agnostic link template instead.",
     )
     embed_src_path: Path = Field(
-        default_factory=_default_embed_src,
+        default_factory=lambda: resources.bundled_path("embed"),
         description="Path to the embed/ viewer sources copied into each share "
-        "bundle. Frozen-app aware (resolves inside the DMG bundle when "
-        "packaged); override only if your embed/ checkout lives elsewhere.",
+        "bundle. Resolved via resources.bundled_path (inside the DMG bundle "
+        "when packaged); override only if your embed/ checkout lives elsewhere.",
     )
 
 
