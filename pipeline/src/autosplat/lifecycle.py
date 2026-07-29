@@ -374,10 +374,21 @@ def list_capture_dirs(captures_dir: Path) -> list[Path]:
     offloaded capture vanish from the captures list and its detail page
     404 — right instinct, wrong function: `find_capture_dirs` skips symlinks
     to guard against loops during its *recursive* descent, a hazard this
-    non-recursive, top-level-only scan never has. Reclaiming through the
-    symlink is safe: `prune_intermediates` resolves both `capture_dir` and
-    its targets before checking containment, so the real, offloaded location
-    is what gets reclaimed — the intended behaviour, not an escape hatch.
+    non-recursive, top-level-only scan never has.
+
+    Reclaiming through the symlink is safe, but NOT because of
+    `prune_intermediates`'s resolve-based containment check — that check
+    only runs for callers that pass an explicit `targets=` (`migrate-storage`
+    alone); `sweep_expired`, the WebUI "Free up space" button and the
+    review-triggered prune all call with `targets=None` and never reach it.
+    The real reason: with `targets=None`, targets are always literal joins of
+    `capture_dir` with a fixed subdirectory name (`_candidate_targets` —
+    `capture_dir / "colmap"` and the like, from `RECLAIMABLE_SUBDIRS` /
+    `_EXTRA_RECLAIMABLE`), so they cannot point outside whatever subtree
+    `capture_dir` — symlink or not — resolves to, and none of those
+    subdirectories are themselves expected to be symlinks elsewhere. The real,
+    offloaded location is what gets reclaimed — the intended behaviour, not
+    an escape hatch.
     """
     if not captures_dir.is_dir():
         return []

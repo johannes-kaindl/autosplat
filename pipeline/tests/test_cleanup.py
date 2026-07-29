@@ -485,9 +485,15 @@ def test_guard_blocks_sweep_outside_the_pytest_temp_root(
 
 
 def test_guard_blocks_prune_intermediates_outside_the_pytest_temp_root(
+    tmp_path_factory: pytest.TempPathFactory,
     storage_guard_violations: list[str],
 ) -> None:
-    outside = Path.home() / "AutoSplat" / "captures" / "2026-05-26_max_strasse"
+    # A synthesized nonexistent sibling of pytest's own temp root, never a
+    # real path — a prior version of this test used a real path on the
+    # maintainer's machine (`Path.home() / "AutoSplat" / ...`), safe only
+    # because the guard fires before anything touches it. Landmine removed.
+    base_temp = tmp_path_factory.getbasetemp().resolve()
+    outside = base_temp.parent / "not-a-real-pytest-tmp-dir-2026-05-26_max_strasse"
 
     with pytest.raises(RuntimeError, match="outside the pytest temp root"):
         cleanup.prune_intermediates(outside)
