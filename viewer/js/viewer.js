@@ -3,8 +3,6 @@ import {
   FILLMODE_FILL_WINDOW, RESOLUTION_AUTO
 } from 'playcanvas';
 
-const CAMERA_CONTROLS_URL =
-  'https://cdn.jsdelivr.net/npm/playcanvas@2.18.1/scripts/esm/camera-controls.mjs';
 const ORBIT_SPEED = 8; // degrees per second
 
 // Pose for the church demo splat — tuned in-browser in Task 4.
@@ -69,7 +67,10 @@ export function createViewer(hostElement) {
 
   let cc = null;
   const cameraReady = (async () => {
-    const ccAsset = new Asset('camera-controls', 'script', { url: CAMERA_CONTROLS_URL });
+    // camera-controls is a PlayCanvas ESM script; loading it through the asset
+    // registry lets the engine attach it. Its `import 'playcanvas'` resolves to
+    // the vendored engine via the importmap in viewer.html.
+    const ccAsset = new Asset('camera-controls', 'script', { url: 'vendor/camera-controls.mjs' });
     await new Promise(res => new AssetListLoader([ccAsset], app.assets).load(res));
     camera.addComponent('script');
     cc = camera.script.create('cameraControls');

@@ -44,9 +44,12 @@ readonly SUPERSPLAT_DIST="${REPO_ROOT}/target/supersplat/dist"
 [[ -f "${SUPERSPLAT_DIST}/index.html" ]] \
   || fail "SuperSplat dist missing at ${SUPERSPLAT_DIST} — run scripts/setup_supersplat.sh"
 
-# viewer/vendor holds the engine copy that makes walking mode work offline.
+# viewer/vendor holds the engine + camera-controls copies that make walking
+# mode work offline.
 [[ -f "${REPO_ROOT}/../viewer/vendor/playcanvas.mjs" ]] \
   || fail "viewer/vendor/playcanvas.mjs missing — see viewer/vendor/README.md"
+[[ -f "${REPO_ROOT}/../viewer/vendor/camera-controls.mjs" ]] \
+  || fail "viewer/vendor/camera-controls.mjs missing — see viewer/vendor/README.md"
 
 cd "${REPO_ROOT}"
 

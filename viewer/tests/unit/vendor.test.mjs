@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VIEWER = join(HERE, '..', '..');
@@ -15,26 +15,68 @@ test('viewer loads the engine from vendor/, not a CDN', () => {
   assert.doesNotMatch(html, /cdn\.jsdelivr\.net/);
 });
 
-test('no allowlisted module specifier points at an external host', () => {
-  // The app bundles these files and claims to be zero-external. That claim
-  // was already wrong once (v1.14.0 share bundles), so it gets a gate.
-  const files = ['viewer.html', 'js/app.js', 'js/viewer.js', 'js/walking.js'];
-  for (const rel of files) {
-    const text = readFileSync(join(VIEWER, rel), 'utf8');
-    const specifiers = [...text.matchAll(/(?:from|import)\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
-    for (const spec of specifiers) {
-      assert.ok(!/^https?:/.test(spec), `${rel} imports external ${spec}`);
+function walk(dir) {
+  let out = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) out = out.concat(walk(full));
+    else out.push(full);
+  }
+  return out;
+}
+
+// The only URLs allowed to appear in the bundled surface: documentation /
+// attribution links that are never fetched at runtime. Keyed by path relative
+// to viewer/, value is the exact URL string(s) permitted in that file — narrow
+// on purpose, so a new URL anywhere always fails closed until someone vets it
+// and adds it here explicitly.
+const ATTRIBUTION_EXEMPTIONS = new Map([
+  ['viewer.html', new Set(['https://codeberg.org/jkaindl/autosplat'])],
+  ['js/collision/mc-tables.js', new Set(['http://paulbourke.net/geometry/polygonise/'])],
+]);
+
+test('no bundled file loads a URL from an external host at runtime', () => {
+  // Widened after a Critical review finding: the previous version of this
+  // test only matched ES `import`/`from` specifiers, so a plain string
+  // constant fed to PlayCanvas's Asset/AssetListLoader (CAMERA_CONTROLS_URL
+  // in viewer.js, pointing at cdn.jsdelivr.net) was invisible to it and
+  // shipped a live CDN call on the critical path inside AutoSplat.app.
+  //
+  // This instead scans every https?:// occurrence in every file
+  // AutoSplat.spec actually bundles as viewer/js, viewer/css and viewer.html
+  // itself. vendor/ is excluded here — it is third-party engine code (not
+  // ours to rewrite) and is already guarded by the byte-identity test below;
+  // icons/ is binary image data. Two documentation/attribution links are
+  // legitimate and explicitly allowlisted above; anything else fails by
+  // default, which is what should have caught CAMERA_CONTROLS_URL.
+  const files = [
+    join(VIEWER, 'viewer.html'),
+    ...walk(join(VIEWER, 'js')),
+    ...walk(join(VIEWER, 'css')),
+  ];
+  const urlRe = /https?:\/\/[^\s"'<>)]+/g;
+  for (const file of files) {
+    const rel = relative(VIEWER, file).split(sep).join('/');
+    const text = readFileSync(file, 'utf8');
+    const allowed = ATTRIBUTION_EXEMPTIONS.get(rel) ?? new Set();
+    const matches = text.match(urlRe) ?? [];
+    for (const url of matches) {
+      assert.ok(allowed.has(url), `${rel} references external URL ${url} — not on the attribution allowlist`);
     }
   }
 });
 
-test('the vendored engine has not drifted from embed/', () => {
-  // Two copies of one engine is a deliberate cost: embed/ is lifted whole
+test('the vendored engine and camera-controls script have not drifted from embed/', () => {
+  // Two copies of these files is a deliberate cost: embed/ is lifted whole
   // into every share bundle and must stay self-contained, and the Pages
   // deploy is a subtree split of viewer/ alone where ../embed/ does not
   // exist. This test is the only thing standing between two copies and a
-  // silent version split.
-  const a = readFileSync(join(VIEWER, 'vendor', 'playcanvas.mjs'));
-  const b = readFileSync(join(REPO, 'embed', 'vendor', 'playcanvas.mjs'));
-  assert.ok(a.equals(b), 'viewer/vendor and embed/vendor disagree — update both');
+  // silent version split. Both vendored files are checked so neither can be
+  // updated alone.
+  for (const name of ['playcanvas.mjs', 'camera-controls.mjs']) {
+    const a = readFileSync(join(VIEWER, 'vendor', name));
+    const b = readFileSync(join(REPO, 'embed', 'vendor', name));
+    assert.ok(a.equals(b), `viewer/vendor/${name} and embed/vendor/${name} disagree — update both`);
+  }
 });
