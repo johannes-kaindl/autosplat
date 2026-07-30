@@ -938,19 +938,19 @@ def review(
     from autosplat.lifecycle import write_review_marker
 
     if confirm_unchanged == (upload is not None):
-        console.print("[red]Pass exactly one of --confirm-unchanged / --upload.[/red]")
+        err_console.print("[red]Pass exactly one of --confirm-unchanged / --upload.[/red]")
         raise typer.Exit(EXIT_USER_ERROR)
 
     scene_ply = capture_dir / "output" / "scene.ply"
     if not scene_ply.exists():
-        console.print(f"[red]No output/scene.ply in {capture_dir}[/red]")
+        err_console.print(f"[red]No output/scene.ply in {capture_dir}[/red]")
         raise typer.Exit(EXIT_USER_ERROR)
 
     reviewed_ply = capture_dir / "output" / "scene_reviewed.ply"
     if upload is not None:
         content = upload.read_bytes()
         if not content.startswith(b"ply\n"):
-            console.print(f"[red]{upload} does not look like a PLY (no 'ply' header).[/red]")
+            err_console.print(f"[red]{upload} does not look like a PLY (no 'ply' header).[/red]")
             raise typer.Exit(EXIT_USER_ERROR)
         reviewed_ply.write_bytes(content)
     else:
@@ -976,11 +976,11 @@ def share(
     try:
         result = build_share_bundle(cfg, capture_dir, capture_dir.name)
     except UnreviewedCapture as e:
-        console.print(f"[red]{e}[/red]")
-        console.print("Run: autosplat review <capture> --confirm-unchanged")
+        err_console.print(f"[red]{e}[/red]")
+        err_console.print("Run: autosplat review <capture> --confirm-unchanged")
         raise typer.Exit(EXIT_USER_ERROR) from e
     except Exception as e:
-        console.print(f"[red]Share failed:[/red] {e}")
+        err_console.print(f"[red]Share failed:[/red] {e}")
         raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
 
     console.print(f"[green]Bundle:[/green] {result.zip_path}")

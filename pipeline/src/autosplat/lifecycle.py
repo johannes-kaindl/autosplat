@@ -2,10 +2,13 @@
 
 """Derives a capture's lifecycle state and what may be reclaimed from it.
 
-Single source of truth for retention. Pure and read-only: state is DERIVED
-from files and mtimes, never stored. That is what makes the v1.15.0 review
-gate correct — a rebuilt scene.ply invalidates everything downstream by mtime
-alone, with no bookkeeping to keep in sync — and this module preserves it.
+Single source of truth for retention. State is DERIVED from files and
+mtimes, never tracked separately — that is what makes the v1.15.0 review gate
+correct: a rebuilt scene.ply invalidates everything downstream by mtime
+alone, with no bookkeeping to keep in sync. The module is no longer
+read-only, though: `write_review_marker` writes `output/.review.json` and
+drops `output/scene.sog` (see its docstring) so that stale sign-off state and
+a stale compressed artifact can never outlive the scene.ply they belonged to.
 """
 
 from __future__ import annotations
