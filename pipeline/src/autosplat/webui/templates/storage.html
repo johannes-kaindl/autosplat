@@ -23,6 +23,24 @@
     </p>
   </div>
 
+  {% if unsafe_layout_error %}
+  <div class="as-card" style="max-width:640px;margin-bottom:var(--space-6);border-color:var(--stage-failed)">
+    <div class="as-card-body">
+      <p style="font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--stage-failed);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.04em">
+        ⚠ Refusing
+      </p>
+      <p style="font-family:var(--font-body);font-size:13px;color:var(--fg-primary);line-height:1.6;margin:0">
+        {{ unsafe_layout_error }}
+      </p>
+      <p style="font-family:var(--font-body);font-size:12px;color:var(--fg-tertiary);line-height:1.6;margin:var(--space-3) 0 0">
+        Fix <code style="font-family:var(--font-mono)">paths.captures_dir</code> and
+        <code style="font-family:var(--font-mono)">export.outputs_dir</code> in your config —
+        this page cannot preview or reclaim anything until they no longer alias or nest.
+      </p>
+    </div>
+  </div>
+  {% else %}
+
   <div class="as-card" style="max-width:420px;margin-bottom:var(--space-6)">
     <div class="as-card-body">
       <p style="font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--fg-primary);margin:0">
@@ -87,6 +105,8 @@
         onsubmit="return confirm('Reclaim {{ plan.reclaimable_bytes | filesizeformat }}? This deletes working directories and cannot be undone.')">
     <button type="submit" class="as-btn danger">{{ icon('trash', 14) }} Reclaim now</button>
   </form>
+  {% endif %}
+
   {% endif %}
 
 </div>

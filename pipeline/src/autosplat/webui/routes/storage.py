@@ -71,11 +71,28 @@ def _plan(cfg: Config) -> migration.MigrationPlan:
 
 @router.get("/storage", response_class=HTMLResponse)
 async def storage_page(request: Request) -> HTMLResponse:
+    """Preview page. Also runs the unsafe-layout guard — not to protect
+    anything here (a `GET` never deletes), but because a preview computed
+    over a layout the guard calls catastrophic must say so, in the page,
+    before the "Reclaim now" button is anywhere near a click. Rendering the
+    plan and the button as if nothing were wrong, and only refusing once the
+    POST fires, would make the single most safety-critical message in this
+    feature a raw JSON error blob in a WKWebView with no way back.
+    """
     cfg = _cfg(request)
+    job = getattr(request.app.state, "reclaim_job", None)
+    try:
+        migration.refuse_if_unsafe_storage_layout(cfg.paths.captures_dir, cfg.export.outputs_dir)
+    except migration.UnsafeStorageLayoutError as e:
+        return _templates(request).TemplateResponse(
+            request,
+            "storage.html",
+            {"plan": None, "unsafe_layout_error": str(e), "job": job},
+        )
     return _templates(request).TemplateResponse(
         request,
         "storage.html",
-        {"plan": _plan(cfg), "job": getattr(request.app.state, "reclaim_job", None)},
+        {"plan": _plan(cfg), "unsafe_layout_error": None, "job": job},
     )
 
 
@@ -96,7 +113,16 @@ async def storage_reclaim(request: Request) -> RedirectResponse:
     """
     cfg = _cfg(request)
     existing: ReclaimJob | None = getattr(request.app.state, "reclaim_job", None)
-    if existing is not None and existing.status == "running":
+    # `existing.thread.is_alive()` matters, not just `status`: a job whose
+    # thread died without transitioning past "running" (process hiccup, or
+    # simply never started) would otherwise 409 every future reclaim
+    # attempt forever, with a hidden button and a busy 2s poll to match.
+    if (
+        existing is not None
+        and existing.status == "running"
+        and existing.thread is not None
+        and existing.thread.is_alive()
+    ):
         raise HTTPException(status_code=409, detail="A reclaim sweep is already running")
 
     try:
@@ -110,8 +136,11 @@ async def storage_reclaim(request: Request) -> RedirectResponse:
         try:
             result = migration.apply_migration(_plan(cfg))
         except Exception as e:  # surfaced on the job, not raised into nowhere
-            job.status = "failed"
+            # error before status: a poll landing between the two would
+            # otherwise render "Reclaim failed: None" — status is what the
+            # template branches on, so it must be the last thing set.
             job.error = str(e)
+            job.status = "failed"
             logger.error("storage.reclaim_failed", error=str(e))
             return
         job.reclaimed_bytes = result.reclaimed_bytes

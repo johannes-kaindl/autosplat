@@ -508,31 +508,56 @@ def test_guard_blocks_prune_intermediates_outside_the_pytest_temp_root(
     assert storage_guard_violations
 
 
-def test_guard_blocks_migrate_storage_rmtree_outside_the_pytest_temp_root(
+def test_guard_blocks_migration_apply_migration_rmtree_outside_the_pytest_temp_root(
     tmp_path_factory: pytest.TempPathFactory,
     storage_guard_violations: list[str],
 ) -> None:
-    """`migrate-storage` rmtrees config-supplied `outputs/` paths directly,
-    bypassing `cleanup` entirely — `tests/test_cli_migrate_storage.py` drives
-    exactly that and was covered by nothing.
+    """`migration.apply_migration`'s `outputs_reclaim` branch rmtrees
+    config-supplied `outputs/` entries directly, bypassing `cleanup` entirely
+    — both `migrate-storage --apply` (`tests/test_cli_migrate_storage.py`)
+    and the WebUI `/storage/reclaim` button (task 6) drive exactly this
+    function.
 
-    The path is a synthesized nonexistent sibling of pytest's temp root. It
-    used to be `Path.home() / "AutoSplat" / "outputs" / "2026-05-14_jay_1"` —
-    a real orphaned capture holding the only surviving copy of that scene
-    (678 MB), which the maintainer ruled must never be deleted. An rmtree
-    aimed at live data is not made safe by the guard that is supposed to stop
-    it; that is circular.
+    Round-2 review finding: the previous version of this test called
+    `cli.shutil.rmtree(outside)` directly — the *wrapper* the guard installs
+    — instead of the production call site inside `apply_migration`. It
+    passed regardless of whether that call site was actually guarded,
+    because `migration.py` does its own `import shutil` and so holds an
+    independent module-level binding from `cli.py`'s; only `cli_mod.shutil`
+    was ever patched. The reviewer proved the hole directly: a `MigrationPlan`
+    built exactly like this one, run through the *pre-fix* `apply_migration`,
+    deleted a directory outside the pytest temp root. This test drives that
+    same call site instead of the wrapper, so it cannot pass vacuously again.
+
+    The path is a synthesized nonexistent sibling of pytest's temp root,
+    never a real one — see the sibling self-tests above for why.
     """
-    from autosplat import cli
+    from autosplat import migration
 
     base_temp = tmp_path_factory.getbasetemp().resolve()
     outside = base_temp.parent / "not-a-real-pytest-tmp-dir-outputs-entry"
     assert not outside.exists()
 
+    plan = migration.MigrationPlan(
+        rows=(
+            migration.PlanRow(
+                display=f"outputs/{outside.name}",
+                kind="outputs_reclaim",
+                label="duplicate — reclaimed",
+                size=0,
+                outputs_entry=outside,
+            ),
+        ),
+        reclaimable_bytes=0,
+        skipped=0,
+        duplicate_names=(),
+    )
+
     with pytest.raises(RuntimeError, match="outside the pytest temp root"):
-        cli.shutil.rmtree(outside)
+        migration.apply_migration(plan)
 
     assert storage_guard_violations
+    assert not outside.exists()
 
 
 def test_guard_covers_prune_intermediates_called_through_the_module_attribute(

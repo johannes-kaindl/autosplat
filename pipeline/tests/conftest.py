@@ -13,6 +13,7 @@ import pytest
 
 from autosplat import cleanup as cleanup_mod
 from autosplat import cli as cli_mod
+from autosplat import migration as migration_mod
 
 
 @pytest.fixture
@@ -47,14 +48,27 @@ def tmp_capture_dir(tmp_path: Path) -> Path:
 #
 # Three entry points are wrapped, covering every way the suite can delete a
 # capture tree: `cleanup.sweep_expired`, `cleanup.prune_intermediates` (which
-# every deletion path except the one below goes through), and `migrate-storage`'s
-# own `shutil.rmtree` on `outputs/` entries, which bypasses `cleanup` entirely.
+# every deletion path except the one below goes through), and the direct
+# `shutil.rmtree` on `outputs/` entries that bypasses `cleanup` entirely —
+# `cli.py`'s own `clean-bisection-probes` command, and (since task 5)
+# `migration.apply_migration`'s `outputs_reclaim` branch, which is what both
+# `migrate-storage --apply` and the WebUI's `/storage/reclaim` button call.
+# `shutil` is patched on *both* module objects — `cli_mod.shutil` and
+# `migration_mod.shutil` — because each did its own `import shutil` and so
+# holds its own independent binding; patching only one leaves the other's
+# call site invisible to this guard (round-2 review finding: a self-test
+# asserted on the `cli_mod.shutil` wrapper directly, which made it pass
+# whether or not `migration_mod.shutil` was actually guarded — see
+# `test_guard_blocks_migration_apply_migration_rmtree_outside_the_pytest_temp_root`
+# in `tests/test_cleanup.py`).
 # Each call with a path outside pytest's temp root raises immediately — before a
 # single file is touched — and is recorded; `_fail_on_recorded_storage_violations`
 # turns that into a hard test failure even if the raise happened on a background
 # thread whose exception nobody observes.
 
 _SWEEP_THREAD_NAME = "autosplat-grace-sweep"
+_RECLAIM_THREAD_NAME = "autosplat-reclaim"
+_GUARDED_THREAD_NAMES = (_SWEEP_THREAD_NAME, _RECLAIM_THREAD_NAME)
 _violations: list[str] = []
 _violations_lock = threading.Lock()
 
@@ -96,7 +110,7 @@ def _guard_reclaim_never_touches_real_captures(
         return real_prune(capture_dir, **kwargs)
 
     class _GuardedShutil:
-        """Stands in for `shutil` inside `autosplat.cli` only.
+        """Stands in for `shutil` inside `autosplat.cli` and `autosplat.migration`.
 
         Delegates everything but `rmtree`, and re-reads `rmtree` off the real
         module on each call so a test's own `monkeypatch.setattr(shutil,
@@ -104,35 +118,42 @@ def _guard_reclaim_never_touches_real_captures(
         """
 
         def rmtree(self, path: Any, *args: Any, **kwargs: Any) -> Any:
-            _check("migrate-storage shutil.rmtree", path)
+            _check("shutil.rmtree", path)
             return real_shutil.rmtree(path, *args, **kwargs)
 
         def __getattr__(self, name: str) -> Any:
             return getattr(real_shutil, name)
 
+    guarded_shutil = _GuardedShutil()
+
     cleanup_mod.sweep_expired = _guarded_sweep
     cleanup_mod.prune_intermediates = _guarded_prune
-    cli_mod.shutil = _GuardedShutil()  # type: ignore[assignment]
+    cli_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    migration_mod.shutil = guarded_shutil  # type: ignore[assignment]
     try:
         yield
     finally:
         cleanup_mod.sweep_expired = real_sweep_expired
         cleanup_mod.prune_intermediates = real_prune
         cli_mod.shutil = real_shutil
+        migration_mod.shutil = real_shutil
 
 
 @pytest.fixture(autouse=True)
 def _fail_on_recorded_storage_violations() -> Iterator[None]:
-    """Per test: join any sweep thread it started, then surface a hard failure
-    if the guard above recorded an out-of-temp-dir call.
+    """Per test: join any sweep/reclaim thread it started, then surface a hard
+    failure if the guard above recorded an out-of-temp-dir call.
 
-    The sweep runs on a background daemon thread (task 7), so without the join,
-    a violation recorded just after the test body returns would race this check
-    and could slip past undetected.
+    Both the grace sweep (task 7) and the WebUI reclaim button (task 6) run on
+    a background daemon thread, so without the join, a violation recorded
+    just after the test body returns would race this check and could slip
+    past undetected — doubly so for reclaim, whose `_run()` catches bare
+    `Exception` and stashes it on the job instead of letting it surface, so
+    the `_violations` list is the only signal left once that happens.
     """
     yield
     for thread in threading.enumerate():
-        if thread.name == _SWEEP_THREAD_NAME:
+        if thread.name in _GUARDED_THREAD_NAMES:
             thread.join(timeout=2)
     with _violations_lock:
         violations, _violations[:] = list(_violations), []
