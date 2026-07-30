@@ -259,3 +259,28 @@ Binds to all interfaces so other devices on your local network can reach the Web
 ### Parallel with CLI
 
 The WebUI and the CLI share the same `captures_dir` and `~/.autosplat/state.json`. You can run `autosplat watch` alongside `autosplat webui` — the watch daemon handles processing while the WebUI provides a read-only view of the queue and finished captures.
+
+---
+
+## 11. Review + share from the CLI (v1.16.0+, scriptable publish path)
+
+Every capture needs a one-time human sign-off (the publish quality gate) before it can be
+shared — the WebUI's **Captures → Review** panel does this by clicking. `autosplat review`
+and `autosplat share` are the same gate, scriptable, using the same marker file so a
+capture reviewed one way can be shared the other.
+
+```bash
+# Publish output/scene.ply as-is, no cleanup pass
+autosplat review ~/AutoSplat/captures/<capture-name> --confirm-unchanged
+
+# ...or publish a PLY you cleaned up in SuperSplat instead
+autosplat review ~/AutoSplat/captures/<capture-name> --upload ~/Downloads/scene_clean.ply
+
+# Build the self-hostable share bundle (refuses if the capture above wasn't reviewed)
+autosplat share ~/AutoSplat/captures/<capture-name>
+```
+
+`share` prints `Token:` and, if `[share].base_url` is configured, `Link:` — script against
+those, not against `Bundle:` (the zip's local path). A capture whose `output/scene.ply` is
+rebuilt (`add-video`, `resume`) reverts to unreviewed automatically — the marker records the
+PLY's mtime, so re-review is required before the next share, from either surface.
