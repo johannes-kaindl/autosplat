@@ -268,6 +268,7 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
             "failure": failure,
             "failure_reason": failure_reason,
             "has_prunable": bool(cleanup.prunable_targets(capture.path)),
+            "viewer_available": _viewer_mount_available(request),
         },
     )
 
@@ -280,6 +281,17 @@ def _supersplat_embed_context(request: Request, capture_id: str, has_ply: bool) 
         base = str(request.base_url).rstrip("/")
         embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/scene.ply"
     return supersplat_available, embed_url
+
+
+def _viewer_mount_available(request: Request) -> bool:
+    """Whether the /viewer static mount is actually registered.
+
+    Same technique as `_supersplat_embed_context`: ask the running app's
+    routes, not config or the filesystem, so there is exactly one source of
+    truth for "is this bundled viewer here" and it can never disagree with
+    what `app.py`'s mount loop actually did.
+    """
+    return any(getattr(r, "name", None) == "viewer" for r in request.app.routes)
 
 
 @router.get("/{capture_id}/view", response_class=HTMLResponse)
@@ -306,13 +318,19 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
 
 
 @router.get("/{capture_id}/walk")
-async def capture_walk(request: Request, capture_id: str) -> RedirectResponse:
+async def capture_walk(request: Request, capture_id: str) -> Response:
     """Open the walking viewer on this capture.
 
-    A redirect rather than a rendered template: viewer.html is served from the
+    A redirect when the viewer is mounted: viewer.html is served from the
     /viewer mount and resolves its own relative js/, css/ and vendor/ paths.
-    Walking mode itself is entered by a click inside the viewer — pointer lock
-    requires a user gesture, so no query parameter can start it.
+    Walking mode itself is entered by a click inside the viewer — pointer
+    lock requires a user gesture, so no query parameter can start it.
+
+    When the /viewer mount is absent — a bundling defect, not something the
+    user did wrong — this must not redirect into a bare 404 (indistinguishable
+    from "wrong capture ID"). It renders the same kind of fallback card
+    `capture_view` already shows for a missing SuperSplat build, pointing at
+    /system instead.
     """
     captures_dir = _captures_dir(request)
     capture = get_capture(captures_dir, capture_id, _job_runner(request))
@@ -320,6 +338,13 @@ async def capture_walk(request: Request, capture_id: str) -> RedirectResponse:
         raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
     if not capture.has_ply:
         raise HTTPException(status_code=409, detail="Capture has no PLY to walk through")
+    if not _viewer_mount_available(request):
+        return _templates(request).TemplateResponse(
+            request,
+            "capture/walk_unavailable.html",
+            {"version": __version__, "capture": capture},
+            status_code=503,
+        )
     return RedirectResponse(
         url=f"/viewer/viewer.html?src=/captures/{capture_id}/scene.ply",
         status_code=307,
@@ -407,6 +432,7 @@ async def capture_add_video(
                 "log_lines": log_lines,
                 "add_video_error": error,
                 "add_video_path": raw,
+                "viewer_available": _viewer_mount_available(request),
             },
             status_code=400,
         )
