@@ -46,7 +46,7 @@ echo "→ snapshot viewer/ from HEAD"
 git archive HEAD viewer/ | tar -x -C "$STAGE"
 
 echo "→ rsync to $DEST"
-"$RSYNC" -az --delete \
+"$RSYNC" -az --delete --chmod=D755,F644 \
   --exclude 'AGENTS.md' --exclude 'CHANGELOG.md' --exclude 'CITATION.cff' \
   --exclude 'CLA.md' --exclude 'CONTRIBUTING.md' --exclude 'LICENSING.md' \
   --exclude 'README.md' --exclude 'SECURITY.md' \
