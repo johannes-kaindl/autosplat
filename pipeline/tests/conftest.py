@@ -14,6 +14,9 @@ import pytest
 from autosplat import cleanup as cleanup_mod
 from autosplat import cli as cli_mod
 from autosplat import migration as migration_mod
+from autosplat.webui import share as share_mod
+from autosplat.webui import share_runner as share_runner_mod
+from autosplat.webui.routes import captures as captures_mod
 
 
 @pytest.fixture
@@ -46,21 +49,36 @@ def tmp_capture_dir(tmp_path: Path) -> Path:
 # `tests/test_cli_migrate_storage.py` drives a CLI that rmtrees config-supplied
 # paths — neither was covered while the guard sat under `tests/webui/`.
 #
-# Three entry points are wrapped, covering every way the suite can delete a
-# capture tree: `cleanup.sweep_expired`, `cleanup.prune_intermediates` (which
-# every deletion path except the one below goes through), and the direct
-# `shutil.rmtree` on `outputs/` entries that bypasses `cleanup` entirely —
-# `cli.py`'s own `clean-bisection-probes` command, and (since task 5)
-# `migration.apply_migration`'s `outputs_reclaim` branch, which is what both
-# `migrate-storage --apply` and the WebUI's `/storage/reclaim` button call.
-# `shutil` is patched on *both* module objects — `cli_mod.shutil` and
-# `migration_mod.shutil` — because each did its own `import shutil` and so
-# holds its own independent binding; patching only one leaves the other's
-# call site invisible to this guard (round-2 review finding: a self-test
-# asserted on the `cli_mod.shutil` wrapper directly, which made it pass
-# whether or not `migration_mod.shutil` was actually guarded — see
+# Two `cleanup` functions and five independent `shutil.rmtree` bindings are
+# wrapped, covering every way the suite can delete a capture tree:
+# `cleanup.sweep_expired`, `cleanup.prune_intermediates` (which every
+# deletion path except the ones below goes through), and `shutil.rmtree`
+# bound separately in `cli_mod`, `migration_mod`, `captures_mod`, `share_mod`
+# and `share_runner_mod` — each of those five does its own `import shutil`
+# and so holds its own independent module-level binding; patching fewer than
+# all five leaves the others' call sites invisible to this guard. Each binds:
+#   - `cli_mod.shutil`: `cli.py`'s own `clean-bisection-probes` command.
+#   - `migration_mod.shutil`: `migration.apply_migration`'s `outputs_reclaim`
+#     branch — what both `migrate-storage --apply` and the WebUI's
+#     `/storage/reclaim` button call.
+#   - `captures_mod.shutil`: `webui/routes/captures.py`'s `POST
+#     /captures/{id}/delete` — a full capture-tree deletion, not bounded to
+#     any subdirectory.
+#   - `share_mod.shutil`: `webui/share.py`'s `assemble_bundle`, which clears
+#     a stale `share/<token>/` folder before rebuilding it. Bounded to
+#     `share/`.
+#   - `share_runner_mod.shutil`: `webui/share_runner.py`'s
+#     `build_share_bundle`, which clears `share/_tmp/`. Also bounded to
+#     `share/`.
+# (round-2 review finding: a self-test asserted on the `cli_mod.shutil`
+# wrapper directly, which made it pass whether or not `migration_mod.shutil`
+# was actually guarded — see
 # `test_guard_blocks_migration_apply_migration_rmtree_outside_the_pytest_temp_root`
-# in `tests/test_cleanup.py`).
+# in `tests/test_cleanup.py`. A later review round found `captures_mod`,
+# `share_mod` and `share_runner_mod` still unguarded one module over — see
+# `test_guard_blocks_capture_delete_route_rmtree_outside_the_pytest_temp_root`
+# in the same file, which drives the production `POST
+# /captures/{id}/delete` route rather than the wrapper.)
 # Each call with a path outside pytest's temp root raises immediately — before a
 # single file is touched — and is recorded; `_fail_on_recorded_storage_violations`
 # turns that into a hard test failure even if the raise happened on a background
@@ -130,6 +148,9 @@ def _guard_reclaim_never_touches_real_captures(
     cleanup_mod.prune_intermediates = _guarded_prune
     cli_mod.shutil = guarded_shutil  # type: ignore[assignment]
     migration_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    captures_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    share_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    share_runner_mod.shutil = guarded_shutil  # type: ignore[assignment]
     try:
         yield
     finally:
@@ -137,6 +158,9 @@ def _guard_reclaim_never_touches_real_captures(
         cleanup_mod.prune_intermediates = real_prune
         cli_mod.shutil = real_shutil
         migration_mod.shutil = real_shutil
+        captures_mod.shutil = real_shutil
+        share_mod.shutil = real_shutil
+        share_runner_mod.shutil = real_shutil
 
 
 @pytest.fixture(autouse=True)

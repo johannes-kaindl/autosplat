@@ -588,3 +588,61 @@ def test_guard_covers_prune_intermediates_called_through_the_module_attribute(
         cleanup.prune_intermediates(outside)
 
     assert storage_guard_violations
+
+
+def test_guard_blocks_capture_delete_route_rmtree_outside_the_pytest_temp_root(
+    tmp_path_factory: pytest.TempPathFactory,
+    storage_guard_violations: list[str],
+) -> None:
+    """`POST /captures/{id}/delete` (`webui/routes/captures.py`) calls
+    `shutil.rmtree(capture.path, ignore_errors=True)` through its own
+    module-local `import shutil` — a binding independent of both
+    `cli_mod.shutil` and `migration_mod.shutil`, the two the guard patched
+    before this test existed. Neither of those covers this one; only
+    binding the guarded shutil into `webui.routes.captures` itself does.
+
+    This drives the actual HTTP route (`TestClient` + `create_app`), not
+    the module import or the wrapper directly, for the same reason the
+    sibling migration test above does: a self-test that asserts on the
+    wrapper passes whether or not the production call site is patched.
+
+    `get_capture` requires `capture_path.is_dir()`, unlike the migration
+    plan above (a bare `PlanRow` with a nonexistent `outputs_entry`), so
+    this test must create a real directory outside pytest's temp root —
+    never under `Path.home()`, and removed with the *real*, unguarded
+    `shutil.rmtree` in `finally` regardless of outcome. `ignore_errors=True`
+    on the production call never gets a chance to matter: the guard's
+    `_check` raises before the real `rmtree` call underneath it runs.
+    """
+    import shutil as real_shutil
+
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+
+    from autosplat.config import load_config
+    from autosplat.webui import create_app
+
+    base_temp = tmp_path_factory.getbasetemp().resolve()
+    outside_root = base_temp.parent / "not-a-real-pytest-tmp-dir-captures-root"
+    capture_id = "2026-05-01_outside"
+    capture_dir = outside_root / capture_id
+    (capture_dir / "output").mkdir(parents=True)
+    (capture_dir / "output" / "scene.ply").write_bytes(b"ply\n")
+
+    try:
+        cfg = load_config(include_xdg=False)
+        cfg.paths.captures_dir = outside_root
+        app: FastAPI = create_app(cfg)
+
+        # raise_server_exceptions=False: a genuinely unguarded call would not
+        # raise at all here (ignore_errors=True swallows it deep inside the
+        # real rmtree) — the deletion just succeeds silently and the route
+        # 303s. capture_dir.exists() is what actually distinguishes the two
+        # worlds, so the response itself is not asserted on.
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client.post(f"/captures/{capture_id}/delete")
+
+        assert capture_dir.exists(), "the guard must stop the delete before rmtree runs"
+        assert any("shutil.rmtree" in v for v in storage_guard_violations)
+    finally:
+        real_shutil.rmtree(outside_root, ignore_errors=True)
