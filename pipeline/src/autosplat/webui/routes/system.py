@@ -6,6 +6,13 @@ Both halves already existed and were discarded: `desktop.main` runs
 `run_doctor` on every launch, then spins in a silent
 `while needs_first_run_setup(cfg)` loop, and `webui/app.py` skips the
 SuperSplat mount without telling anyone. This page is where that goes.
+
+`system_page` is a plain `def`, not `async def`: `run_doctor` runs ten
+checks synchronously, four of them subprocess version probes, measured at
+1164 ms. An `async def` handler runs on the event loop, so that would block
+every other request — including htmx job-status polling — for over a
+second on every click of the `/system` nav entry `base.html` shows on every
+page. A plain `def` lets FastAPI run it in its threadpool instead.
 """
 
 from __future__ import annotations
@@ -22,7 +29,7 @@ router = APIRouter(prefix="/system")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def system_page(request: Request) -> HTMLResponse:
+def system_page(request: Request) -> HTMLResponse:
     templates: Jinja2Templates = request.app.state.templates
     cfg: Config | None = request.app.state.cfg
     return templates.TemplateResponse(

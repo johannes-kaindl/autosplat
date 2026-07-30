@@ -85,7 +85,7 @@ def _plan(cfg: Config) -> migration.MigrationPlan:
 
 
 @router.get("/storage", response_class=HTMLResponse)
-async def storage_page(request: Request) -> HTMLResponse:
+def storage_page(request: Request) -> HTMLResponse:
     """Preview page. Also runs the unsafe-layout guard — not to protect
     anything here (a `GET` never deletes), but because a preview computed
     over a layout the guard calls catastrophic must say so, in the page,
@@ -93,6 +93,13 @@ async def storage_page(request: Request) -> HTMLResponse:
     plan and the button as if nothing were wrong, and only refusing once the
     POST fires, would make the single most safety-critical message in this
     feature a raw JSON error blob in a WKWebView with no way back.
+
+    Plain `def`, not `async def`: `_plan` walks the whole captures tree via
+    a recursive `bytes_in`, which is cheap on a test fixture but not on a
+    real, multi-GB captures dir — an `async def` handler runs on the event
+    loop, so a slow walk here would block every other request (htmx polling
+    included) for its whole duration. A plain `def` runs in FastAPI's
+    threadpool instead.
     """
     cfg = _cfg(request)
     job = getattr(request.app.state, "reclaim_job", None)
