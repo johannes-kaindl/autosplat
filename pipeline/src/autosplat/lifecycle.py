@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -97,6 +97,39 @@ def review_status(capture_dir: Path) -> ReviewStatus:
     if recorded_mtime != current_mtime:
         return "unreviewed"
     return "reviewed"
+
+
+def write_review_marker(capture_dir: Path) -> None:
+    """Record a human sign-off for `capture_dir`'s current output/scene.ply.
+
+    Stores the PLY's mtime so a later rebuild invalidates the sign-off with no
+    cooperation from the rebuild path (see `review_status`). Callers that
+    publish scene.ply as-is must remove a leftover scene_reviewed.ply first —
+    `resolve_publish_ply` would otherwise keep serving the stale one.
+
+    Also drops any existing `output/scene.sog`. The share runner reuses that
+    SOG whenever its mtime is >= the publish PLY's, and mtime cannot see a
+    *deletion*: e.g. "confirm unchanged" unlinks `scene_reviewed.ply` while
+    `scene.ply`'s mtime never changes, so a SOG built from the previously
+    reviewed PLY would be reused and keep serving the very scene the caller
+    just reverted. Regenerating it costs one compression on the next share;
+    serving the wrong scene is silent and unbounded. Shared here (rather than
+    left to each caller) so the CLI's `review` command gets the same
+    protection as the WebUI route, with no chance of one path forgetting it.
+    """
+    scene_ply = capture_dir / "output" / "scene.ply"
+    (capture_dir / "output" / "scene.sog").unlink(missing_ok=True)
+    marker = review_marker_path(capture_dir)
+    marker.write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": datetime.now(UTC).isoformat(),
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def find_ply(capture_dir: Path) -> Path | None:

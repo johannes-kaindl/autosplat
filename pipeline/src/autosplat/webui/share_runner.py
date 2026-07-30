@@ -19,15 +19,84 @@ from typing import Literal
 from autosplat import resources
 from autosplat.compress import CompressResult, compress_ply
 from autosplat.config import Config
+from autosplat.lifecycle import resolve_publish_ply, review_status
 from autosplat.logging import get_logger
 from autosplat.webui.share import assemble_bundle, make_share_token, share_link
-from autosplat.webui.state import _review_status, resolve_publish_ply
 
 logger = get_logger(__name__)
 
 ShareStatus = Literal["running", "done", "failed"]
 
 Compressor = Callable[..., CompressResult]
+
+
+class UnreviewedCapture(Exception):
+    """Raised when a capture is asked to be shared before it was reviewed.
+
+    The publish quality gate used to live only in `capture_share`, while this
+    module would bundle an unreviewed capture without complaint. That was
+    survivable while the WebUI was the only caller; it stops being survivable
+    the moment a CLI command exists.
+    """
+
+
+@dataclass(frozen=True)
+class ShareResult:
+    token: str
+    zip_path: Path
+    output_bytes: int
+    input_bytes: int
+    link: str | None
+
+
+def build_share_bundle(
+    cfg: Config,
+    capture_dir: Path,
+    capture_id: str,
+    *,
+    compressor: Compressor = compress_ply,
+) -> ShareResult:
+    """Compress to SOG and assemble a share bundle. Synchronous; raises.
+
+    Refuses an unreviewed capture — the gate lives here so that every
+    surface inherits it instead of re-implementing it.
+    """
+    status = review_status(capture_dir)
+    if status == "unreviewed":
+        raise UnreviewedCapture(
+            f"{capture_dir.name} has not been reviewed — review it before sharing"
+        )
+    ply = resolve_publish_ply(capture_dir, status)
+    if ply is None or not ply.exists():
+        raise FileNotFoundError(f"No output/scene.ply in {capture_dir}")
+
+    # The SOG is a durable artifact under output/, kept per the retention
+    # policy and reused by later shares — a repeat share becomes seconds.
+    sog = capture_dir / "output" / "scene.sog"
+    if sog.exists() and sog.stat().st_mtime >= ply.stat().st_mtime:
+        logger.info("share.sog_reused", capture_id=capture_id)
+    else:
+        result = compressor(ply, capture_dir / "output", fmt="sog", quality=cfg.compress.quality)
+        # compress_ply names its output after the input stem, so a reviewed
+        # capture would yield scene_reviewed.sog. The canonical name is
+        # scene.sog regardless of which PLY was published.
+        if result.output_path != sog:
+            result.output_path.replace(sog)
+
+    token = make_share_token(capture_id)
+    embed_src = cfg.share.embed_src_path
+    if not embed_src.is_absolute():
+        embed_src = resources.REPO_ROOT / embed_src
+    paths = assemble_bundle(sog, embed_src, capture_dir / "share", token)
+    shutil.rmtree(capture_dir / "share" / "_tmp", ignore_errors=True)
+
+    return ShareResult(
+        token=token,
+        zip_path=paths.zip_path,
+        output_bytes=sog.stat().st_size,
+        input_bytes=ply.stat().st_size,
+        link=share_link(cfg.share.base_url, token),
+    )
 
 
 @dataclass
@@ -70,47 +139,18 @@ class ShareJobRunner:
 
     def _run(self, job: ShareJob, capture_dir: Path) -> None:
         try:
-            review_status = _review_status(capture_dir)
-            ply = resolve_publish_ply(capture_dir, review_status)
-            if ply is None or not ply.exists():
-                raise FileNotFoundError(f"No output/scene.ply in {capture_dir}")
-
-            # The SOG is a durable artifact under output/, not bundle scratch:
-            # it is kept per the retention policy and reused by later shares,
-            # turning a repeat share from minutes of compression into seconds.
-            sog = capture_dir / "output" / "scene.sog"
-            if sog.exists() and sog.stat().st_mtime >= ply.stat().st_mtime:
-                logger.info("share.sog_reused", capture_id=job.capture_id)
-            else:
-                result = self._compress(
-                    ply,
-                    capture_dir / "output",
-                    fmt="sog",
-                    quality=self._cfg.compress.quality,
-                )
-                # compress_ply names its output after the input stem, so a
-                # reviewed capture would yield scene_reviewed.sog. The canonical
-                # name is scene.sog regardless of which PLY was published.
-                if result.output_path != sog:
-                    result.output_path.replace(sog)
-
-            token = make_share_token(job.capture_id)
-            embed_src = self._resolve_embed_src()
-            paths = assemble_bundle(sog, embed_src, capture_dir / "share", token)
-            shutil.rmtree(capture_dir / "share" / "_tmp", ignore_errors=True)
-
-            job.token = token
-            job.zip_path = paths.zip_path
-            job.output_bytes = sog.stat().st_size
-            job.input_bytes = ply.stat().st_size
-            job.link = share_link(self._cfg.share.base_url, token)
-            job.status = "done"
-            logger.info("share.done", capture_id=job.capture_id, token=token)
+            result = build_share_bundle(
+                self._cfg, capture_dir, job.capture_id, compressor=self._compress
+            )
         except Exception as e:  # surfaced on the job, not raised
             job.status = "failed"
             job.error = str(e)
             logger.error("share.failed", capture_id=job.capture_id, error=str(e))
-
-    def _resolve_embed_src(self) -> Path:
-        p = self._cfg.share.embed_src_path
-        return p if p.is_absolute() else (resources.REPO_ROOT / p)
+            return
+        job.token = result.token
+        job.zip_path = result.zip_path
+        job.output_bytes = result.output_bytes
+        job.input_bytes = result.input_bytes
+        job.link = result.link
+        job.status = "done"
+        logger.info("share.done", capture_id=job.capture_id, token=result.token)

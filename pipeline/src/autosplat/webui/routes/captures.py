@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -22,7 +21,6 @@ from autosplat.webui.state import (
     last_activity_age_s,
     list_captures,
     read_log_tail,
-    review_marker_path,
     sort_captures,
 )
 
@@ -527,32 +525,6 @@ def _prune_after_review(capture_dir: Path, job_runner: JobRunner | None) -> None
     logger.info("review.pruned", capture=capture_dir.name, bytes_reclaimed=result.bytes_reclaimed)
 
 
-def _write_review_marker(capture_dir: Path) -> None:
-    """Mark capture_dir as reviewed against output/scene.ply's current mtime.
-
-    Drops any existing `output/scene.sog` as part of the sign-off. The share
-    runner reuses that SOG whenever its mtime is >= the publish PLY's, and
-    mtime cannot see a *deletion*: "Confirm unchanged" unlinks
-    `scene_reviewed.ply` while `scene.ply`'s mtime never changes, so a SOG
-    built from the cleaned PLY would be reused and keep serving the very
-    scene the user just reverted. Regenerating it costs one compression on
-    the next share; serving the wrong scene is silent and unbounded.
-    """
-    scene_ply = capture_dir / "output" / "scene.ply"
-    (capture_dir / "output" / "scene.sog").unlink(missing_ok=True)
-    marker = review_marker_path(capture_dir)
-    marker.write_text(
-        json.dumps(
-            {
-                "status": "reviewed",
-                "reviewed_at": datetime.now(UTC).isoformat(),
-                "source_ply_mtime": scene_ply.stat().st_mtime,
-            }
-        ),
-        encoding="utf-8",
-    )
-
-
 @router.post("/{capture_id}/review/confirm")
 async def capture_review_confirm(request: Request, capture_id: str) -> RedirectResponse:
     """Mark a capture as reviewed without changing its PLY (publish quality gate)."""
@@ -567,7 +539,7 @@ async def capture_review_confirm(request: Request, capture_id: str) -> RedirectR
     # not linger, or resolve_publish_ply would silently keep serving it.
     reviewed = capture.path / "output" / "scene_reviewed.ply"
     reviewed.unlink(missing_ok=True)
-    _write_review_marker(capture.path)
+    lifecycle.write_review_marker(capture.path)
     _prune_after_review(capture.path, _job_runner(request))
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
@@ -615,7 +587,7 @@ async def capture_review_upload(
         )
 
     (capture.path / "output" / "scene_reviewed.ply").write_bytes(content)
-    _write_review_marker(capture.path)
+    lifecycle.write_review_marker(capture.path)
     _prune_after_review(capture.path, _job_runner(request))
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 

@@ -912,6 +912,84 @@ def serve(
 
 
 @app.command()
+def review(
+    capture_dir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, help="Capture directory to sign off."
+    ),
+    confirm_unchanged: bool = typer.Option(
+        False,
+        "--confirm-unchanged",
+        help="Publish output/scene.ply as-is, without a cleaned upload.",
+    ),
+    upload: Path | None = typer.Option(
+        None,
+        "--upload",
+        exists=True,
+        dir_okay=False,
+        help="A cleaned PLY exported from SuperSplat to publish instead.",
+    ),
+) -> None:
+    """Sign a capture off for publication (publish quality gate).
+
+    The same marker the WebUI writes, through the same function — so a
+    capture reviewed here can be shared there, and vice versa. Exactly one of
+    --confirm-unchanged / --upload is required.
+    """
+    from autosplat.lifecycle import write_review_marker
+
+    if confirm_unchanged == (upload is not None):
+        console.print("[red]Pass exactly one of --confirm-unchanged / --upload.[/red]")
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    scene_ply = capture_dir / "output" / "scene.ply"
+    if not scene_ply.exists():
+        console.print(f"[red]No output/scene.ply in {capture_dir}[/red]")
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    reviewed_ply = capture_dir / "output" / "scene_reviewed.ply"
+    if upload is not None:
+        content = upload.read_bytes()
+        if not content.startswith(b"ply\n"):
+            console.print(f"[red]{upload} does not look like a PLY (no 'ply' header).[/red]")
+            raise typer.Exit(EXIT_USER_ERROR)
+        reviewed_ply.write_bytes(content)
+    else:
+        # A leftover from a previous review cycle would keep being published
+        # by resolve_publish_ply — the WebUI route documents the same trap.
+        reviewed_ply.unlink(missing_ok=True)
+
+    write_review_marker(capture_dir)
+    console.print(f"[green]Reviewed:[/green] {capture_dir.name}")
+
+
+@app.command()
+def share(
+    capture_dir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, help="Reviewed capture directory to share."
+    ),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
+) -> None:
+    """Build a self-hostable share bundle (requires a review first)."""
+    from autosplat.webui.share_runner import UnreviewedCapture, build_share_bundle
+
+    cfg = _load_or_die(config)
+    try:
+        result = build_share_bundle(cfg, capture_dir, capture_dir.name)
+    except UnreviewedCapture as e:
+        console.print(f"[red]{e}[/red]")
+        console.print("Run: autosplat review <capture> --confirm-unchanged")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except Exception as e:
+        console.print(f"[red]Share failed:[/red] {e}")
+        raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
+
+    console.print(f"[green]Bundle:[/green] {result.zip_path}")
+    console.print(f"Token: {result.token}")
+    if result.link:
+        console.print(f"Link:  {result.link}")
+
+
+@app.command()
 def webui(
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
     port: int = typer.Option(8080, "--port", "-p", help="HTTP port."),
