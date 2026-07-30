@@ -156,6 +156,43 @@ def test_reclaim_recovers_from_a_wedged_job_whose_thread_died(
     assert new_job.status == "done", new_job.error
 
 
+def test_wedged_job_offers_the_button_and_stops_polling(app: FastAPI, tmp_path: Path) -> None:
+    """Round-2 re-review finding: fixing the route's 409 check alone left the
+    templates still branching on raw `status == "running"`, so a wedged job
+    (status stuck at "running", thread already dead) rendered a hidden
+    Reclaim button *and* a busy `hx-trigger="every 2s"` poll that never
+    self-terminates — the exact symptom `ReclaimJob.is_running`'s docstring
+    names. `ReclaimJob.is_running` is what both `storage.html` (button) and
+    `partials/storage_status.html` (poll) now gate on, same as the route.
+    Asserted on the rendered HTML the browser actually receives, not on the
+    dataclass."""
+    import threading
+
+    captures = tmp_path / "captures"
+    captures.mkdir()
+    app.state.cfg.paths.captures_dir = captures
+    app.state.cfg.export.outputs_dir = tmp_path / "outputs"
+    _settled_capture(captures, "2026-05-06_demo")
+
+    from autosplat.webui.routes import storage
+
+    dead_thread = threading.Thread(target=lambda: None)
+    dead_thread.start()
+    dead_thread.join()
+    assert not dead_thread.is_alive()
+    app.state.reclaim_job = storage.ReclaimJob(status="running", thread=dead_thread)
+
+    with TestClient(app) as client:
+        body = client.get("/storage").text
+
+    assert "Reclaim now" in body
+    # Not a bare "hx-trigger" substring check: base.html's own JS has a
+    # comment mentioning "hx-trigger" (V12-4 dev overlay) that would make
+    # that assertion pass unconditionally regardless of this fix. The
+    # `hx-get` target is what actually drives the poll for this fragment.
+    assert 'hx-get="/partials/storage-status"' not in body
+
+
 def test_get_storage_refuses_an_unsafe_layout_and_hides_the_button(
     app: FastAPI, tmp_path: Path
 ) -> None:

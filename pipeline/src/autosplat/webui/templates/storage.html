@@ -13,13 +13,22 @@
     <div class="as-eyebrow">
       <span>chamber</span>
       <span class="sep">·</span>
+      {% if unsafe_layout_error %}
+      <span>refused</span>
+      {% else %}
       <span>{{ plan.rows | length }} entr{{ "y" if plan.rows | length == 1 else "ies" }}</span>
+      {% endif %}
     </div>
     <h1 class="as-h1">Storage</h1>
     <p class="as-sub">
+      {% if unsafe_layout_error %}
+      What <code style="font-family:var(--font-mono)">migrate-storage</code> would reclaim on disk —
+      refused below, before anything was even computed, because of the current captures/outputs layout.
+      {% else %}
       What <code style="font-family:var(--font-mono)">migrate-storage</code> would reclaim on disk, and
       what it keeps and why. This preview never deletes anything — reclaiming is a separate,
       confirmed step below.
+      {% endif %}
     </p>
   </div>
 
@@ -100,7 +109,7 @@
 
   {% include "partials/storage_status.html" %}
 
-  {% if plan.reclaimable_bytes and not (job and job.status == "running") %}
+  {% if plan.reclaimable_bytes and not (job and job.is_running) %}
   <form method="post" action="/storage/reclaim"
         onsubmit="return confirm('Reclaim {{ plan.reclaimable_bytes | filesizeformat }}? This deletes working directories and cannot be undone.')">
     <button type="submit" class="as-btn danger">{{ icon('trash', 14) }} Reclaim now</button>

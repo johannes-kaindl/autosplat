@@ -50,6 +50,21 @@ class ReclaimJob:
     error: str | None = None
     thread: threading.Thread | None = field(default=None, repr=False)
 
+    @property
+    def is_running(self) -> bool:
+        """`status == "running"` alone is not enough: `request.app.state.reclaim_job`
+        is published *before* `job.thread.start()` (so the redirect target has
+        something to poll immediately), which means a `start()` failure — or
+        any other way the thread dies without transitioning `status` — leaves
+        a job permanently stuck reporting "running" with nothing backing it.
+
+        One predicate, three consumers (the route's 409 check, the "Reclaim
+        now" button's suppression in `storage.html`, and the polling
+        attributes in `partials/storage_status.html`) so they cannot drift
+        out of sync the way a bare `status == "running"` check in each did.
+        """
+        return self.status == "running" and self.thread is not None and self.thread.is_alive()
+
 
 def _templates(request: Request) -> Jinja2Templates:
     templates: Jinja2Templates = request.app.state.templates
@@ -113,16 +128,7 @@ async def storage_reclaim(request: Request) -> RedirectResponse:
     """
     cfg = _cfg(request)
     existing: ReclaimJob | None = getattr(request.app.state, "reclaim_job", None)
-    # `existing.thread.is_alive()` matters, not just `status`: a job whose
-    # thread died without transitioning past "running" (process hiccup, or
-    # simply never started) would otherwise 409 every future reclaim
-    # attempt forever, with a hidden button and a busy 2s poll to match.
-    if (
-        existing is not None
-        and existing.status == "running"
-        and existing.thread is not None
-        and existing.thread.is_alive()
-    ):
+    if existing is not None and existing.is_running:
         raise HTTPException(status_code=409, detail="A reclaim sweep is already running")
 
     try:

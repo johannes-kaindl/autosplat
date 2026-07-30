@@ -1,10 +1,10 @@
 <div id="storage-status"
-     {%- if job and job.status == "running" %}
+     {%- if job and job.is_running %}
      hx-get="/partials/storage-status" hx-trigger="every 2s" hx-swap="outerHTML"
      {%- endif %}
      style="margin-bottom:var(--space-4)">
   {% if job %}
-    {% if job.status == "running" %}
+    {% if job.is_running %}
       <p style="font-family:var(--font-mono);font-size:12px;color:var(--fg-tertiary)">
         Reclaiming… this page updates itself.
       </p>
@@ -20,8 +20,14 @@
         {% for f in job.failures %}<li>{{ f }}</li>{% endfor %}
       </ul>
       {% endif %}
-    {% else %}
+    {% elif job.status == "failed" %}
       <p style="color:var(--stage-failed);font-size:13px">Reclaim failed: {{ job.error }}</p>
     {% endif %}
+    {# A job with status == "running" but not is_running is wedged (its
+       thread died without transitioning status — see ReclaimJob.is_running).
+       None of the branches above match on purpose: claiming "Reclaiming…
+       this page updates itself" would be false once polling has already
+       stopped, and storage.html offers the Reclaim button again right below
+       this partial, which is the honest next step. #}
   {% endif %}
 </div>
