@@ -67,10 +67,11 @@ datas += _tree(_p("target/supersplat/dist"), "supersplat", skip_suffixes=(".map"
 
 # viewer/ carries the walking mode (walking.js, heightmap.js, collision/) that
 # no other runtime has. Allowlist, mirroring share.py's _EMBED_ALLOWLIST:
-# index.html + landing.js (the marketing landing page) and assets/ (17 MB of
-# hero imagery) have no business inside the app. js/ is taken whole — app.js
-# imports dropzone.js, so cherry-picking modules breaks the viewer to save
-# kilobytes.
+# index.html (the marketing landing page) and assets/ (17 MB of hero imagery)
+# have no business inside the app and are left out. landing.js is NOT excluded
+# — js/ is taken whole because app.js imports dropzone.js, so cherry-picking
+# modules breaks the viewer to save kilobytes, and landing.js lives inside
+# js/. It ships as an accepted consequence of that choice, not by design.
 datas += [
     (_p("..", "viewer", "viewer.html"), "viewer"),
     (_p("..", "viewer", "js"), "viewer/js"),

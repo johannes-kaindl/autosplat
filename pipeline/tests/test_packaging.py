@@ -24,6 +24,29 @@ needs_dist = pytest.mark.skipif(
 )
 
 
+def _expand_datas(datas: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Expand directory entries in a `datas` list into their individual files.
+
+    `datas` pairs a source path with a bundle-relative dest directory; when
+    the source is a directory (as `viewer/js` is), PyInstaller stages every
+    file under it, but the plan itself never names them. An assertion like
+    `"landing.js" not in sources` against the unexpanded list can never see
+    inside `viewer/js` — it isn't testing what ships, only what the plan's
+    top-level entries are literally named. Expanding here makes filename
+    assertions actually reflect the files PyInstaller would stage.
+    """
+    expanded: list[tuple[str, str]] = []
+    for src, dest in datas:
+        path = Path(src)
+        if path.is_dir():
+            for file in sorted(path.rglob("*")):
+                if file.is_file():
+                    expanded.append((str(file), dest))
+        else:
+            expanded.append((src, dest))
+    return expanded
+
+
 def _spec_datas() -> list[tuple[str, str]]:
     """Execute the spec's `datas` construction in isolation.
 
@@ -49,14 +72,30 @@ def test_supersplat_is_bundled_without_source_maps() -> None:
 
 
 def test_viewer_is_bundled_by_allowlist() -> None:
+    """Round-2 review finding: `"landing.js" not in sources` against the
+    unexpanded `datas` list can never fail — `viewer/js/landing.js` lives
+    *inside* the `js` directory entry, and `_spec_datas()` never looks
+    inside directory sources. `_expand_datas` fixes that by walking
+    directory entries down to their files, which also makes the assertion's
+    outcome flip: landing.js does ship (see AutoSplat.spec's comment) as an
+    accepted consequence of taking `js/` whole. `assets` and `index.html`
+    stay genuinely excluded — they are their own top-level allowlist
+    entries, never taken, so they are absent even after expansion.
+    """
     datas = _spec_datas()
     dests = [d[1] for d in datas]
     assert "viewer" in dests or any(x.startswith("viewer/") for x in dests)
-    sources = [Path(d[0]).name for d in datas if d[1].startswith("viewer")]
-    # The 17 MB marketing assets, the landing page and its script stay out.
-    assert "assets" not in sources
-    assert "index.html" not in sources
-    assert "landing.js" not in sources
+    viewer_files = _expand_datas(datas)
+    names = [Path(src).name for src, dest in viewer_files if dest.startswith("viewer")]
+    # The 17 MB marketing assets and the landing page's own top-level entry
+    # (viewer/index.html) stay out — only viewer.html, js/, css/, icons/,
+    # vendor/ are allowlisted (see AutoSplat.spec).
+    assert "assets" not in names
+    assert "index.html" not in names
+    # landing.js DOES ship: it lives inside js/, taken whole because app.js
+    # imports dropzone.js — see AutoSplat.spec's comment for why cherry-
+    # picking modules out of js/ is not an option.
+    assert "landing.js" in names
 
 
 def test_embed_is_still_bundled() -> None:
