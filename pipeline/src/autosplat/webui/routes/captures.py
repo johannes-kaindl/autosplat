@@ -305,6 +305,27 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
     )
 
 
+@router.get("/{capture_id}/walk")
+async def capture_walk(request: Request, capture_id: str) -> RedirectResponse:
+    """Open the walking viewer on this capture.
+
+    A redirect rather than a rendered template: viewer.html is served from the
+    /viewer mount and resolves its own relative js/, css/ and vendor/ paths.
+    Walking mode itself is entered by a click inside the viewer — pointer lock
+    requires a user gesture, so no query parameter can start it.
+    """
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    if not capture.has_ply:
+        raise HTTPException(status_code=409, detail="Capture has no PLY to walk through")
+    return RedirectResponse(
+        url=f"/viewer/viewer.html?src=/captures/{capture_id}/scene.ply",
+        status_code=307,
+    )
+
+
 @router.get("/{capture_id}/log")
 async def capture_log(request: Request, capture_id: str) -> JSONResponse:
     captures_dir = _captures_dir(request)

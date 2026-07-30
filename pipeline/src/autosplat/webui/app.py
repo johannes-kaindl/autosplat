@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from autosplat import __version__, cleanup
+from autosplat import __version__, cleanup, resources
 from autosplat.config import Config
 from autosplat.failure import classify_failure
 from autosplat.logging import get_logger
@@ -91,13 +91,24 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     # Static files
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-    # SuperSplat dist/ — only mount if built
-    if cfg is not None:
-        dist = cfg.viewer.supersplat_dist_path
-        if not dist.is_absolute():
-            dist = Path.cwd() / dist
-        if (dist / "index.html").exists():
-            app.mount("/supersplat", StaticFiles(directory=str(dist)), name="supersplat")
+    # Bundled viewer runtimes, mounted from the same status list /system
+    # renders — so the page can never claim a viewer the app did not mount.
+    # The old code mounted SuperSplat if a cwd-relative path happened to
+    # exist and said nothing when it didn't, which is why the shipped app's
+    # review gate looked empty rather than broken.
+    for status in resources.viewer_status(cfg):
+        if status.name == "embed":
+            continue  # copied into share bundles, never served from here
+        if status.present:
+            app.mount(
+                f"/{status.name}",
+                StaticFiles(directory=str(status.path)),
+                name=status.name,
+            )
+        else:
+            logger.warning(
+                "webui.viewer_missing", viewer=status.name, path=str(status.path)
+            )
 
     # Jinja2 templates
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
