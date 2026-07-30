@@ -14,7 +14,6 @@ Commands (spec §7):
 
 from __future__ import annotations
 
-import os
 import shutil
 import webbrowser
 from datetime import UTC, datetime
@@ -626,88 +625,21 @@ def migrate_storage(
         raise typer.Exit(EXIT_PIPELINE_FAILURE)
 
 
-def _same_directory(a: Path, b: Path) -> bool:
-    """True if `a` and `b` refer to the same directory on disk.
-
-    Compares filesystem identity (`os.path.samefile` — device + inode)
-    rather than string equality. `Path.resolve()` does NOT case-normalise on
-    macOS's default APFS (case-insensitive but case-preserving): a config
-    typo like `outputs_dir = "/Users/Johannes"` against a real
-    `/Users/johannes` would compare unequal as strings while being the exact
-    same directory on disk — `==` (or `os.path.normcase`, which is a no-op
-    on POSIX platforms including macOS) would miss that; `samefile` doesn't.
-    Falls back to plain equality only when one side doesn't exist yet
-    (`samefile` requires both to), which is safe: there's nothing on disk
-    yet for a nonexistent path to alias with.
-    """
-    try:
-        return os.path.samefile(a, b)
-    except OSError:
-        return a == b
-
-
-def _is_same_or_inside(outer: Path, inner: Path) -> bool:
-    """True if `inner` is `outer` itself, or nested inside it — by
-    filesystem identity (`_same_directory`), so this holds even across a
-    case-insensitive filesystem alias."""
-    if _same_directory(outer, inner):
-        return True
-    return any(_same_directory(outer, ancestor) for ancestor in inner.parents)
-
-
 def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> None:
     """Refuse rather than let a config typo turn `--apply` into an `rm -rf`.
 
-    Every direct child of `outputs_dir` is a deletion candidate once it
-    matches a fully-exported capture name, so a config where `outputs_dir`
-    resolves to `captures_dir` itself (or an ancestor of it), to $HOME, or to
-    a filesystem root would make this command delete far more than
-    deprecated export copies. `config.py` documents "distinct from
-    captures_dir" as an invariant on `export.outputs_dir`, but nothing
-    enforced it before this check.
-
-    Both nesting directions are refused, because both are destructive:
-    - captures inside outputs — every capture becomes a deletion candidate;
-    - outputs inside captures — `find_capture_dirs` descends into `outputs/`
-      and registers each `outputs/<name>` as a capture of its own (a
-      top-level `scene.ply` satisfies the signature), so the outputs loop
-      then matches an entry against *itself*, sees "a capture of that name
-      exists and has a PLY", and deletes the orphan — the one thing this
-      command must never delete.
+    The containment check itself lives in
+    `migration.refuse_if_unsafe_storage_layout` — this is a thin CLI adapter
+    (Rich console message + `typer.Exit`) around it. `webui/routes/storage.py`
+    is the other caller; it must fail the same way but has neither Rich nor
+    typer available, so it catches `migration.UnsafeStorageLayoutError`
+    directly instead of going through this function.
     """
-    captures_resolved = captures_dir.resolve()
-    outputs_resolved = outputs_dir.resolve()
-
-    if _is_same_or_inside(outputs_resolved, captures_resolved):
-        err_console.print(
-            "[red]Refusing:[/red] paths.captures_dir "
-            f"({captures_resolved}) is the same as, or inside, export.outputs_dir "
-            f"({outputs_resolved}). migrate-storage would delete the captures tree "
-            "itself while treating it as deprecated 'outputs/' copies."
-        )
-        raise typer.Exit(EXIT_USER_ERROR)
-
-    if _is_same_or_inside(captures_resolved, outputs_resolved):
-        err_console.print(
-            "[red]Refusing:[/red] export.outputs_dir "
-            f"({outputs_resolved}) is inside paths.captures_dir "
-            f"({captures_resolved}). migrate-storage would scan its entries as "
-            "captures in their own right and then delete them as redundant "
-            "copies of themselves — including orphans, which are the last "
-            "surviving copy of their scene."
-        )
-        raise typer.Exit(EXIT_USER_ERROR)
-
-    home_resolved = Path.home().resolve()
-    if (
-        _same_directory(outputs_resolved, home_resolved)
-        or outputs_resolved == outputs_resolved.parent
-    ):
-        err_console.print(
-            f"[red]Refusing:[/red] export.outputs_dir ({outputs_resolved}) resolves to your "
-            "home directory or a filesystem root — deleting its children would be catastrophic."
-        )
-        raise typer.Exit(EXIT_USER_ERROR)
+    try:
+        migration.refuse_if_unsafe_storage_layout(captures_dir, outputs_dir)
+    except migration.UnsafeStorageLayoutError as e:
+        err_console.print(f"[red]Refusing:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
 
 
 def _human_bytes(n: int) -> str:

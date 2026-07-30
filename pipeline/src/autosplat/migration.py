@@ -14,6 +14,7 @@ The one time that rule was written a second time it was wrong twice.
 
 from __future__ import annotations
 
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,6 +24,106 @@ from autosplat import cleanup, lifecycle
 from autosplat.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class UnsafeStorageLayoutError(Exception):
+    """`captures_dir`/`outputs_dir` are nested, aliased, or resolve to $HOME
+    or a filesystem root — a layout where a reclaim sweep would delete far
+    more than deprecated export copies.
+
+    Raised rather than acted on directly: this module has no opinion on how a
+    refusal should be surfaced (the CLI prints a Rich "Refusing:" message and
+    exits non-zero; the WebUI turns it into an HTTP error), only that every
+    caller of `apply_migration` must check this first. The one time this rule
+    was written a second time (see `migration.py`'s module docstring) it was
+    wrong twice — it lives here, once, for the same reason.
+    """
+
+
+def _same_directory(a: Path, b: Path) -> bool:
+    """True if `a` and `b` refer to the same directory on disk.
+
+    Compares filesystem identity (`os.path.samefile` — device + inode)
+    rather than string equality. `Path.resolve()` does NOT case-normalise on
+    macOS's default APFS (case-insensitive but case-preserving): a config
+    typo like `outputs_dir = "/Users/Johannes"` against a real
+    `/Users/johannes` would compare unequal as strings while being the exact
+    same directory on disk — `==` (or `os.path.normcase`, which is a no-op
+    on POSIX platforms including macOS) would miss that; `samefile` doesn't.
+    Falls back to plain equality only when one side doesn't exist yet
+    (`samefile` requires both to), which is safe: there's nothing on disk
+    yet for a nonexistent path to alias with.
+    """
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return a == b
+
+
+def _is_same_or_inside(outer: Path, inner: Path) -> bool:
+    """True if `inner` is `outer` itself, or nested inside it — by
+    filesystem identity (`_same_directory`), so this holds even across a
+    case-insensitive filesystem alias."""
+    if _same_directory(outer, inner):
+        return True
+    return any(_same_directory(outer, ancestor) for ancestor in inner.parents)
+
+
+def refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> None:
+    """Raise `UnsafeStorageLayoutError` rather than let a config typo turn a
+    reclaim into an `rm -rf`.
+
+    Every direct child of `outputs_dir` is a deletion candidate once it
+    matches a fully-exported capture name, so a config where `outputs_dir`
+    resolves to `captures_dir` itself (or an ancestor of it), to $HOME, or to
+    a filesystem root would make a reclaim delete far more than deprecated
+    export copies. `config.py` documents "distinct from captures_dir" as an
+    invariant on `export.outputs_dir`, but nothing enforced it before this
+    check.
+
+    Both nesting directions are refused, because both are destructive:
+    - captures inside outputs — every capture becomes a deletion candidate;
+    - outputs inside captures — `find_capture_dirs` descends into `outputs/`
+      and registers each `outputs/<name>` as a capture of its own (a
+      top-level `scene.ply` satisfies the signature), so the outputs loop
+      then matches an entry against *itself*, sees "a capture of that name
+      exists and has a PLY", and deletes the orphan — the one thing this
+      command must never delete.
+
+    Callers must call this before `apply_migration` — `apply_migration`
+    itself performs no containment check.
+    """
+    captures_resolved = captures_dir.resolve()
+    outputs_resolved = outputs_dir.resolve()
+
+    if _is_same_or_inside(outputs_resolved, captures_resolved):
+        raise UnsafeStorageLayoutError(
+            "paths.captures_dir "
+            f"({captures_resolved}) is the same as, or inside, export.outputs_dir "
+            f"({outputs_resolved}). migrate-storage would delete the captures tree "
+            "itself while treating it as deprecated 'outputs/' copies."
+        )
+
+    if _is_same_or_inside(captures_resolved, outputs_resolved):
+        raise UnsafeStorageLayoutError(
+            "export.outputs_dir "
+            f"({outputs_resolved}) is inside paths.captures_dir "
+            f"({captures_resolved}). migrate-storage would scan its entries as "
+            "captures in their own right and then delete them as redundant "
+            "copies of themselves — including orphans, which are the last "
+            "surviving copy of their scene."
+        )
+
+    home_resolved = Path.home().resolve()
+    if (
+        _same_directory(outputs_resolved, home_resolved)
+        or outputs_resolved == outputs_resolved.parent
+    ):
+        raise UnsafeStorageLayoutError(
+            f"export.outputs_dir ({outputs_resolved}) resolves to your home "
+            "directory or a filesystem root — deleting its children would be "
+            "catastrophic."
+        )
 
 
 @dataclass(frozen=True)
@@ -68,7 +169,7 @@ def plan_migration(captures_dir: Path, outputs_dir: Path, *, now: datetime) -> M
     not required, otherwise no legacy capture would ever qualify.
 
     Callers must apply their own unsafe-layout guard before acting on this
-    (see `cli._refuse_if_unsafe_storage_layout`); a planner that refused by
+    (see `refuse_if_unsafe_storage_layout`, below); a planner that refused by
     raising would be awkward to render.
     """
     rows: list[PlanRow] = []

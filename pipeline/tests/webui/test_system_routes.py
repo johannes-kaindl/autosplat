@@ -37,6 +37,9 @@ def test_system_page_names_the_role_of_each_viewer(app: FastAPI) -> None:
 
 
 def test_nav_links_to_system(app: FastAPI) -> None:
+    """Trailing slash matches `/system`'s canonical `APIRouter(prefix="/system")`
+    + `"/"` route — same shape as `/captures/` and `/jobs/` in this nav, which
+    both already carry it. Linking the bare path costs an extra 307 per click."""
     with TestClient(app) as client:
         body = client.get("/").text
-    assert 'href="/system"' in body
+    assert 'href="/system/"' in body

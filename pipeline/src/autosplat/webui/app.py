@@ -22,7 +22,7 @@ from autosplat.config import Config
 from autosplat.failure import classify_failure
 from autosplat.logging import get_logger
 
-from .routes import captures, dashboard, health, jobs, partials, source, system
+from .routes import captures, dashboard, health, jobs, partials, source, storage, system
 
 logger = get_logger(__name__)
 
@@ -115,6 +115,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     app.include_router(partials.router)
     app.include_router(source.router)
     app.include_router(system.router)
+    app.include_router(storage.router)
 
     # Wire up job runner (available for all routes via request.app.state.job_runner)
     from .jobs_runner import JobRunner
@@ -129,5 +130,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     from .share_runner import ShareJobRunner
 
     app.state.share_runner = ShareJobRunner(cfg) if cfg is not None else None
+
+    # No reclaim sweep has run yet in this process.
+    app.state.reclaim_job = None
 
     return app

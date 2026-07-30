@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Storage{% endblock %}
+
+{% block crumbs %}
+<span class="sep">/</span><span class="cur">storage</span>
+{% endblock %}
+
+{% block content %}
+{%- from "_icons.html" import icon -%}
+<div class="as-main-inner">
+
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span>
+      <span class="sep">·</span>
+      <span>{{ plan.rows | length }} entr{{ "y" if plan.rows | length == 1 else "ies" }}</span>
+    </div>
+    <h1 class="as-h1">Storage</h1>
+    <p class="as-sub">
+      What <code style="font-family:var(--font-mono)">migrate-storage</code> would reclaim on disk, and
+      what it keeps and why. This preview never deletes anything — reclaiming is a separate,
+      confirmed step below.
+    </p>
+  </div>
+
+  <div class="as-card" style="max-width:420px;margin-bottom:var(--space-6)">
+    <div class="as-card-body">
+      <p style="font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--fg-primary);margin:0">
+        {{ plan.reclaimable_bytes | filesizeformat }}
+      </p>
+      <p style="font-family:var(--font-body);font-size:12px;color:var(--fg-tertiary);margin:4px 0 0">
+        reclaimable
+        {% if plan.skipped %}
+        · {{ plan.skipped }} entr{{ "y" if plan.skipped == 1 else "ies" }} deliberately kept
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if plan.duplicate_names %}
+  <p style="font-family:var(--font-body);font-size:12px;color:var(--role-warning);margin:0 0 var(--space-4)">
+    ⚠ {{ plan.duplicate_names | length }} capture name(s) appear more than once
+    ({{ plan.duplicate_names | join(", ") }}) — an outputs/ entry may have been judged
+    against the wrong same-named capture.
+  </p>
+  {% endif %}
+
+  <section style="margin-bottom:var(--space-6)">
+    <div class="as-tbl-wrap">
+      {% if plan.rows %}
+      <table class="as-tbl">
+        <thead>
+          <tr>
+            <th>path</th>
+            <th>what</th>
+            <th style="text-align:right">size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in plan.rows %}
+          <tr>
+            <td class="mono">{{ row.display }}</td>
+            <td class="{% if row.kind in ('kept', 'failed', 'outputs_kept') %}dim{% endif %}"
+                {%- if row.kind == 'active' %} style="color:var(--role-warning)"{% endif %}>
+              {{ row.label }}
+            </td>
+            <td class="num">{{ row.size | filesizeformat if row.size else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state" style="text-align:center;padding:48px;color:var(--fg-tertiary);font-family:var(--font-mono);font-size:12px">
+        <p>Nothing tracked under captures/ or outputs/ yet.</p>
+      </div>
+      {% endif %}
+    </div>
+    <p style="font-family:var(--font-body);font-size:11px;color:var(--fg-tertiary);line-height:1.6;margin-top:var(--space-3)">
+      Sizes on kept rows are informational — they are not part of the reclaimable total above.
+    </p>
+  </section>
+
+  {% include "partials/storage_status.html" %}
+
+  {% if plan.reclaimable_bytes and not (job and job.status == "running") %}
+  <form method="post" action="/storage/reclaim"
+        onsubmit="return confirm('Reclaim {{ plan.reclaimable_bytes | filesizeformat }}? This deletes working directories and cannot be undone.')">
+    <button type="submit" class="as-btn danger">{{ icon('trash', 14) }} Reclaim now</button>
+  </form>
+  {% endif %}
+
+</div>
+{% endblock %}
