@@ -37,9 +37,15 @@ Die drei Viewer überlappen sich nur beim reinen Anschauen. Jeder hat genau eine
 Ein vierter Viewer ist eine Design-Entscheidung, kein Detail. Wer einen hinzufügt, trägt
 ihn hier ein oder lässt es.
 
-**Gebündelte Ressourcen** werden ausschließlich über `resources.bundled_path()` aufgelöst
-— nie gegen `Path.cwd()`. Ein Finder-Start hat kein sinnvolles CWD; genau daran fehlte
-jeder DMG bis v1.16.0 der Review-Viewer.
+**Gebündelte Ressourcen, wie die App sie auflöst** — der WebUI-Mount
+(`resources.viewer_status`/`_root_for`) und alles, was `create_app` und das gepackte
+Bundle anfassen — laufen ausschließlich über `resources.bundled_path()`, nie gegen
+`Path.cwd()`. Ein Finder-Start hat kein sinnvolles CWD; genau daran fehlte jeder DMG bis
+v1.16.0 der Review-Viewer. Reine CLI-Pfade (`autosplat serve --with-supersplat`, die
+Preflight-Warnung vor `process`/`resume`/`add-video`/`rescue`, deren Auto-Open am Ende)
+dürfen einen relativ gesetzten `supersplat_dist_path`-Override weiterhin gegen das
+Arbeitsverzeichnis auflösen — für ein Terminal-Kommando ist das erwartetes Verhalten,
+kein Bug; sie laufen nie im gepackten Bundle.
 
 ## Working in the monorepo
 
