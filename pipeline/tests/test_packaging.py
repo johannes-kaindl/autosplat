@@ -90,7 +90,15 @@ def test_viewer_is_bundled_by_allowlist() -> None:
     # The 17 MB marketing assets and the landing page's own top-level entry
     # (viewer/index.html) stay out — only viewer.html, js/, css/, icons/,
     # vendor/ are allowlisted (see AutoSplat.spec).
-    assert "assets" not in names
+    #
+    # Checked on `dests`, not `names`: `assets/` is itself a directory entry,
+    # so `_expand_datas` would expand it into its individual files (hero.png,
+    # etc.) — none of which is literally named "assets". An assertion like
+    # `"assets" not in names` can therefore never see an allowlisted
+    # `viewer/assets` entry; it would keep passing even after the plan starts
+    # shipping the 17 MB marketing folder. Asserting on the unexpanded dest
+    # path catches that regardless of what's inside the directory.
+    assert not [d for d in dests if d.startswith("viewer/assets")]
     assert "index.html" not in names
     # landing.js DOES ship: it lives inside js/, taken whole because app.js
     # imports dropzone.js — see AutoSplat.spec's comment for why cherry-
