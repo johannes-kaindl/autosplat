@@ -70,3 +70,16 @@ def test_non_ply_upload_is_rejected(tmp_path: Path) -> None:
     result = runner.invoke(app, ["review", str(capture), "--upload", str(bad)])
     assert result.exit_code != 0
     assert review_status(capture) == "unreviewed"
+
+
+def test_review_refuses_a_capture_with_no_scene_ply(tmp_path: Path) -> None:
+    """review's own no-PLY guard (cli.py:944-947) — the sibling of `share`'s,
+    which test_cli_share.py already covers. `capture_dir` only requires the
+    directory itself to exist (`exists=True, file_okay=False` on the typer
+    argument); output/scene.ply is checked separately, after that."""
+    capture = tmp_path / "2026-07-19_no_ply"
+    capture.mkdir()
+    result = runner.invoke(app, ["review", str(capture), "--confirm-unchanged"])
+    assert result.exit_code != 0
+    assert "No output/scene.ply" in result.output
+    assert review_status(capture) == "unreviewed"
