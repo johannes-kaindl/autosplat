@@ -328,8 +328,10 @@ def test_viewer_config_supersplat_local_port_default() -> None:
 
 
 def test_viewer_config_supersplat_dist_path_default() -> None:
+    from autosplat import resources
+
     cfg = load_config(include_xdg=False)
-    assert cfg.viewer.supersplat_dist_path == Path("target/supersplat/dist")
+    assert cfg.viewer.supersplat_dist_path == resources.bundled_path("supersplat")
 
 
 def test_viewer_config_supersplat_local_port_override(tmp_path: Path) -> None:

@@ -15,6 +15,29 @@ def _fake_embed(root: Path) -> Path:
     return e
 
 
+def _mark_reviewed(capture_dir: Path) -> None:
+    """Write a review marker matching output/scene.ply's current mtime.
+
+    build_share_bundle now gates on review status (v1.16.0's publish quality
+    gate moved down from the route into the runner), so any test that drives
+    ShareJobRunner directly — bypassing capture_share's own gate — needs a
+    capture that is actually reviewed to reach the compress-and-bundle path.
+    """
+    import json
+
+    scene_ply = capture_dir / "output" / "scene.ply"
+    marker = capture_dir / "output" / ".review.json"
+    marker.write_text(
+        json.dumps(
+            {
+                "status": "reviewed",
+                "reviewed_at": "2026-07-19T00:00:00",
+                "source_ply_mtime": scene_ply.stat().st_mtime,
+            }
+        )
+    )
+
+
 def _wait(job, timeout: float = 3.0) -> None:
     deadline = time.monotonic() + timeout
     while job.status == "running" and time.monotonic() < deadline:
@@ -46,6 +69,7 @@ def _share_capture(tmp_path: Path) -> tuple[Path, Path]:
     capture_dir = tmp_path / "2026-07-10_lgs"
     (capture_dir / "output").mkdir(parents=True)
     (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
+    _mark_reviewed(capture_dir)
     return capture_dir, embed
 
 
@@ -61,6 +85,7 @@ def test_share_job_compresses_and_bundles(tmp_path: Path) -> None:
     capture_dir = tmp_path / "2026-07-10_lgs"
     (capture_dir / "output").mkdir(parents=True)
     (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
+    _mark_reviewed(capture_dir)
 
     def fake_compress(ply: Path, out_dir: Path, *, fmt: str = "sog", quality: str = "medium"):
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -96,6 +121,7 @@ def test_share_job_cleans_up_tmp_dir_after_success(tmp_path: Path) -> None:
     capture_dir = tmp_path / "2026-07-10_lgs"
     (capture_dir / "output").mkdir(parents=True)
     (capture_dir / "output" / "scene.ply").write_bytes(b"PLY" * 5000)
+    _mark_reviewed(capture_dir)
 
     def fake_compress(ply: Path, out_dir: Path, *, fmt: str = "sog", quality: str = "medium"):
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -122,6 +148,11 @@ def test_share_job_cleans_up_tmp_dir_after_success(tmp_path: Path) -> None:
 
 
 def test_share_job_fails_without_ply(tmp_path: Path) -> None:
+    """A capture with no output/scene.ply can never be marked reviewed
+    (write_review_marker needs the PLY's mtime), so it now fails at the
+    review gate rather than reaching the PLY-resolution check — both are
+    "this capture isn't shareable yet", but the review gate is what a real
+    caller hits first."""
     embed = _fake_embed(tmp_path)
     capture_dir = tmp_path / "2026-07-10_empty"
     capture_dir.mkdir()
@@ -133,7 +164,7 @@ def test_share_job_fails_without_ply(tmp_path: Path) -> None:
     _wait(job)
 
     assert job.status == "failed"
-    assert job.error and "scene.ply" in job.error
+    assert job.error and "review" in job.error.lower()
 
 
 def test_share_job_compresses_reviewed_ply_when_present(tmp_path: Path) -> None:
@@ -223,9 +254,13 @@ def test_rebuilt_ply_forces_recompression(tmp_path: Path) -> None:
     _wait(first)
     assert first.status == "done", first.error
 
-    # Simulate add-video: scene.ply becomes newer than the SOG.
+    # Simulate add-video: scene.ply becomes newer than the SOG. A rebuild
+    # invalidates the review sign-off by mtime (review_status), so the
+    # capture must be re-reviewed before it can be shared again — same as a
+    # real caller would have to do through `autosplat review` or the WebUI.
     future = (capture_dir / "output" / "scene.sog").stat().st_mtime + 60
     os.utime(capture_dir / "output" / "scene.ply", (future, future))
+    _mark_reviewed(capture_dir)
 
     second = runner.start("2026-07-10_lgs", capture_dir)
     _wait(second)

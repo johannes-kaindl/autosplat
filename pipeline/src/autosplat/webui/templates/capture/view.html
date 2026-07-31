@@ -83,8 +83,9 @@
     <div class="as-card" style="max-width:480px">
       <div class="as-card-body">
         <p style="font-family:var(--font-body);font-size:13px;color:var(--fg-secondary);line-height:1.6;margin:0 0 var(--space-4)">
-          The local SuperSplat build was not found at <code style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">target/supersplat/dist/</code>.
-          Run <code style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">bash scripts/setup_supersplat.sh</code> and restart the WebUI.
+          The local SuperSplat build was not found. See <a href="/system" style="color:var(--signal-circuit)">/system</a> for
+          where it's expected and what's missing, then run
+          <code style="font-family:var(--font-mono);font-size:11px;color:var(--fg-tertiary)">bash scripts/setup_supersplat.sh</code> and restart the WebUI.
         </p>
         <a href="/captures/{{ capture.id }}/scene.ply" class="as-btn primary" download>{{ icon('download', 13) }} Download PLY</a>
       </div>

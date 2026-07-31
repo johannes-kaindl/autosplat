@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -22,7 +21,6 @@ from autosplat.webui.state import (
     last_activity_age_s,
     list_captures,
     read_log_tail,
-    review_marker_path,
     sort_captures,
 )
 
@@ -268,6 +266,7 @@ async def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
             "failure": failure,
             "failure_reason": failure_reason,
             "has_prunable": bool(cleanup.prunable_targets(capture.path)),
+            "viewer_available": _viewer_mount_available(request),
         },
     )
 
@@ -280,6 +279,17 @@ def _supersplat_embed_context(request: Request, capture_id: str, has_ply: bool) 
         base = str(request.base_url).rstrip("/")
         embed_url = f"{base}/supersplat/index.html?load={base}/captures/{capture_id}/scene.ply"
     return supersplat_available, embed_url
+
+
+def _viewer_mount_available(request: Request) -> bool:
+    """Whether the /viewer static mount is actually registered.
+
+    Same technique as `_supersplat_embed_context`: ask the running app's
+    routes, not config or the filesystem, so there is exactly one source of
+    truth for "is this bundled viewer here" and it can never disagree with
+    what `app.py`'s mount loop actually did.
+    """
+    return any(getattr(r, "name", None) == "viewer" for r in request.app.routes)
 
 
 @router.get("/{capture_id}/view", response_class=HTMLResponse)
@@ -302,6 +312,40 @@ async def capture_view(request: Request, capture_id: str) -> HTMLResponse:
             "supersplat_available": supersplat_available,
             "embed_url": embed_url,
         },
+    )
+
+
+@router.get("/{capture_id}/walk")
+async def capture_walk(request: Request, capture_id: str) -> Response:
+    """Open the walking viewer on this capture.
+
+    A redirect when the viewer is mounted: viewer.html is served from the
+    /viewer mount and resolves its own relative js/, css/ and vendor/ paths.
+    Walking mode itself is entered by a click inside the viewer — pointer
+    lock requires a user gesture, so no query parameter can start it.
+
+    When the /viewer mount is absent — a bundling defect, not something the
+    user did wrong — this must not redirect into a bare 404 (indistinguishable
+    from "wrong capture ID"). It renders the same kind of fallback card
+    `capture_view` already shows for a missing SuperSplat build, pointing at
+    /system instead.
+    """
+    captures_dir = _captures_dir(request)
+    capture = get_capture(captures_dir, capture_id, _job_runner(request))
+    if capture is None:
+        raise HTTPException(status_code=404, detail=f"Capture '{capture_id}' not found")
+    if not capture.has_ply:
+        raise HTTPException(status_code=409, detail="Capture has no PLY to walk through")
+    if not _viewer_mount_available(request):
+        return _templates(request).TemplateResponse(
+            request,
+            "capture/walk_unavailable.html",
+            {"version": __version__, "capture": capture},
+            status_code=503,
+        )
+    return RedirectResponse(
+        url=f"/viewer/viewer.html?src=/captures/{capture_id}/scene.ply",
+        status_code=307,
     )
 
 
@@ -386,6 +430,7 @@ async def capture_add_video(
                 "log_lines": log_lines,
                 "add_video_error": error,
                 "add_video_path": raw,
+                "viewer_available": _viewer_mount_available(request),
             },
             status_code=400,
         )
@@ -480,32 +525,6 @@ def _prune_after_review(capture_dir: Path, job_runner: JobRunner | None) -> None
     logger.info("review.pruned", capture=capture_dir.name, bytes_reclaimed=result.bytes_reclaimed)
 
 
-def _write_review_marker(capture_dir: Path) -> None:
-    """Mark capture_dir as reviewed against output/scene.ply's current mtime.
-
-    Drops any existing `output/scene.sog` as part of the sign-off. The share
-    runner reuses that SOG whenever its mtime is >= the publish PLY's, and
-    mtime cannot see a *deletion*: "Confirm unchanged" unlinks
-    `scene_reviewed.ply` while `scene.ply`'s mtime never changes, so a SOG
-    built from the cleaned PLY would be reused and keep serving the very
-    scene the user just reverted. Regenerating it costs one compression on
-    the next share; serving the wrong scene is silent and unbounded.
-    """
-    scene_ply = capture_dir / "output" / "scene.ply"
-    (capture_dir / "output" / "scene.sog").unlink(missing_ok=True)
-    marker = review_marker_path(capture_dir)
-    marker.write_text(
-        json.dumps(
-            {
-                "status": "reviewed",
-                "reviewed_at": datetime.now(UTC).isoformat(),
-                "source_ply_mtime": scene_ply.stat().st_mtime,
-            }
-        ),
-        encoding="utf-8",
-    )
-
-
 @router.post("/{capture_id}/review/confirm")
 async def capture_review_confirm(request: Request, capture_id: str) -> RedirectResponse:
     """Mark a capture as reviewed without changing its PLY (publish quality gate)."""
@@ -520,7 +539,7 @@ async def capture_review_confirm(request: Request, capture_id: str) -> RedirectR
     # not linger, or resolve_publish_ply would silently keep serving it.
     reviewed = capture.path / "output" / "scene_reviewed.ply"
     reviewed.unlink(missing_ok=True)
-    _write_review_marker(capture.path)
+    lifecycle.write_review_marker(capture.path)
     _prune_after_review(capture.path, _job_runner(request))
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 
@@ -568,7 +587,7 @@ async def capture_review_upload(
         )
 
     (capture.path / "output" / "scene_reviewed.ply").write_bytes(content)
-    _write_review_marker(capture.path)
+    lifecycle.write_review_marker(capture.path)
     _prune_after_review(capture.path, _job_runner(request))
     return RedirectResponse(url=f"/captures/{capture_id}", status_code=303)
 

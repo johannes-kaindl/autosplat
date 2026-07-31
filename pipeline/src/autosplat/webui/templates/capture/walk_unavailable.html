@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Walk — {{ capture.id[:10] }}{% endblock %}
+
+{% block crumbs %}
+<span class="sep">/</span>
+<a href="/captures/" style="color:var(--fg-tertiary);text-decoration:none">captures</a>
+<span class="sep">/</span>
+<a href="/captures/{{ capture.id }}" style="color:var(--fg-tertiary);text-decoration:none">{{ capture.id[:10] }}</a>
+<span class="sep">/</span>
+<span class="cur">walk</span>
+{% endblock %}
+
+{% block content %}
+{%- from "_icons.html" import icon -%}
+<div class="as-main-inner">
+  <div class="as-page-head">
+    <a href="/captures/{{ capture.id }}" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--signal-circuit);text-decoration:none;margin-bottom:14px">
+      {{ icon('arrow-left', 12) }} captures / {{ capture.id[:10] }}
+    </a>
+    <div class="as-eyebrow"><span>viewer</span></div>
+    <h1 class="as-h1 as-h1-mono">Walking viewer unavailable</h1>
+  </div>
+  <div class="as-card" style="max-width:480px">
+    <div class="as-card-body">
+      <p style="font-family:var(--font-body);font-size:13px;color:var(--fg-secondary);line-height:1.6;margin:0 0 var(--space-4)">
+        The bundled walking-mode viewer was not found. See <a href="/system" style="color:var(--signal-circuit)">/system</a> for
+        where it's expected and what's missing.
+      </p>
+      <a href="/captures/{{ capture.id }}/scene.ply" class="as-btn primary" download>{{ icon('download', 13) }} Download PLY</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

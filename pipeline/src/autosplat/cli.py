@@ -14,7 +14,6 @@ Commands (spec §7):
 
 from __future__ import annotations
 
-import os
 import shutil
 import webbrowser
 from datetime import UTC, datetime
@@ -25,7 +24,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__
+from . import __version__, migration
 from . import cleanup as cleanup_mod
 from . import viewer as viewer_mod
 from .bisection import rescue_via_bisection
@@ -572,15 +571,14 @@ def migrate_storage(
     touch is still listed in the preview, with a label saying why, rather
     than silently disappearing.
     """
-    from autosplat import cleanup as cleanup_mod
-    from autosplat import lifecycle
-
     cfg = _load_or_die(config)
     captures_dir = cfg.paths.captures_dir
     outputs_dir = cfg.export.outputs_dir
     now = datetime.now(UTC)
 
     _refuse_if_unsafe_storage_layout(captures_dir, outputs_dir)
+
+    plan = migration.plan_migration(captures_dir, outputs_dir, now=now)
 
     # Fixed, generous width rather than the ambient terminal size: capture
     # paths are long (nested legacy layouts especially) and truncating them
@@ -591,110 +589,23 @@ def migrate_storage(
     table.add_column("Path")
     table.add_column("What")
     table.add_column("Size", justify="right")
-
-    total = 0
-    skipped = 0  # deliberately-kept rows: active/failed captures, protected outputs/
-    planned: list[tuple[Path, list[Path]]] = []
-
-    capture_dirs = lifecycle.find_capture_dirs(captures_dir)
-
-    # Deliberate last-wins on a basename collision (the real backlog has
-    # repeated names, e.g. two unrelated captures both called
-    # "2026-05-25_A_vor1" under different parents) — flagged below rather
-    # than silently letting an outputs/<name> match resolve against
-    # whichever capture happened to be enumerated last.
-    capture_by_name: dict[str, Path] = {}
-    duplicate_names: set[str] = set()
-    for c in capture_dirs:
-        if c.name in capture_by_name:
-            duplicate_names.add(c.name)
-        capture_by_name[c.name] = c
-
-    for capture_dir in capture_dirs:
-        rel = capture_dir.relative_to(captures_dir)
-        ply = lifecycle.find_ply(capture_dir)
-        if ply is None:
-            # Failed/unfinished capture — colmap/rescue are still needed for
-            # diagnosis or `resume`. Listed (not skipped silently) so the
-            # user can see why it's absent from the reclaim total.
-            skipped += 1
-            table.add_row(str(rel), "[dim]failed — kept (no scene.ply)[/dim]", "—")
-            continue
-
-        # The safety rule itself lives in `lifecycle.reclaimable_targets`, so
-        # every deletion path inherits it (C3). All that is left here is
-        # naming what was kept, which `protected_targets` answers.
-        targets = lifecycle.reclaimable_targets(capture_dir)
-        protected = lifecycle.protected_targets(capture_dir)
-        if not targets and not protected:
-            continue  # genuinely nothing there — nothing to explain
-        protected_note = (
-            f" (kept: {_target_labels(capture_dir, protected)} — holds a nested capture)"
-            if protected
-            else ""
-        )
-        if not targets:
-            # Something was there, but every single target is protected
-            # (e.g. a nested capture buried in rescue/) — list it as kept,
-            # by name, instead of letting the capture vanish from the table
-            # with no explanation.
-            skipped += 1
-            table.add_row(str(rel), f"[dim]kept{protected_note}[/dim]", "—")
-            continue
-        size = lifecycle.bytes_in(targets)
-
-        if lifecycle.recently_active(capture_dir, now=now):
-            skipped += 1
-            table.add_row(
-                str(rel),
-                f"[yellow]active — skipped (in-flight run)[/yellow]{protected_note}",
-                _human_bytes(size),
-            )
-            continue
-
-        total += size
-        planned.append((capture_dir, targets))
-        # A target can be protected even while others on this same capture
-        # are reclaimed normally (a probe that succeeded sits next to
-        # abandoned ones under rescue/) — protected_note names it instead
-        # of letting it disappear from this row with no trace, which is
-        # exactly what hid the round-2 regression until real data surfaced
-        # it.
-        table.add_row(
-            str(rel), f"{_target_labels(capture_dir, targets)}{protected_note}", _human_bytes(size)
-        )
-
-    to_delete: list[Path] = []
-    if outputs_dir.is_dir():
-        for entry in sorted(outputs_dir.iterdir()):
-            if entry.is_symlink() or not entry.is_dir():
-                continue
-            size = lifecycle.bytes_in([entry])
-            owning_capture = capture_by_name.get(entry.name)
-            if owning_capture is not None and lifecycle.find_ply(owning_capture) is not None:
-                total += size
-                to_delete.append(entry)
-                table.add_row(f"outputs/{entry.name}", "duplicate — reclaimed", _human_bytes(size))
-                continue
-            skipped += 1
-            reason = (
-                "orphaned — kept (no capture holds this scene)"
-                if owning_capture is None
-                else "duplicate — kept (capture has no scene.ply yet)"
-            )
-            table.add_row(f"outputs/{entry.name}", f"[dim]{reason}[/dim]", _human_bytes(size))
-
+    for row in plan.rows:
+        what = row.label if row.kind in ("reclaim", "outputs_reclaim") else f"[dim]{row.label}[/dim]"
+        if row.kind == "active":
+            what = f"[yellow]{row.label}[/yellow]"
+        size = _human_bytes(row.size) if row.size else "—"
+        table.add_row(row.display, what, size)
     table_console.print(table)
-    console.print(f"[bold]Reclaimable: {_human_bytes(total)}[/bold]")
-    if skipped:
+    console.print(f"[bold]Reclaimable: {_human_bytes(plan.reclaimable_bytes)}[/bold]")
+    if plan.skipped:
         console.print(
             "[dim]Sizes shown for kept/skipped rows above are informational only — "
             "they are excluded from Reclaimable.[/dim]"
         )
-    if duplicate_names:
+    if plan.duplicate_names:
         console.print(
-            f"[yellow]Warning:[/yellow] {len(duplicate_names)} capture name(s) appear more than "
-            f"once under captures/ ({', '.join(sorted(duplicate_names))}) — outputs/ matching by "
+            f"[yellow]Warning:[/yellow] {len(plan.duplicate_names)} capture name(s) appear more "
+            f"than once under captures/ ({', '.join(plan.duplicate_names)}) — outputs/ matching by "
             "name used whichever one was found last. An outputs/<name> entry may have been "
             "judged redundant (or kept) on the strength of the wrong same-named capture."
         )
@@ -703,131 +614,32 @@ def migrate_storage(
         console.print("Run again with [bold]--apply[/bold] to reclaim.")
         return
 
-    reclaimed = 0
-    failures = 0
-    for capture_dir, targets in planned:
-        try:
-            result = cleanup_mod.prune_intermediates(capture_dir, targets=targets)
-        except Exception as e:  # one failure must not stop the rest of the sweep
-            console.print(f"[red]failed:[/red] {capture_dir} — {e}")
-            failures += 1
-            continue
-        reclaimed += result.bytes_reclaimed
-        if result.failed:
-            failures += len(result.failed)
-            for failed_target in result.failed:
-                console.print(f"[red]failed:[/red] {failed_target}")
-    for entry in to_delete:
-        try:
-            size = lifecycle.bytes_in([entry])
-            shutil.rmtree(entry)
-        except OSError as e:
-            console.print(f"[red]failed:[/red] {entry} — {e}")
-            failures += 1
-            continue
-        reclaimed += size
-
+    result = migration.apply_migration(plan)
+    for failure in result.failures:
+        console.print(f"[red]failed:[/red] {failure}")
     console.print(
-        f"[green]Reclaimed {_human_bytes(reclaimed)}[/green], "
-        f"{skipped} skipped, {failures} failure(s)."
+        f"[green]Reclaimed {_human_bytes(result.reclaimed_bytes)}[/green], "
+        f"{plan.skipped} skipped, {len(result.failures)} failure(s)."
     )
-    if failures:
+    if result.failures:
         raise typer.Exit(EXIT_PIPELINE_FAILURE)
-
-
-def _same_directory(a: Path, b: Path) -> bool:
-    """True if `a` and `b` refer to the same directory on disk.
-
-    Compares filesystem identity (`os.path.samefile` — device + inode)
-    rather than string equality. `Path.resolve()` does NOT case-normalise on
-    macOS's default APFS (case-insensitive but case-preserving): a config
-    typo like `outputs_dir = "/Users/Johannes"` against a real
-    `/Users/johannes` would compare unequal as strings while being the exact
-    same directory on disk — `==` (or `os.path.normcase`, which is a no-op
-    on POSIX platforms including macOS) would miss that; `samefile` doesn't.
-    Falls back to plain equality only when one side doesn't exist yet
-    (`samefile` requires both to), which is safe: there's nothing on disk
-    yet for a nonexistent path to alias with.
-    """
-    try:
-        return os.path.samefile(a, b)
-    except OSError:
-        return a == b
-
-
-def _is_same_or_inside(outer: Path, inner: Path) -> bool:
-    """True if `inner` is `outer` itself, or nested inside it — by
-    filesystem identity (`_same_directory`), so this holds even across a
-    case-insensitive filesystem alias."""
-    if _same_directory(outer, inner):
-        return True
-    return any(_same_directory(outer, ancestor) for ancestor in inner.parents)
 
 
 def _refuse_if_unsafe_storage_layout(captures_dir: Path, outputs_dir: Path) -> None:
     """Refuse rather than let a config typo turn `--apply` into an `rm -rf`.
 
-    Every direct child of `outputs_dir` is a deletion candidate once it
-    matches a fully-exported capture name, so a config where `outputs_dir`
-    resolves to `captures_dir` itself (or an ancestor of it), to $HOME, or to
-    a filesystem root would make this command delete far more than
-    deprecated export copies. `config.py` documents "distinct from
-    captures_dir" as an invariant on `export.outputs_dir`, but nothing
-    enforced it before this check.
-
-    Both nesting directions are refused, because both are destructive:
-    - captures inside outputs — every capture becomes a deletion candidate;
-    - outputs inside captures — `find_capture_dirs` descends into `outputs/`
-      and registers each `outputs/<name>` as a capture of its own (a
-      top-level `scene.ply` satisfies the signature), so the outputs loop
-      then matches an entry against *itself*, sees "a capture of that name
-      exists and has a PLY", and deletes the orphan — the one thing this
-      command must never delete.
+    The containment check itself lives in
+    `migration.refuse_if_unsafe_storage_layout` — this is a thin CLI adapter
+    (Rich console message + `typer.Exit`) around it. `webui/routes/storage.py`
+    is the other caller; it must fail the same way but has neither Rich nor
+    typer available, so it catches `migration.UnsafeStorageLayoutError`
+    directly instead of going through this function.
     """
-    captures_resolved = captures_dir.resolve()
-    outputs_resolved = outputs_dir.resolve()
-
-    if _is_same_or_inside(outputs_resolved, captures_resolved):
-        err_console.print(
-            "[red]Refusing:[/red] paths.captures_dir "
-            f"({captures_resolved}) is the same as, or inside, export.outputs_dir "
-            f"({outputs_resolved}). migrate-storage would delete the captures tree "
-            "itself while treating it as deprecated 'outputs/' copies."
-        )
-        raise typer.Exit(EXIT_USER_ERROR)
-
-    if _is_same_or_inside(captures_resolved, outputs_resolved):
-        err_console.print(
-            "[red]Refusing:[/red] export.outputs_dir "
-            f"({outputs_resolved}) is inside paths.captures_dir "
-            f"({captures_resolved}). migrate-storage would scan its entries as "
-            "captures in their own right and then delete them as redundant "
-            "copies of themselves — including orphans, which are the last "
-            "surviving copy of their scene."
-        )
-        raise typer.Exit(EXIT_USER_ERROR)
-
-    home_resolved = Path.home().resolve()
-    if (
-        _same_directory(outputs_resolved, home_resolved)
-        or outputs_resolved == outputs_resolved.parent
-    ):
-        err_console.print(
-            f"[red]Refusing:[/red] export.outputs_dir ({outputs_resolved}) resolves to your "
-            "home directory or a filesystem root — deleting its children would be catastrophic."
-        )
-        raise typer.Exit(EXIT_USER_ERROR)
-
-
-def _target_labels(capture_dir: Path, targets: list[Path]) -> str:
-    """Name reclaim targets by their path relative to the capture.
-
-    A bare `.name` is ambiguous now that targets can be nested: `share/_tmp`
-    and `rescue/probes` would both read as a single opaque leaf ("_tmp",
-    "probes") in a table whose whole purpose is telling the user exactly what
-    is about to be deleted.
-    """
-    return ", ".join(t.relative_to(capture_dir).as_posix() for t in targets)
+    try:
+        migration.refuse_if_unsafe_storage_layout(captures_dir, outputs_dir)
+    except migration.UnsafeStorageLayoutError as e:
+        err_console.print(f"[red]Refusing:[/red] {e}")
+        raise typer.Exit(EXIT_USER_ERROR) from e
 
 
 def _human_bytes(n: int) -> str:
@@ -1097,6 +909,84 @@ def serve(
         except RuntimeError as exc:
             err_console.print(f"[red]{exc}[/red]")
             raise typer.Exit(EXIT_USER_ERROR) from None
+
+
+@app.command()
+def review(
+    capture_dir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, help="Capture directory to sign off."
+    ),
+    confirm_unchanged: bool = typer.Option(
+        False,
+        "--confirm-unchanged",
+        help="Publish output/scene.ply as-is, without a cleaned upload.",
+    ),
+    upload: Path | None = typer.Option(
+        None,
+        "--upload",
+        exists=True,
+        dir_okay=False,
+        help="A cleaned PLY exported from SuperSplat to publish instead.",
+    ),
+) -> None:
+    """Sign a capture off for publication (publish quality gate).
+
+    The same marker the WebUI writes, through the same function — so a
+    capture reviewed here can be shared there, and vice versa. Exactly one of
+    --confirm-unchanged / --upload is required.
+    """
+    from autosplat.lifecycle import write_review_marker
+
+    if confirm_unchanged == (upload is not None):
+        err_console.print("[red]Pass exactly one of --confirm-unchanged / --upload.[/red]")
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    scene_ply = capture_dir / "output" / "scene.ply"
+    if not scene_ply.exists():
+        err_console.print(f"[red]No output/scene.ply in {capture_dir}[/red]")
+        raise typer.Exit(EXIT_USER_ERROR)
+
+    reviewed_ply = capture_dir / "output" / "scene_reviewed.ply"
+    if upload is not None:
+        content = upload.read_bytes()
+        if not content.startswith(b"ply\n"):
+            err_console.print(f"[red]{upload} does not look like a PLY (no 'ply' header).[/red]")
+            raise typer.Exit(EXIT_USER_ERROR)
+        reviewed_ply.write_bytes(content)
+    else:
+        # A leftover from a previous review cycle would keep being published
+        # by resolve_publish_ply — the WebUI route documents the same trap.
+        reviewed_ply.unlink(missing_ok=True)
+
+    write_review_marker(capture_dir)
+    console.print(f"[green]Reviewed:[/green] {capture_dir.name}")
+
+
+@app.command()
+def share(
+    capture_dir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, help="Reviewed capture directory to share."
+    ),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Override config file."),
+) -> None:
+    """Build a self-hostable share bundle (requires a review first)."""
+    from autosplat.webui.share_runner import UnreviewedCapture, build_share_bundle
+
+    cfg = _load_or_die(config)
+    try:
+        result = build_share_bundle(cfg, capture_dir, capture_dir.name)
+    except UnreviewedCapture as e:
+        err_console.print(f"[red]{e}[/red]")
+        err_console.print("Run: autosplat review <capture> --confirm-unchanged")
+        raise typer.Exit(EXIT_USER_ERROR) from e
+    except Exception as e:
+        err_console.print(f"[red]Share failed:[/red] {e}")
+        raise typer.Exit(EXIT_PIPELINE_FAILURE) from e
+
+    console.print(f"[green]Bundle:[/green] {result.zip_path}")
+    console.print(f"Token: {result.token}")
+    if result.link:
+        console.print(f"Link:  {result.link}")
 
 
 @app.command()

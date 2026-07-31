@@ -13,12 +13,39 @@ Guidance for AI coding agents working in this monorepo.
 | Pfad | Inhalt | Eigene AGENTS.md |
 |---|---|---|
 | `pipeline/` | Lokale Pipeline: Drohnen-/Handheld-Video → trainierter 3D Gaussian Splat (Python, uv, Apple-Silicon-only) | `pipeline/AGENTS.md` |
-| `viewer/` | Statische Viewer-PWA für Gaussian Splats (Vanilla HTML/CSS/JS, kein Build-Step) — geparkt als Entwicklungsviewer | `viewer/AGENTS.md` |
+| `viewer/` | Splat-Viewer mit **Walking-Mode** (First-Person + Kollision) und die Projekt-Website auf Codeberg Pages (Vanilla HTML/CSS/JS, kein Build-Step) | `viewer/AGENTS.md` |
 | `embed/` | Minimaler, embed-fähiger Splat-Viewer: iframe-Seite mit vendored Engine, zero-external | `embed/AGENTS.md` |
 
 **Regel:** Für Arbeit *innerhalb* einer Komponente gilt deren eigene AGENTS.md — dort
 stehen Befehle, Test-Pflichten, Commit-Stil und Architektur-Notizen. Diese Datei regelt
 die Produkt-Ebene darüber.
+
+## Rollen-Charta (ratifiziert 2026-07-29, nicht neu diskutieren)
+
+**AutoSplat.app ist die kanonische Tür.** Jeder Schritt von Import bis Veröffentlichung
+muss dort klickbar sein. Die CLI ist gleichwertig für Automatisierung und Batch, darf aber
+**nie der einzige Weg** zu einem Schritt sein — und umgekehrt.
+
+Die drei Viewer überlappen sich nur beim reinen Anschauen. Jeder hat genau eine Rolle:
+
+| Artefakt | Rolle |
+|---|---|
+| SuperSplat (`pipeline/target/supersplat/dist`, gebündelt) | **bereinigen** — der Editor des Review-Gates |
+| `embed/` | **teilen** — zero-external Runtime in Share-Bundles |
+| `viewer/` | **begehen** — Walking-Mode; dazu die Projekt-Website |
+
+Ein vierter Viewer ist eine Design-Entscheidung, kein Detail. Wer einen hinzufügt, trägt
+ihn hier ein oder lässt es.
+
+**Gebündelte Ressourcen, wie die App sie auflöst** — der WebUI-Mount
+(`resources.viewer_status`/`_root_for`) und alles, was `create_app` und das gepackte
+Bundle anfassen — laufen ausschließlich über `resources.bundled_path()`, nie gegen
+`Path.cwd()`. Ein Finder-Start hat kein sinnvolles CWD; genau daran fehlte jeder DMG bis
+v1.16.0 der Review-Viewer. Reine CLI-Pfade (`autosplat serve --with-supersplat`, die
+Preflight-Warnung vor `process`/`resume`/`add-video`/`rescue`, deren Auto-Open am Ende)
+dürfen einen relativ gesetzten `supersplat_dist_path`-Override weiterhin gegen das
+Arbeitsverzeichnis auflösen — für ein Terminal-Kommando ist das erwartetes Verhalten,
+kein Bug; sie laufen nie im gepackten Bundle.
 
 ## Working in the monorepo
 

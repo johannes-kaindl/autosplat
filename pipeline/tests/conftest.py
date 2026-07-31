@@ -11,8 +11,16 @@ from typing import Any
 
 import pytest
 
+from autosplat import bisection as bisection_mod
 from autosplat import cleanup as cleanup_mod
 from autosplat import cli as cli_mod
+from autosplat import migration as migration_mod
+from autosplat import pipeline as pipeline_mod
+from autosplat import sfm as sfm_mod
+from autosplat import train as train_mod
+from autosplat.webui import share as share_mod
+from autosplat.webui import share_runner as share_runner_mod
+from autosplat.webui.routes import captures as captures_mod
 
 
 @pytest.fixture
@@ -45,16 +53,64 @@ def tmp_capture_dir(tmp_path: Path) -> Path:
 # `tests/test_cli_migrate_storage.py` drives a CLI that rmtrees config-supplied
 # paths — neither was covered while the guard sat under `tests/webui/`.
 #
-# Three entry points are wrapped, covering every way the suite can delete a
-# capture tree: `cleanup.sweep_expired`, `cleanup.prune_intermediates` (which
-# every deletion path except the one below goes through), and `migrate-storage`'s
-# own `shutil.rmtree` on `outputs/` entries, which bypasses `cleanup` entirely.
+# Two `cleanup` functions and nine independent `shutil.rmtree` bindings are
+# wrapped: `cleanup.sweep_expired`, `cleanup.prune_intermediates`, and
+# `shutil.rmtree` bound separately in `cli_mod`, `migration_mod`,
+# `captures_mod`, `share_mod`, `share_runner_mod`, `pipeline_mod`,
+# `bisection_mod`, `sfm_mod` and `train_mod` — each of those nine does its
+# own `import shutil` and so holds its own independent module-level binding;
+# patching fewer than all nine leaves the others' call sites invisible to
+# this guard. This is a known-bindings list, not a proof of completeness —
+# it covers the rmtree call sites identified by audit as of this writing, not
+# a formally verified enumeration of every way the suite could delete a
+# capture tree. A new module that imports `shutil` and calls `rmtree` on a
+# capture path needs its own binding added here. Each binds:
+#   - `cli_mod.shutil`: `cli.py`'s own `clean-bisection-probes` command.
+#   - `migration_mod.shutil`: `migration.apply_migration`'s `outputs_reclaim`
+#     branch — what both `migrate-storage --apply` and the WebUI's
+#     `/storage/reclaim` button call.
+#   - `captures_mod.shutil`: `webui/routes/captures.py`'s `POST
+#     /captures/{id}/delete` — a full capture-tree deletion, not bounded to
+#     any subdirectory.
+#   - `share_mod.shutil`: `webui/share.py`'s `assemble_bundle`, which clears
+#     a stale `share/<token>/` folder before rebuilding it. Bounded to
+#     `share/`.
+#   - `share_runner_mod.shutil`: `webui/share_runner.py`'s
+#     `build_share_bundle`, which clears `share/_tmp/`. Also bounded to
+#     `share/`.
+#   - `pipeline_mod.shutil`: `pipeline.py`'s adaptive-retry colmap wipe and
+#     `add_video_to_capture`'s stale `frames/`, `colmap/`, `training/` wipe —
+#     the latter reachable from production via `POST
+#     /captures/{id}/add-video` → `jobs_runner` → `add_video_to_capture`,
+#     bypassing `prune_intermediates` entirely.
+#   - `bisection_mod.shutil`: `bisection.py`'s single- and multi-video rescue
+#     paths, each of which wipes stale `frames/`, `colmap/`, `training/`
+#     before re-running.
+#   - `sfm_mod.shutil`: `sfm.py`'s `run_colmap` stale-artefact wipe (the
+#     `sparse/` directory) before a fresh COLMAP run.
+#   - `train_mod.shutil`: `train.py`'s brush-staging symlink setup, which
+#     rmtrees a stale non-symlink `staging_dir/sparse` or `staging_dir/images`
+#     before relinking.
+# (round-2 review finding: a self-test asserted on the `cli_mod.shutil`
+# wrapper directly, which made it pass whether or not `migration_mod.shutil`
+# was actually guarded — see
+# `test_guard_blocks_migration_apply_migration_rmtree_outside_the_pytest_temp_root`
+# in `tests/test_cleanup.py`. A later review round found `captures_mod`,
+# `share_mod` and `share_runner_mod` still unguarded one module over — see
+# `test_guard_blocks_capture_delete_route_rmtree_outside_the_pytest_temp_root`
+# in the same file, which drives the production `POST
+# /captures/{id}/delete` route rather than the wrapper. A third round found
+# `pipeline_mod`, `bisection_mod`, `sfm_mod` and `train_mod` rmtree stale
+# capture subdirectories directly, bypassing `prune_intermediates` and this
+# guard both — closed here.)
 # Each call with a path outside pytest's temp root raises immediately — before a
 # single file is touched — and is recorded; `_fail_on_recorded_storage_violations`
 # turns that into a hard test failure even if the raise happened on a background
 # thread whose exception nobody observes.
 
 _SWEEP_THREAD_NAME = "autosplat-grace-sweep"
+_RECLAIM_THREAD_NAME = "autosplat-reclaim"
+_GUARDED_THREAD_NAMES = (_SWEEP_THREAD_NAME, _RECLAIM_THREAD_NAME)
 _violations: list[str] = []
 _violations_lock = threading.Lock()
 
@@ -96,7 +152,7 @@ def _guard_reclaim_never_touches_real_captures(
         return real_prune(capture_dir, **kwargs)
 
     class _GuardedShutil:
-        """Stands in for `shutil` inside `autosplat.cli` only.
+        """Stands in for `shutil` inside `autosplat.cli` and `autosplat.migration`.
 
         Delegates everything but `rmtree`, and re-reads `rmtree` off the real
         module on each call so a test's own `monkeypatch.setattr(shutil,
@@ -104,35 +160,56 @@ def _guard_reclaim_never_touches_real_captures(
         """
 
         def rmtree(self, path: Any, *args: Any, **kwargs: Any) -> Any:
-            _check("migrate-storage shutil.rmtree", path)
+            _check("shutil.rmtree", path)
             return real_shutil.rmtree(path, *args, **kwargs)
 
         def __getattr__(self, name: str) -> Any:
             return getattr(real_shutil, name)
 
+    guarded_shutil = _GuardedShutil()
+
     cleanup_mod.sweep_expired = _guarded_sweep
     cleanup_mod.prune_intermediates = _guarded_prune
-    cli_mod.shutil = _GuardedShutil()  # type: ignore[assignment]
+    cli_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    migration_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    captures_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    share_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    share_runner_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    pipeline_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    bisection_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    sfm_mod.shutil = guarded_shutil  # type: ignore[assignment]
+    train_mod.shutil = guarded_shutil  # type: ignore[assignment]
     try:
         yield
     finally:
         cleanup_mod.sweep_expired = real_sweep_expired
         cleanup_mod.prune_intermediates = real_prune
         cli_mod.shutil = real_shutil
+        migration_mod.shutil = real_shutil
+        captures_mod.shutil = real_shutil
+        share_mod.shutil = real_shutil
+        share_runner_mod.shutil = real_shutil
+        pipeline_mod.shutil = real_shutil
+        bisection_mod.shutil = real_shutil
+        sfm_mod.shutil = real_shutil
+        train_mod.shutil = real_shutil
 
 
 @pytest.fixture(autouse=True)
 def _fail_on_recorded_storage_violations() -> Iterator[None]:
-    """Per test: join any sweep thread it started, then surface a hard failure
-    if the guard above recorded an out-of-temp-dir call.
+    """Per test: join any sweep/reclaim thread it started, then surface a hard
+    failure if the guard above recorded an out-of-temp-dir call.
 
-    The sweep runs on a background daemon thread (task 7), so without the join,
-    a violation recorded just after the test body returns would race this check
-    and could slip past undetected.
+    Both the grace sweep (task 7) and the WebUI reclaim button (task 6) run on
+    a background daemon thread, so without the join, a violation recorded
+    just after the test body returns would race this check and could slip
+    past undetected — doubly so for reclaim, whose `_run()` catches bare
+    `Exception` and stashes it on the job instead of letting it surface, so
+    the `_violations` list is the only signal left once that happens.
     """
     yield
     for thread in threading.enumerate():
-        if thread.name == _SWEEP_THREAD_NAME:
+        if thread.name in _GUARDED_THREAD_NAMES:
             thread.join(timeout=2)
     with _violations_lock:
         violations, _violations[:] = list(_violations), []

@@ -10,13 +10,18 @@ Conventions for AI assistants working in this repo.
 ## What this is
 
 Static viewer PWA for 3D Gaussian Splats. Vanilla HTML/CSS/JS, no build
-step, no runtime dependencies. The PlayCanvas Engine is loaded at
-runtime from the jsDelivr CDN.
+step, no runtime dependencies. The PlayCanvas Engine is vendored
+in-repo (`vendor/playcanvas.mjs`), not loaded from a CDN.
 
-> **Status: geparkt als Entwicklungsviewer (2026-07).** Neue Features und
-> Experimente (Walking-Mode, Collision-Editor, Landing) leben hier; der
-> saubere, produktive Embed-Viewer ist die eigene Komponente `../embed/`
-> (Spec: `pipeline/docs/superpowers/specs/2026-07-14-embed-viewer-design.md`).
+Two jobs live here: the **walking viewer** — First-Person mode with
+collision (`js/walking.js`, `js/collision/*.js`) — is the one thing this
+component can do that neither SuperSplat nor `../embed/` can; and the
+**project website** served from this directory via Codeberg Pages. The
+clean, embeddable viewer for share bundles is the separate component
+`../embed/` (Spec: `pipeline/docs/superpowers/specs/2026-07-14-embed-viewer-design.md`).
+
+`vendor/playcanvas.mjs` muss **byte-identisch** zu `embed/vendor/playcanvas.mjs`
+bleiben — `tests/unit/vendor.test.mjs` prüft das. Beide zusammen aktualisieren.
 
 ## Workflow conventions
 

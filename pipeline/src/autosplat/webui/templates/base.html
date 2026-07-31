@@ -114,6 +114,14 @@
       <span class="ic">{{ icon('book', 15) }}</span>
       <span class="lbl">Source</span>
     </a>
+    <a href="/system/" class="{% if request.url.path.startswith('/system') %}active{% endif %}">
+      <span class="ic">{{ icon('settings', 15) }}</span>
+      <span class="lbl">System</span>
+    </a>
+    <a href="/storage" class="{% if request.url.path.startswith('/storage') %}active{% endif %}">
+      <span class="ic">{{ icon('hard-drive', 15) }}</span>
+      <span class="lbl">Storage</span>
+    </a>
   </nav>
 
   {% if stats is defined and stats %}

@@ -38,6 +38,19 @@ command -v create-dmg >/dev/null 2>&1 || fail "create-dmg missing — 'brew inst
 uv run --group build python -c "import PyInstaller" 2>/dev/null \
   || fail "PyInstaller missing — 'uv sync --group build'"
 
+# A bundle without SuperSplat ships a review gate that can only be answered
+# blind — v1.15.0 through v1.16.0 did exactly that. Fail the build instead.
+readonly SUPERSPLAT_DIST="${REPO_ROOT}/target/supersplat/dist"
+[[ -f "${SUPERSPLAT_DIST}/index.html" ]] \
+  || fail "SuperSplat dist missing at ${SUPERSPLAT_DIST} — run scripts/setup_supersplat.sh"
+
+# viewer/vendor holds the engine + camera-controls copies that make walking
+# mode work offline.
+[[ -f "${REPO_ROOT}/../viewer/vendor/playcanvas.mjs" ]] \
+  || fail "viewer/vendor/playcanvas.mjs missing — see viewer/vendor/README.md"
+[[ -f "${REPO_ROOT}/../viewer/vendor/camera-controls.mjs" ]] \
+  || fail "viewer/vendor/camera-controls.mjs missing — see viewer/vendor/README.md"
+
 cd "${REPO_ROOT}"
 
 log "Cleaning previous build…"

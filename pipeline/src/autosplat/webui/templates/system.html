@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}System{% endblock %}
+
+{% block crumbs %}
+<span class="sep">/</span><span class="cur">system</span>
+{% endblock %}
+
+{% block content %}
+{%- from "_macros.html" import stage_badge -%}
+{%- from "_icons.html" import icon -%}
+<div class="as-main-inner">
+
+  <div class="as-page-head">
+    <div class="as-eyebrow">
+      <span>chamber</span>
+      <span class="sep">·</span>
+      <span>doctor + bundled viewers</span>
+    </div>
+    <h1 class="as-h1">System</h1>
+    <p class="as-sub">What the launcher already checks on every start — external tools and the viewers bundled into the app.</p>
+  </div>
+
+  {% if setup_result == "started" %}
+  <div class="as-card" style="max-width:640px;margin-bottom:var(--space-4)">
+    <div class="as-card-body">
+      <p style="font-family:var(--font-body);font-size:13px;color:var(--fg-primary);margin:0;line-height:1.6">
+        Setup started in a Terminal window. It runs outside this app — this page still shows
+        the state from before it started; reload once Terminal finishes to see the tools appear.
+      </p>
+    </div>
+  </div>
+  {% elif setup_result == "missing_script" %}
+  <div class="as-card" style="max-width:640px;margin-bottom:var(--space-4);border-color:var(--stage-failed)">
+    <div class="as-card-body">
+      <p style="font-family:var(--font-body);font-size:13px;color:var(--stage-failed);margin:0;line-height:1.6">
+        Could not find <code style="font-family:var(--font-mono)">install_deps.sh</code> — setup did not
+        start. This app bundle or dev checkout is missing the install script.
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  <section style="margin-bottom:var(--space-6)">
+    <div style="display:flex;align-items:baseline;margin-bottom:14px;gap:12px">
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:600;margin:0;color:var(--fg-primary)">External tools</h2>
+    </div>
+    <div class="as-tbl-wrap">
+      <table class="as-tbl">
+        <thead>
+          <tr>
+            <th>tool</th>
+            <th>status</th>
+            <th>detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in checks %}
+          <tr>
+            <td class="mono">{{ c.name }}</td>
+            <td>
+              {% if c.status_emoji == 'OK' %}
+                {{ stage_badge('done', label='OK') }}
+              {% elif c.status_emoji == 'MISSING' %}
+                {{ stage_badge('failed', label='MISSING') }}
+              {% else %}
+                {{ stage_badge('ready', label='WARN') }}
+              {% endif %}
+            </td>
+            <td class="dim" style="font-size:11px">{{ c.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-family:var(--font-body);font-size:11px;color:var(--fg-tertiary);line-height:1.6;margin-top:var(--space-3)">
+      Missing required tools are installed by <code style="font-family:var(--font-mono);color:var(--fg-tertiary)">scripts/install_deps.sh</code>,
+      which the app runs in Terminal on first launch.
+    </p>
+
+    {% if missing_tools %}
+    <div class="as-card" style="max-width:640px;margin-top:var(--space-4)">
+      <div class="as-card-body">
+        <p style="font-family:var(--font-body);font-size:12px;color:var(--fg-secondary);line-height:1.6;margin:0 0 var(--space-3)">
+          {{ missing_tools | join(", ") }} {{ "is" if missing_tools | length == 1 else "are" }} missing.
+          Running setup opens a Terminal window and runs
+          <code style="font-family:var(--font-mono)">install_deps.sh</code> via Homebrew there —
+          Homebrew will ask for your password in that window.
+        </p>
+        <form method="post" action="/system/setup">
+          <button type="submit" class="as-btn primary">{{ icon('terminal', 14) }} Run setup</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <div style="display:flex;align-items:baseline;margin-bottom:14px;gap:12px">
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:600;margin:0;color:var(--fg-primary)">Bundled viewers</h2>
+    </div>
+    <div class="as-tbl-wrap">
+      <table class="as-tbl">
+        <thead>
+          <tr>
+            <th>viewer</th>
+            <th>role</th>
+            <th>status</th>
+            <th>path</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in viewers %}
+          <tr>
+            <td class="mono">{{ v.name }}</td>
+            <td class="dim" style="font-size:11px">{{ v.role }}</td>
+            <td>
+              {% if v.present %}
+                {{ stage_badge('done', label='OK') }}
+              {% else %}
+                {{ stage_badge('failed', label='MISSING') }}
+              {% endif %}
+            </td>
+            <td class="mono" style="font-size:11px">{{ v.path }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

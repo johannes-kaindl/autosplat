@@ -157,6 +157,15 @@ async def capture_share_partial(request: Request, capture_id: str) -> HTMLRespon
     )
 
 
+@router.get("/storage-status", response_class=HTMLResponse)
+async def storage_status_partial(request: Request) -> HTMLResponse:
+    return _templates(request).TemplateResponse(
+        request,
+        "partials/storage_status.html",
+        {"job": getattr(request.app.state, "reclaim_job", None)},
+    )
+
+
 @router.get("/capture/{capture_id}/liveness", response_class=HTMLResponse)
 async def capture_liveness_partial(request: Request, capture_id: str) -> HTMLResponse:
     captures_dir = _captures_dir(request)

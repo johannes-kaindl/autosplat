@@ -12,6 +12,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- `/system` page: external tool status (the launcher already ran `doctor` and discarded
+  the result) plus which bundled viewer resolved, and its role. When a required tool is
+  missing, a "Run setup" button re-runs first-run setup (`desktop.run_first_run_setup`)
+  on demand, in a visible Terminal window.
+- `/storage` page: disk usage and reclaimable space by lifecycle state, preview-first,
+  with an explicit apply.
+- "Walk through" on a capture: the walking viewer, previously reachable only by dragging
+  a PLY onto the Pages site, now opens on the capture's own PLY.
+- `autosplat review` and `autosplat share`: the publish path is scriptable.
+
+### Fixed
+- **AutoSplat.app had no review viewer.** `supersplat_dist_path` resolved against the
+  process CWD and was never bundled, so a Finder launch silently rendered no viewer and
+  the mandatory review gate degraded to blind "confirm unchanged". SuperSplat is now
+  bundled (source maps stripped) and `build_app.sh` refuses to build without it.
+- **The review gate could be bypassed below the route.** `ShareJobRunner` would bundle an
+  unreviewed capture; the refusal now lives in `build_share_bundle`, beneath both surfaces.
+- `viewer/` loaded the PlayCanvas engine from a CDN, which would have broken walking mode
+  offline once bundled. The engine is vendored, with a drift test against `embed/vendor`.
+
+### Changed
+- `resources.bundled_path()` is the single resolver for bundled assets.
+- The migrate-storage planner moved out of `cli.py` into `migration.py`; behaviour
+  unchanged.
+
 ---
 
 ## [v1.16.0] — 2026-07-29 — Capture lifecycle & storage retention
