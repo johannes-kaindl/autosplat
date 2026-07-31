@@ -14,7 +14,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - `/system` page: external tool status (the launcher already ran `doctor` and discarded
-  the result) plus which bundled viewer resolved, and its role.
+  the result) plus which bundled viewer resolved, and its role. When a required tool is
+  missing, a "Run setup" button re-runs first-run setup (`desktop.run_first_run_setup`)
+  on demand, in a visible Terminal window.
 - `/storage` page: disk usage and reclaimable space by lifecycle state, preview-first,
   with an explicit apply.
 - "Walk through" on a capture: the walking viewer, previously reachable only by dragging
