@@ -10,7 +10,7 @@ Guidance for AI coding agents working in this repository. Human-facing docs live
 
 ## Offene Konventions-Punkte
 
-- [ ] CORE-GIT-01 — GitHub-Mirror-Remote (`github`) zusaetzlich zu Codeberg-`origin` anlegen.
+- [ ] CORE-GIT-01 — GitHub-Mirror-Remote (`github`) zusaetzlich zum Forgejo-`origin` (git.jkaindl.de) anlegen.
 - [ ] CORE-AGENT-01 — Abschnitt "Abweichungen von der Leitkonvention" in dieser AGENTS.md ergaenzen.
 - [x] CORE-AGENT-04 — obsolet seit 2026-07-16 (CORE-META-14): neue Specs/Plans/Task-Reports leben im
   Coding-Cockpit des Maintainers (maintainer-lokal), nicht mehr im Repo; `docs/superpowers/{specs,plans}/`
@@ -95,7 +95,7 @@ If a change materially alters the surface, update the spec or call out the diver
 - Commits with substantial AI input add the trailer:
   `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`
 - Create new commits; do not amend or force-push without explicit instruction.
-- Remote is Codeberg (Forgejo) at `codeberg.org/jkaindl/autosplat`.
+- Remote is the maintainer's Forgejo instance at `git.jkaindl.de/jkaindl/autosplat`.
 
 ## Scope boundaries
 

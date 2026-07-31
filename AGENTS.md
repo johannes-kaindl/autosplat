@@ -59,8 +59,9 @@ kein Bug; sie laufen nie im gepackten Bundle.
   beides). Historische Tags sind `pipeline-v*` / `viewer-v*`.
 - **Tests vor jedem Commit:** `cd pipeline && uv run pytest -q` bzw.
   `cd viewer && ./tests/run.sh` bzw. `cd embed && ./tests/run.sh`.
-- **Pages-Deploy des Viewers:** `scripts/deploy-pages.sh` (subtree split `viewer/` →
-  `pages`-Branch). Live: `https://jkaindl.codeberg.page/autosplat/`.
+- **Pages-Deploy des Viewers:** `scripts/deploy-pages.sh` (rsync-Snapshot von `viewer/`
+  aus committed HEAD nach `pages.jkaindl.de`; ersetzt den alten Codeberg-Pages-Flow).
+  Live: `https://pages.jkaindl.de/autosplat/`.
 
 ## Memory
 

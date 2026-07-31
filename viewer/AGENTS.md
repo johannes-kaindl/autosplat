@@ -29,11 +29,13 @@ bleiben — `tests/unit/vendor.test.mjs` prüft das. Beide zusammen aktualisiere
   `node:test` with zero deps; e2e uses `puppeteer-core` which is
   auto-installed into `tests/node_modules/` (gitignored). Tests must
   pass before any commit.
-- **Pages deploy:** Codeberg Pages serves the `pages` branch. To
-  publish:
+- **Pages deploy:** the site is served from `pages.jkaindl.de` via
+  rsync — run `scripts/deploy-pages.sh` from the monorepo root. It
+  snapshots `viewer/` from committed HEAD (never the working tree)
+  and replaces the old Codeberg Pages `pages`-branch flow:
   ```bash
   git push origin main
-  git push origin main:pages
+  ../scripts/deploy-pages.sh   # from viewer/, or scripts/deploy-pages.sh from the root
   ```
 - **Commit style:** Conventional Commits — `feat(scope): …`, `fix:`,
   `chore:`, `docs:`, `refactor:`. AI-pair commits get a
@@ -41,9 +43,10 @@ bleiben — `tests/unit/vendor.test.mjs` prüft das. Beide zusammen aktualisiere
 - **No build step.** No bundlers, no transpilation, no npm runtime
   deps. Stay vanilla HTML/CSS/JS (ES modules).
 - **Releases:** annotated tag (`git tag -a vX.Y.Z`), CHANGELOG entry
-  in Keep-a-Changelog format, Codeberg release via the API. See
-  the `codeberg-release-workflow` memory for the `has_releases`
-  quirk on fresh Codeberg repos.
+  in Keep-a-Changelog format, Forgejo release via the API on
+  `git.jkaindl.de`. The `has_releases` quirk on fresh repos (API
+  default `false` — PATCH it before the release POST) applies to
+  Forgejo just as it did on Codeberg.
 
 ## Memory + logs
 
@@ -66,8 +69,8 @@ bleiben — `tests/unit/vendor.test.mjs` prüft das. Beide zusammen aktualisiere
 - `CITATION.cff` — academic citation block.
 - `.editorconfig` — 2-space indent (HTML/CSS/JS), LF, trim trailing
   whitespace (except `.md`).
-- Codeberg repo metadata (description, website, topics) is set via
-  the Gitea API — see the `codeberg-release-workflow` memory.
+- Forgejo repo metadata on `git.jkaindl.de` (description, website,
+  topics) is set via the Gitea-compatible API.
 
 ## Architecture notes
 
