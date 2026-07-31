@@ -70,6 +70,12 @@ The companion **[viewer](../viewer/README.md)** — the other half of this
 monorepo — is a static PWA that renders Gaussian Splats right in the browser —
 drop in a `.ply`, orbit around it, install it as an app. No setup required.
 
+Since v1.17.0 the WebUI and the app open it directly: **Walk through** on a finished capture
+opens that capture in the viewer's first-person walking mode (WASD, collision, `Esc` to leave).
+The same release adds two pages — **System** (external tool status, which bundled viewer resolved
+and its role, plus a button to re-run the dependency setup) and **Storage** (disk usage by capture
+state, what is reclaimable, preview first and an explicit apply).
+
 **▶ Try it live: <https://jkaindl.codeberg.page/autosplat/viewer.html>**
 
 ---
@@ -193,10 +199,23 @@ autosplat doctor                                              # ffmpeg / colmap 
 autosplat compress <ply> [--format sog|spz|ksplat]
 autosplat cleanup-intermediates <capture-dir> [--dry-run]           # v1.15.0+
 autosplat migrate-storage [--config PATH] [--apply]
+autosplat review <capture-dir> --confirm-unchanged | --upload <ply>  # v1.17.0+
+autosplat share  <capture-dir> [--config PATH]                       # v1.17.0+
 autosplat version
 ```
 
 Exit codes: `0` success · `1` user error · `2` pipeline failure · `3` dependency missing.
+
+### Publishing from a script
+
+`autosplat review` records the publish sign-off the WebUI otherwise asks for — either
+`--confirm-unchanged` (publish `output/scene.ply` as is) or `--upload <cleaned.ply>` (publish a
+PLY you cleaned in SuperSplat). `autosplat share` then builds the self-hostable bundle and prints
+its token and zip path.
+
+The review gate is enforced **below** both surfaces: `share` refuses an unreviewed capture with a
+non-zero exit, and so does the WebUI's share action. A rebuild (`resume` / `add-video`) changes
+`scene.ply`'s mtime, which silently invalidates the sign-off — review again before sharing.
 
 ### Multi-video capture
 

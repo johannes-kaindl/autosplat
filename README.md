@@ -51,12 +51,18 @@ one release line.
 |---|---|---|
 | [`pipeline/`](pipeline/) | **Capture → splat pipeline** | Drone / handheld video → trained 3D Gaussian Splat. Python · `uv` · COLMAP · Brush (WebGPU). Apple-Silicon-only, macOS 15+. → [`pipeline/README.md`](pipeline/README.md) |
 | [`embed/`](embed/) | **Embeddable splat viewer** | Minimal self-contained iframe page (`index.html?src=…`) with click-to-load gate, auto-framing and a fully vendored PlayCanvas engine — zero external requests. Powers the share bundles. |
-| [`viewer/`](viewer/) | **Splat viewer PWA** (parked development viewer) | Static, installable web app that loads and renders `.ply` / `.sog` splats locally — walking mode, collision editor and landing page live here. Vanilla HTML/CSS/JS, no build step. → [`viewer/README.md`](viewer/README.md) |
+| [`viewer/`](viewer/) | **Walking viewer + project site** | Static, installable web app that loads and renders `.ply` / `.sog` splats locally. Home of the **first-person walking mode** (collision, heightmap) that nothing else has — the app opens it via **Walk through** on a finished capture. Also serves the project site. Vanilla HTML/CSS/JS, no build step, vendored engine. → [`viewer/README.md`](viewer/README.md) |
 
 ```
 video ──▶ pipeline/  ──exports .ply / .sog──▶  embed/ · viewer/  ──▶ fly through it
           (COLMAP → Brush → compress)          (PlayCanvas / WebGL2)
 ```
+
+**One door, three roles.** Since v1.17.0 **AutoSplat.app is the canonical entrance** — every step
+from import to publication is clickable there, and the three viewers each have one job: SuperSplat
+cleans up (the publish review gate), `embed/` ships inside share bundles, `viewer/` is for walking
+through a scene. The CLI is an equal path for automation — including `autosplat review` and
+`autosplat share` — but never the only way to a step.
 
 ## Quickstart
 
