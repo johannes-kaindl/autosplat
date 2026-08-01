@@ -2,7 +2,7 @@
 
 `playcanvas.mjs` and `camera-controls.mjs` — PlayCanvas engine + its camera
 control script, vendored so this viewer needs no CDN: it is bundled into
-AutoSplat.app (walking mode must work offline) and served from Codeberg Pages.
+AutoSplat.app (walking mode must work offline) and served from pages.jkaindl.de.
 
 **Both are copies of `embed/vendor/playcanvas.mjs` and
 `embed/vendor/camera-controls.mjs` and must stay byte-identical.**
@@ -13,4 +13,4 @@ AutoSplat.app (walking mode must work offline) and served from Codeberg Pages.
 
 Two copies rather than one shared file, deliberately: `embed/` is copied
 wholesale into every share bundle and has to be self-contained, and the Pages
-deploy is a `git subtree split` of `viewer/` alone, where `../embed/` is absent.
+deploy is a snapshot of `viewer/` alone, where `../embed/` is absent.

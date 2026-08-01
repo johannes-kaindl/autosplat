@@ -4,7 +4,7 @@
 
 ## Bug reports
 
-Use the [Codeberg issue tracker](https://codeberg.org/jkaindl/autosplat/issues) — the bug-report and feature-request templates in `.gitea/issue_template/` prompt for everything below.
+Use the [issue tracker](https://git.jkaindl.de/jkaindl/autosplat/issues) — the bug-report and feature-request templates in `.gitea/issue_template/` prompt for everything below.
 
 Please include:
 
@@ -18,7 +18,7 @@ For security-sensitive reports see [`SECURITY.md`](SECURITY.md).
 ## Development setup
 
 ```bash
-git clone https://codeberg.org/jkaindl/autosplat.git
+git clone https://git.jkaindl.de/jkaindl/autosplat.git
 cd autosplat
 uv sync                          # install deps (Python 3.11+, uv-managed)
 uv run pre-commit install        # install pre-commit hooks (ruff + ruff-format on commit, pytest on push)

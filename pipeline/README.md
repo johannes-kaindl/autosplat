@@ -1,8 +1,8 @@
 # autosplat · pipeline
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fcodeberg.org&sort=semver&label=release&color=2ecc71)](https://codeberg.org/jkaindl/autosplat/releases)
-[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/autosplat)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fgit.jkaindl.de&sort=semver&label=release&color=2ecc71)](https://git.jkaindl.de/jkaindl/autosplat/releases)
+[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://git.jkaindl.de/jkaindl/autosplat)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS%2015%2B%20%C2%B7%20Apple%20Silicon-lightgrey)](https://www.apple.com/macos/)
 
@@ -76,7 +76,7 @@ The same release adds two pages — **System** (external tool status, which bund
 and its role, plus a button to re-run the dependency setup) and **Storage** (disk usage by capture
 state, what is reclaimable, preview first and an explicit apply).
 
-**▶ Try it live: <https://jkaindl.codeberg.page/autosplat/viewer.html>**
+**▶ Try it live: <https://pages.jkaindl.de/autosplat/viewer.html>**
 
 ---
 
@@ -141,7 +141,7 @@ recent pipeline feature/fix releases:
 
 ### Option A — the app (DMG)
 
-Grab `AutoSplat.dmg` from the [latest release](https://codeberg.org/jkaindl/autosplat/releases), open it, and drag **AutoSplat** to Applications. The app opens as a normal window; on first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window.
+Grab `AutoSplat.dmg` from the [latest release](https://git.jkaindl.de/jkaindl/autosplat/releases), open it, and drag **AutoSplat** to Applications. The app opens as a normal window; on first run it installs the external tools (ffmpeg, COLMAP, Brush) via Homebrew in a Terminal window.
 
 The app is **Developer ID-signed and Apple-notarized**, so it opens with no Gatekeeper warning — just drag it to Applications and launch.
 
@@ -318,7 +318,7 @@ auto-splat-pipeline/
 │                         # concepts, getting-started, ply-output-format,
 │                         # troubleshooting, phase reports
 ├── .pre-commit-config.yaml  # pytest + ruff + standard hooks
-├── .forgejo/             # Codeberg issue templates (bug_report, feature_request)
+├── .gitea/               # issue templates (bug_report, feature_request)
 ├── CHANGELOG.md          # Keep-A-Changelog release notes
 ├── CITATION.cff          # machine-readable citation metadata
 ├── SECURITY.md           # security-reporting policy
@@ -390,13 +390,13 @@ All failures produce structured JSON events in `state.json` and are visible via 
 
 ## Contributing
 
-Issues and pull requests are welcome at [codeberg.org/jkaindl/autosplat](https://codeberg.org/jkaindl/autosplat). For larger changes, open an issue first to discuss the approach. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for bug-report and PR conventions.
+Issues and pull requests are welcome at [git.jkaindl.de/jkaindl/autosplat](https://git.jkaindl.de/jkaindl/autosplat). For larger changes, open an issue first to discuss the approach. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for bug-report and PR conventions.
 
 ---
 
 ## Project status
 
-Actively maintained by a single maintainer ([@jkaindl](https://codeberg.org/jkaindl)). Apple-Silicon focus. Pull requests for cross-platform support are welcome but not actively pursued by the maintainer.
+Actively maintained by a single maintainer ([@jkaindl](https://git.jkaindl.de/jkaindl)). Apple-Silicon focus. Pull requests for cross-platform support are welcome but not actively pursued by the maintainer.
 
 ---
 

@@ -4,10 +4,10 @@
 > embed-fähige Produktiv-Viewer lebt in [`../embed/`](../embed/).
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fcodeberg.org&sort=semver&label=release&color=2ecc71)](https://codeberg.org/jkaindl/autosplat/releases)
-[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://codeberg.org/jkaindl/autosplat)
-[![Live demo](https://img.shields.io/badge/live-jkaindl.codeberg.page-brightgreen)](https://jkaindl.codeberg.page/autosplat/)
-[![PWA: installable](https://img.shields.io/badge/PWA-installable-5A0FC8.svg)](https://jkaindl.codeberg.page/autosplat/)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fgit.jkaindl.de&sort=semver&label=release&color=2ecc71)](https://git.jkaindl.de/jkaindl/autosplat/releases)
+[![Status: Active](https://img.shields.io/badge/status-active-brightgreen)](https://git.jkaindl.de/jkaindl/autosplat)
+[![Live demo](https://img.shields.io/badge/live-pages.jkaindl.de-brightgreen)](https://pages.jkaindl.de/autosplat/)
+[![PWA: installable](https://img.shields.io/badge/PWA-installable-5A0FC8.svg)](https://pages.jkaindl.de/autosplat/)
 [![No build step](https://img.shields.io/badge/build-vanilla%20HTML%2FCSS%2FJS-lightgrey)](#tech)
 
 > Part of the **[autosplat](../README.md)** monorepo — the browser half. The [pipeline](../pipeline/README.md) produces the splats this viewer renders.
@@ -17,8 +17,8 @@ for the [autosplat pipeline](../pipeline/README.md) and a general-purpose
 splat viewer. Vanilla HTML/CSS/JS, no build step, no upload — everything
 renders locally in the browser.
 
-**▶ Live viewer: <https://jkaindl.codeberg.page/autosplat/viewer.html>**
-· **Service landing: <https://jkaindl.codeberg.page/autosplat/>**
+**▶ Live viewer: <https://pages.jkaindl.de/autosplat/viewer.html>**
+· **Service landing: <https://pages.jkaindl.de/autosplat/>**
 
 > **Status: v1.12.0 — Mobile + Walking-mode + Collision editor.**
 > First-person walk-through with in-browser heightmap collision (and an
@@ -29,12 +29,12 @@ renders locally in the browser.
 ---
 
 <p align="center">
-  <a href="https://jkaindl.codeberg.page/autosplat/viewer.html" title="Open the live viewer">
+  <a href="https://pages.jkaindl.de/autosplat/viewer.html" title="Open the live viewer">
     <img src="assets/og-image.jpg" alt="autosplat viewer — 3D Gaussian Splat rendered live in the browser" width="720" />
   </a>
 </p>
 
-<p align="center"><strong><a href="https://jkaindl.codeberg.page/autosplat/viewer.html">▶ Open the live viewer</a></strong></p>
+<p align="center"><strong><a href="https://pages.jkaindl.de/autosplat/viewer.html">▶ Open the live viewer</a></strong></p>
 
 ---
 
@@ -56,8 +56,8 @@ flowchart LR
 
 Everything in the diagram runs **in the browser**. No upload, no server,
 no account. The PlayCanvas Engine is loaded from the jsDelivr CDN at
-runtime; the rest of the site is plain static files served from Codeberg
-Pages.
+runtime; the rest of the site is plain static files served from
+pages.jkaindl.de.
 
 ---
 
@@ -69,7 +69,7 @@ This viewer is the browser-facing half of the
 handheld video into trained 3D Gaussian Splats on Apple Silicon. The
 pipeline produces the splats; this viewer shows them off and lets anyone
 inspect their own. Both live in one repo:
-<https://codeberg.org/jkaindl/autosplat>.
+<https://git.jkaindl.de/jkaindl/autosplat>.
 
 ---
 
@@ -179,7 +179,7 @@ offline once the shell has been seen.
 ## Quick start (local development)
 
 ```bash
-git clone https://codeberg.org/jkaindl/autosplat.git
+git clone https://git.jkaindl.de/jkaindl/autosplat.git
 cd autosplat/viewer
 
 ./serve.sh                       # → http://localhost:8123/
@@ -203,21 +203,19 @@ for the manual walking-mode smoke checklist and
 
 ---
 
-## Deployment — Codeberg Pages
+## Deployment — pages.jkaindl.de
 
-Codeberg Pages serves the `pages` branch at
-`https://jkaindl.codeberg.page/autosplat/`. The root (`index.html`)
-is the bilingual **service landing**; the splat viewer itself lives at
-`viewer.html`. Both are fully static.
+Caddy serves the site at `https://pages.jkaindl.de/autosplat/`. The root
+(`index.html`) is the bilingual **service landing**; the splat viewer itself
+lives at `viewer.html`. Both are fully static.
 
-Because the viewer is now a subdirectory of the monorepo, the live site
-is published with the repo-root deploy script, which performs a
-`git subtree split` of `viewer/` and force-pushes the result to the
-`pages` branch:
+The live site is published with the repo-root deploy script, which takes a
+clean `git archive` snapshot of the committed `viewer/` subtree and rsyncs it
+to the pages host:
 
 ```bash
 git push origin main                 # push development branch
-../scripts/deploy-pages.sh           # subtree-split viewer/ → pages branch
+../scripts/deploy-pages.sh           # snapshot viewer/ → rsync to pages.jkaindl.de
 ```
 
 All asset paths are relative, so the site works unchanged under the
@@ -258,7 +256,7 @@ See [`SECURITY.md`](SECURITY.md) for the reporting channel and scope.
 ## Citation
 
 Academic / research use — see [`CITATION.cff`](CITATION.cff) or click
-*Cite this repository* on the Codeberg sidebar.
+*Cite this repository* on the repo sidebar.
 
 ## License
 

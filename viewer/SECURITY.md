@@ -9,8 +9,8 @@ user's browser.
 
 The attack surface is therefore narrow:
 
-- The static site served from Codeberg Pages
-  (<https://jkaindl.codeberg.page/autosplat/>)
+- The static site served from pages.jkaindl.de
+  (<https://pages.jkaindl.de/autosplat/>)
 - The service worker (`service-worker.js`) that caches the app shell
 - The runtime import of the PlayCanvas Engine from the jsDelivr CDN
   (`https://cdn.jsdelivr.net/npm/playcanvas@<pinned-version>/+esm`)
@@ -18,7 +18,7 @@ The attack surface is therefore narrow:
   GSplat loader
 
 Notably **out of scope** as a deliverable: any hosted instance other than
-the one at `jkaindl.codeberg.page`. Anyone is free to host the static
+the one at `pages.jkaindl.de`. Anyone is free to host the static
 files themselves under the AGPL.
 
 ## Supported versions
@@ -37,7 +37,7 @@ Preferred channel:
 - Subject line: `[security] autosplat viewer: <short description>`
 
 If you don't get an acknowledgement within 7 days, please open a
-placeholder Codeberg issue titled `Security report pending` (no details)
+placeholder issue titled `Security report pending` (no details)
 and mention you tried email — that flags it without disclosing the
 vulnerability.
 
@@ -57,8 +57,8 @@ This is a solo-maintained, low-traffic project. Realistic timeline:
 - **Acknowledgement:** within 7 days
 - **Triage + fix or mitigation:** best-effort within 30 days for
   high-severity issues
-- **Public disclosure:** after a fix is released and pushed to the
-  `pages` branch, with credit to the reporter unless they request
+- **Public disclosure:** after a fix is released and deployed to
+  pages.jkaindl.de, with credit to the reporter unless they request
   anonymity
 
 ## Out of scope

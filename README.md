@@ -1,7 +1,7 @@
 # autosplat
 
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fcodeberg.org&sort=semver&label=release&color=2ecc71)](https://codeberg.org/jkaindl/autosplat/releases)
-[![Live viewer](https://img.shields.io/badge/live-jkaindl.codeberg.page-2ecc71)](https://jkaindl.codeberg.page/autosplat/)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/autosplat?gitea_url=https%3A%2F%2Fgit.jkaindl.de&sort=semver&label=release&color=2ecc71)](https://git.jkaindl.de/jkaindl/autosplat/releases)
+[![Live viewer](https://img.shields.io/badge/live-pages.jkaindl.de-2ecc71)](https://pages.jkaindl.de/autosplat/)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
 **autosplat turns ordinary video into a 3D Gaussian Splat you can fly through in
@@ -9,14 +9,14 @@ the browser — captured, reconstructed and rendered entirely on your own machin
 No cloud, no GPU server, no upload.**
 
 <p align="center">
-  <a href="https://jkaindl.codeberg.page/autosplat/viewer.html" title="Open the live splat viewer">
+  <a href="https://pages.jkaindl.de/autosplat/viewer.html" title="Open the live splat viewer">
     <img src="pipeline/docs/assets/max_strasse_autobisect_hero.gif" width="760"
          alt="Animated fly-through of a trained 3D Gaussian Splat — Augsburg's old-town street and the St. Ulrich und Afra basilica, reconstructed automatically from a single drone pass and rendered in the browser" />
   </a>
   <br />
   <sub><em>A trained splat flown through in the browser — the <code>max_strasse</code> drone pass,
   reconstructed automatically by the pipeline's auto-bisection rescue (490/493 cameras, 99.4&nbsp;%).<br />
-  <strong><a href="https://jkaindl.codeberg.page/autosplat/viewer.html">▶ Try the live viewer</a></strong> ·
+  <strong><a href="https://pages.jkaindl.de/autosplat/viewer.html">▶ Try the live viewer</a></strong> ·
   <a href="https://www.youtube.com/watch?v=1U-onh-9QNY">▶ Full fly-through (YouTube)</a> ·
   <a href="pipeline/docs/assets/max_strasse_autobisect_hero.mp4">MP4</a> ·
   <a href="pipeline/docs/assets/max_strasse_autobisect_hero.webm">WebM</a></em></sub>
@@ -77,8 +77,8 @@ cd viewer
 ./serve.sh                         # → http://localhost:8123/
 ```
 
-The published viewer is live on Codeberg Pages:
-**<https://jkaindl.codeberg.page/autosplat/>** — drop in a `.ply`, orbit it, or
+The published viewer is live on pages.jkaindl.de:
+**<https://pages.jkaindl.de/autosplat/>** — drop in a `.ply`, orbit it, or
 **▶ walk through it** in first-person.
 
 Each component documents its own deep setup, CLI, and configuration in its own
@@ -91,7 +91,7 @@ cd pipeline && uv run pytest -q     # 448 pipeline unit tests
 cd viewer   && ./tests/run.sh       # 77 viewer unit tests (+ opt-in e2e)
 ```
 
-Publish the viewer to Codeberg Pages (subtree split of `viewer/` → `pages` branch):
+Publish the viewer to pages.jkaindl.de (snapshot of `viewer/` rsynced to the pages host):
 
 ```bash
 scripts/deploy-pages.sh
@@ -103,7 +103,7 @@ scripts/deploy-pages.sh
 autosplat/
 ├─ README.md · CHANGELOG.md · AGENTS.md      product level (this repo)
 ├─ LICENSE · LICENSING.md · CLA.md · SECURITY.md · CITATION.cff · CONTRIBUTING.md
-├─ scripts/deploy-pages.sh                   viewer → Codeberg Pages
+├─ scripts/deploy-pages.sh                   viewer → pages.jkaindl.de
 ├─ pipeline/                                 capture→splat pipeline (own README/CHANGELOG)
 └─ viewer/                                   splat viewer PWA (own README/CHANGELOG)
 ```

@@ -16,7 +16,7 @@ in-repo (`vendor/playcanvas.mjs`), not loaded from a CDN.
 Two jobs live here: the **walking viewer** — First-Person mode with
 collision (`js/walking.js`, `js/collision/*.js`) — is the one thing this
 component can do that neither SuperSplat nor `../embed/` can; and the
-**project website** served from this directory via Codeberg Pages. The
+**project website** served from this directory via pages.jkaindl.de. The
 clean, embeddable viewer for share bundles is the separate component
 `../embed/` (Spec: `pipeline/docs/superpowers/specs/2026-07-14-embed-viewer-design.md`).
 

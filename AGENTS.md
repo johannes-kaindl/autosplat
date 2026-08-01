@@ -13,7 +13,7 @@ Guidance for AI coding agents working in this monorepo.
 | Pfad | Inhalt | Eigene AGENTS.md |
 |---|---|---|
 | `pipeline/` | Lokale Pipeline: Drohnen-/Handheld-Video → trainierter 3D Gaussian Splat (Python, uv, Apple-Silicon-only) | `pipeline/AGENTS.md` |
-| `viewer/` | Splat-Viewer mit **Walking-Mode** (First-Person + Kollision) und die Projekt-Website auf Codeberg Pages (Vanilla HTML/CSS/JS, kein Build-Step) | `viewer/AGENTS.md` |
+| `viewer/` | Splat-Viewer mit **Walking-Mode** (First-Person + Kollision) und die Projekt-Website auf pages.jkaindl.de (Vanilla HTML/CSS/JS, kein Build-Step) | `viewer/AGENTS.md` |
 | `embed/` | Minimaler, embed-fähiger Splat-Viewer: iframe-Seite mit vendored Engine, zero-external | `embed/AGENTS.md` |
 
 **Regel:** Für Arbeit *innerhalb* einer Komponente gilt deren eigene AGENTS.md — dort

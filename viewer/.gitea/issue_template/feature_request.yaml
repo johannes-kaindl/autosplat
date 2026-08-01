@@ -10,7 +10,7 @@ body:
     attributes:
       value: |
         Before you type — the autosplat viewer is deliberately **lean** with clear
-        guardrails (see [`AGENTS.md`](https://codeberg.org/jkaindl/autosplat/src/branch/main/viewer/AGENTS.md)):
+        guardrails (see [`AGENTS.md`](https://git.jkaindl.de/jkaindl/autosplat/src/branch/main/viewer/AGENTS.md)):
 
         - **no** framework (React / Vue / Svelte)
         - **no** build step (Webpack / Vite / esbuild)
@@ -57,7 +57,7 @@ body:
     attributes:
       label: Pre-flight checks
       options:
-        - label: I checked [existing issues](https://codeberg.org/jkaindl/autosplat/issues) for duplicates.
+        - label: I checked [existing issues](https://git.jkaindl.de/jkaindl/autosplat/issues) for duplicates.
           required: true
         - label: I understand the architecture guardrails from AGENTS.md.
           required: true

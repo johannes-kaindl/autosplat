@@ -58,12 +58,12 @@ def test_jobs_renders_ksp(app: FastAPI) -> None:
 
 
 def test_source_renders_ksp(app: FastAPI) -> None:
-    """GET /source → 200, contains AGPL text + Codeberg link."""
+    """GET /source → 200, contains AGPL text + Forgejo link."""
     with TestClient(app) as client:
         r = client.get("/source")
     assert r.status_code == 200
     assert "AGPL-3.0-or-later" in r.text
-    assert "codeberg.org/jkaindl/autosplat" in r.text
+    assert "git.jkaindl.de/jkaindl/autosplat" in r.text
 
 
 def test_static_tokens_css(app: FastAPI) -> None:

@@ -51,10 +51,10 @@ dev = [
 autosplat = "autosplat.cli:app"
 
 [project.urls]
-Homepage = "https://codeberg.org/jkaindl/autosplat"
-Repository = "https://codeberg.org/jkaindl/autosplat"
-Documentation = "https://codeberg.org/jkaindl/autosplat/src/branch/main/pipeline#readme"
-Issues = "https://codeberg.org/jkaindl/autosplat/issues"
+Homepage = "https://git.jkaindl.de/jkaindl/autosplat"
+Repository = "https://git.jkaindl.de/jkaindl/autosplat"
+Documentation = "https://git.jkaindl.de/jkaindl/autosplat/src/branch/main/pipeline#readme"
+Issues = "https://git.jkaindl.de/jkaindl/autosplat/issues"
 
 [build-system]
 requires = ["hatchling"]

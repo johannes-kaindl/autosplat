@@ -26,7 +26,7 @@ def test_source_route_returns_200(app: FastAPI) -> None:
     with TestClient(app) as client:
         response = client.get("/source")
     assert response.status_code == 200
-    assert "codeberg.org" in response.text
+    assert "git.jkaindl.de" in response.text
     assert "AGPL" in response.text
 
 

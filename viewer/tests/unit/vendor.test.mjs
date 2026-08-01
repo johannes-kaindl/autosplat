@@ -32,7 +32,7 @@ function walk(dir) {
 // on purpose, so a new URL anywhere always fails closed until someone vets it
 // and adds it here explicitly.
 const ATTRIBUTION_EXEMPTIONS = new Map([
-  ['viewer.html', new Set(['https://codeberg.org/jkaindl/autosplat'])],
+  ['viewer.html', new Set(['https://git.jkaindl.de/jkaindl/autosplat'])],
   ['js/collision/mc-tables.js', new Set(['http://paulbourke.net/geometry/polygonise/'])],
 ]);
 
@@ -70,7 +70,7 @@ test('no bundled file loads a URL from an external host at runtime', () => {
 test('the vendored engine and camera-controls script have not drifted from embed/', () => {
   // Two copies of these files is a deliberate cost: embed/ is lifted whole
   // into every share bundle and must stay self-contained, and the Pages
-  // deploy is a subtree split of viewer/ alone where ../embed/ does not
+  // deploy is a snapshot of viewer/ alone where ../embed/ does not
   // exist. This test is the only thing standing between two copies and a
   // silent version split. Both vendored files are checked so neither can be
   // updated alone.
