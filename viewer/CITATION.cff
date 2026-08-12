@@ -17,8 +17,8 @@ authors:
     given-names: Johannes
     email: code.jkaindl@mailbox.org
     affiliation: Independent
-repository-code: "https://codeberg.org/jkaindl/autosplat"
-url: "https://jkaindl.codeberg.page/autosplat/"
+repository-code: "https://git.jkaindl.de/jkaindl/autosplat"
+url: "https://pages.jkaindl.de/autosplat/"
 license: AGPL-3.0-or-later
 version: "1.1.1"
 date-released: "2026-05-26"
@@ -44,7 +44,7 @@ references:
     authors:
       - family-names: Kaindl
         given-names: Johannes
-    repository-code: "https://codeberg.org/jkaindl/autosplat"
+    repository-code: "https://git.jkaindl.de/jkaindl/autosplat"
     license: AGPL-3.0-or-later
   - type: software
     title: "PlayCanvas Engine"

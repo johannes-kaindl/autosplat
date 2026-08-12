@@ -14,8 +14,8 @@ authors:
     given-names: Johannes
     email: code.jkaindl@mailbox.org
     affiliation: Independent
-repository-code: "https://codeberg.org/jkaindl/autosplat"
-url: "https://codeberg.org/jkaindl/autosplat"
+repository-code: "https://git.jkaindl.de/jkaindl/autosplat"
+url: "https://git.jkaindl.de/jkaindl/autosplat"
 license: AGPL-3.0-or-later
 version: "1.5.0"
 date-released: "2026-05-27"
