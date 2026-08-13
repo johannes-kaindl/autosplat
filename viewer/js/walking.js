@@ -17,7 +17,9 @@ import {
   robustBounds,
 } from './heightmap.js';
 import { raycast as bvhRaycast, capsuleSweep as bvhCapsuleSweep } from './collision/mesh-bvh.js';
-import { extractSplatPositions } from './splat-data.js';
+import {
+  extractSplatPositions, transformPositions,
+} from './splat-data.js';
 
 const LOOK_SENSITIVITY = 0.0022;  // radians per pixel of mouse movement
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
@@ -102,34 +104,6 @@ function boundsFromEntityAabb(splatEntity, root) {
       max: { x: p.x + 1, y: p.y + 1, z: p.z + 1 },
     };
   } catch { return null; }
-}
-
-function transformPositions(local, entity) {
-  const m = entity.getWorldTransform();
-  const d = m.data;  // column-major: see PlayCanvas Mat4
-  const out = new Float32Array(local.length);
-  for (let i = 0; i < local.length; i += 3) {
-    const x = local[i], y = local[i + 1], z = local[i + 2];
-    out[i]     = d[0] * x + d[4] * y + d[8]  * z + d[12];
-    out[i + 1] = d[1] * x + d[5] * y + d[9]  * z + d[13];
-    out[i + 2] = d[2] * x + d[6] * y + d[10] * z + d[14];
-  }
-  return out;
-}
-
-function boundsFromPositions(positions) {
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-  for (let i = 0; i < positions.length; i += 3) {
-    const x = positions[i], y = positions[i + 1], z = positions[i + 2];
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
-  }
-  return {
-    min: { x: minX, y: minY, z: minZ },
-    max: { x: maxX, y: maxY, z: maxZ },
-  };
 }
 
 export class WalkingMode {

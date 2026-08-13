@@ -3,6 +3,8 @@ import {
   FILLMODE_FILL_WINDOW, RESOLUTION_AUTO
 } from 'playcanvas';
 
+import { pickCollider } from './collision/import-collider.js';
+
 const CAMERA_CONTROLS_URL =
   'https://cdn.jsdelivr.net/npm/playcanvas@2.18.1/scripts/esm/camera-controls.mjs';
 const ORBIT_SPEED = 8; // degrees per second
@@ -46,6 +48,7 @@ export function createViewer(hostElement) {
       onCollisionExit: () => {},
       onCollisionMeshBuilt: () => {},
       setUseMeshCollider: () => {},
+      loadColliderObj: async () => null,
       isUsingMeshCollider: () => false,
       unsupported: true
     };
@@ -144,6 +147,10 @@ export function createViewer(hostElement) {
   let pivotRotationOnEnter = null;
   let lockChangeHandler = null;
   let useMeshCollider = false;  // sticky preference, applied on every walking-enter
+  // An imported collider outlives the collision editor on purpose: closing the
+  // editor destroys CollisionMode, and a collider the user supplied by hand
+  // must not vanish with it.
+  let importedCollider = null;
   const walkEnterListeners = [];
   const walkExitListeners = [];
   const walkModeListeners = [];
@@ -211,11 +218,28 @@ export function createViewer(hostElement) {
 
   function applyWalkingColliderPreference() {
     if (!walkingMode) return;
-    if (useMeshCollider && collisionMode) {
-      const strat = collisionMode.getCollider();
-      if (strat) { walkingMode.setCollider(strat); return; }
-    }
-    walkingMode.setCollider(null); // back to heightmap default
+    const voxelised = (useMeshCollider && collisionMode)
+      ? collisionMode.getCollider()
+      : null;
+    // null → walking falls back to its heightmap default.
+    walkingMode.setCollider(pickCollider(importedCollider, voxelised));
+  }
+
+  /**
+   * Adopt an externally authored collision mesh (OBJ) as the walking collider.
+   * Needs a loaded splat for the world transform, but no collision editor —
+   * if one happens to be open, the mesh is drawn there for a visual check.
+   * Returns a summary, or null if the file carried no faces.
+   */
+  async function loadColliderObj(text) {
+    if (!splatEntity) throw new Error('no-splat-loaded');
+    const { buildImportedCollider } = await import('./collision/import-collider.js');
+    const imported = buildImportedCollider(text, splatPivot ?? splatEntity);
+    if (!imported) return null;
+    importedCollider = imported;
+    collisionMode?.showMesh(imported.mesh);
+    applyWalkingColliderPreference();
+    return { triangles: imported.triangles, bounds: imported.bounds };
   }
 
   function setUseMeshCollider(on) {
@@ -262,6 +286,9 @@ export function createViewer(hostElement) {
       app, camera, splatEntity, splatPivot,
       getSplatPositions: () => splatWorldGeometry(splatEntity, splatPivot),
     });
+    // A collider imported before the editor was opened still deserves its
+    // visual check.
+    if (importedCollider) collisionMode.showMesh(importedCollider.mesh);
     collisionMode.onBuilt((info) => {
       // If walking-mode is up and prefers mesh, the BVH just got rebuilt —
       // hand the fresh one over.
@@ -305,6 +332,7 @@ export function createViewer(hostElement) {
     onCollisionExit(fn) { collisionExitListeners.push(fn); },
     onCollisionMeshBuilt(fn) { collisionBuiltListeners.push(fn); },
     setUseMeshCollider,
+    loadColliderObj,
     isUsingMeshCollider() { return useMeshCollider; },
     // Toggle the orbit/pan/zoom camera controls. Used by the collision editor
     // to stop the camera from spinning (and fighting for pointer-capture)

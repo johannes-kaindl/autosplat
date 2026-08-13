@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  writeObj, rlePack, rleUnpack, encodeSidecar, decodeSidecar,
+  writeObj, readObj, rlePack, rleUnpack, encodeSidecar, decodeSidecar,
 } from '../../js/collision/persist.js';
 
 test('writeObj: single triangle round-trips through parser', () => {
@@ -52,4 +52,58 @@ test('encodeSidecar / decodeSidecar: full round-trip', () => {
 test('decodeSidecar: rejects unsupported version', () => {
   const bad = JSON.stringify({ version: 99, resolution: 4, bounds: {min:[0,0,0],max:[1,1,1]}, iso: 1, densityRLE: [] });
   assert.throws(() => decodeSidecar(bad), /unsupported sidecar version/);
+});
+
+// ---------- readObj ----------
+
+test('readObj: triangle face yields one triangle', () => {
+  const obj = 'v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n';
+  const mesh = readObj(obj);
+  assert.deepEqual(Array.from(mesh.positions), [0, 0, 0, 1, 0, 0, 0, 1, 0]);
+  assert.deepEqual(Array.from(mesh.indices), [0, 1, 2]);
+});
+
+test('readObj: quad face is fan-triangulated into two triangles', () => {
+  const obj = 'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n';
+  const mesh = readObj(obj);
+  assert.equal(mesh.positions.length, 12);
+  assert.deepEqual(Array.from(mesh.indices), [0, 1, 2, 0, 2, 3]);
+});
+
+test('readObj: face references with slashes use the vertex index only', () => {
+  const obj = 'v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1//1 2//2 3//3\n';
+  const mesh = readObj(obj);
+  assert.deepEqual(Array.from(mesh.indices), [0, 1, 2]);
+});
+
+test('readObj: negative face indices count back from the last vertex', () => {
+  const obj = 'v 0 0 0\nv 1 0 0\nv 0 1 0\nf -3 -2 -1\n';
+  const mesh = readObj(obj);
+  assert.deepEqual(Array.from(mesh.indices), [0, 1, 2]);
+});
+
+test('readObj: normals, groups, materials and comments are skipped', () => {
+  const obj = [
+    '# a comment', 'o ground_collision', 'usemtl none',
+    'v 0 0 0', 'vn 0 1 0', 'v 1 0 0', 'vt 0 0', 'v 0 1 0',
+    'g wall_collision', 'f 1 2 3', '',
+  ].join('\n');
+  const mesh = readObj(obj);
+  assert.equal(mesh.positions.length, 9);
+  assert.deepEqual(Array.from(mesh.indices), [0, 1, 2]);
+});
+
+test('writeObj → readObj: geometry survives the round-trip', () => {
+  const positions = new Float32Array([0, 0, 0,  1, 0, 0,  0, 1, 0]);
+  const normals   = new Float32Array([0, 0, 1,  0, 0, 1,  0, 0, 1]);
+  const indices   = new Uint32Array([0, 1, 2]);
+  const mesh = readObj(writeObj({ positions, normals, indices }));
+  assert.deepEqual(Array.from(mesh.positions), Array.from(positions));
+  assert.deepEqual(Array.from(mesh.indices), Array.from(indices));
+});
+
+test('readObj: empty input yields empty buffers, not a crash', () => {
+  const mesh = readObj('');
+  assert.equal(mesh.positions.length, 0);
+  assert.equal(mesh.indices.length, 0);
 });

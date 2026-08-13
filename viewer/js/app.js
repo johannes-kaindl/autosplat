@@ -89,6 +89,28 @@ initDropzone({
     if (file) load(file);
     else showError(`Unsupported: ${badName} — only .ply is allowed`);
   },
+  onCollider: async (text, name) => {
+    try {
+      const summary = await viewer.loadColliderObj?.(text);
+      if (!summary) { showError(`${name}: no faces — not a collision mesh.`); return; }
+      // An imported collider is only useful if walking actually uses it, so
+      // switch the preference on and keep the checkbox honest about it.
+      viewer.setUseMeshCollider?.(true);
+      const box = document.getElementById('coll-use-collider');
+      if (box) box.checked = true;
+      // eslint-disable-next-line no-console
+      console.log('[collision] imported collider:', name,
+        `→ ${summary.triangles} tris`);
+    }
+    catch (err) {
+      if (err?.message === 'no-splat-loaded') {
+        showError('Load a splat before dropping a collision mesh.');
+        return;
+      }
+      console.error('[collision] collider import failed:', err);
+      showError('Collision mesh import failed — file may be malformed.');
+    }
+  },
   onSidecar: async (text, meta = {}) => {
     if (!viewer.isCollisionEditor?.()) {
       try { await viewer.enterCollisionEditor?.(); }

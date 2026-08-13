@@ -1,5 +1,5 @@
-const SHELL = 'autosplat-shell-v17';
-const RUNTIME = 'autosplat-runtime-v17';
+const SHELL = 'autosplat-shell-v18';
+const RUNTIME = 'autosplat-runtime-v18';
 const SHELL_FILES = [
   './', './index.html', './css/style.css',
   './js/app.js', './js/viewer.js', './js/dropzone.js',
@@ -8,7 +8,7 @@ const SHELL_FILES = [
   './js/collision/voxelize.js', './js/collision/mc-tables.js',
   './js/collision/marching-cubes.js', './js/collision/mesh-bvh.js',
   './js/collision/editor.js', './js/collision/persist.js',
-  './js/collision/collision-mode.js',
+  './js/collision/collision-mode.js', './js/collision/import-collider.js',
   './manifest.webmanifest', './assets/og-image.jpg',
   './icons/icon-192.png', './icons/icon-512.png'
 ];

@@ -19,6 +19,37 @@ export function writeObj({ positions, normals, indices }) {
   return out;
 }
 
+/**
+ * Parse an OBJ into the flat buffers `buildBvh(positions, indices)` expects.
+ * Deliberately narrow: only `v` and `f` carry meaning for collision. Faces
+ * with more than three corners are fan-triangulated; everything else in the
+ * file (normals, texcoords, comments, materials) is skipped.
+ */
+export function readObj(text) {
+  const verts = [];
+  const indices = [];
+  for (const line of text.split('\n')) {
+    if (line[0] === 'v' && line[1] === ' ') {
+      const p = line.split(/\s+/);
+      verts.push(+p[1], +p[2], +p[3]);
+    } else if (line[0] === 'f' && line[1] === ' ') {
+      const n = verts.length / 3;
+      const corners = line.trim().split(/\s+/).slice(1)
+        // `v`, `v/vt`, `v/vt/vn` and `v//vn` all start with the vertex index.
+        .map(ref => parseInt(ref, 10))
+        // Negative references count back from the last vertex seen so far.
+        .map(i => (i < 0 ? n + i : i - 1));
+      for (let i = 1; i + 1 < corners.length; i++) {
+        indices.push(corners[0], corners[i], corners[i + 1]);
+      }
+    }
+  }
+  return {
+    positions: new Float32Array(verts),
+    indices: new Uint32Array(indices),
+  };
+}
+
 function fmt(v) {
   // Six decimals is overkill for collision meshes; strip trailing zeros so
   // .obj files compress better and diff cleanly.

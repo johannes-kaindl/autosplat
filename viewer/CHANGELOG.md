@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the same collider can be re-attached on the next page load.
 - New stage-controls button `⬛ Collider` toggles the editor; right-rail
   toolbar on desktop, bottom-sheet on mobile.
+- Import an externally authored collision mesh: drop a `.obj` onto the
+  viewer and it becomes the active walking collider, taking precedence
+  over the voxelised one. Needed for scenes the 64³ grid cannot resolve
+  — a street spanning several hundred metres gets ~6 m voxels, which
+  cannot represent a pavement. The mesh is lifted into splat world space
+  via the same transform the splat positions use, and is drawn in green
+  whenever the collision editor is open, for a visual alignment check.
+  An imported collider outlives the editor: closing the editor no longer
+  silently drops it.
 
 ## [1.1.1] — 2026-05-26
 

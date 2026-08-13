@@ -52,6 +52,16 @@ export class CollisionMode {
   }
 
   /**
+   * Draw a mesh the editor did not produce (an imported collider) so it can
+   * be eyeballed against the splat. Purely visual — ownership of an imported
+   * collider sits in viewer.js, which outlives this editor.
+   */
+  showMesh(mesh) {
+    // Green, so an import is visually distinct from the blue voxel mesh.
+    this._updatePlayCanvasMesh(mesh, new Color(0.35, 0.9, 0.45));
+  }
+
+  /**
    * Load a sidecar — replaces the editor state entirely. Returns a summary
    * `{ tris, iso, resolution }` of the restored state so the caller can log
    * a visible confirmation (sidecar restores are otherwise indistinguishable
@@ -119,7 +129,7 @@ export class CollisionMode {
    * For walking-mode: return a collider strategy or null if no mesh exists.
    */
   getCollider() {
-    if (!this.bvh) return null;
+    if (!this.bvh || !this.editor) return null;
     return { kind: 'mesh', bvh: this.bvh, bounds: this.editor.bounds };
   }
 
@@ -152,7 +162,7 @@ export class CollisionMode {
     }
   }
 
-  _updatePlayCanvasMesh(mesh) {
+  _updatePlayCanvasMesh(mesh, color = new Color(0.4, 0.7, 1.0)) {
     if (this.meshEntity) {
       this.meshEntity.destroy();
       this.meshEntity = null;
@@ -167,7 +177,7 @@ export class CollisionMode {
     pcMesh.update(PRIMITIVE_TRIANGLES);
 
     const mat = new StandardMaterial();
-    mat.diffuse = new Color(0.4, 0.7, 1.0);
+    mat.diffuse = color;
     mat.opacity = 0.35;
     mat.blendType = BLEND_NORMAL;
     mat.cull = CULLFACE_NONE;  // 2-sided so MC normal direction doesn't matter

@@ -2,11 +2,16 @@
 // - .ply: splat file (PlayCanvas SOG loader can't read blob: URLs, so user
 //   uploads are limited to .ply; the bundled demo is SOG over http).
 // - .collision.json: collision-mesh sidecar — routed to onSidecar handler.
+// - .obj: externally authored collision mesh (e.g. from blender-lab) —
+//   routed to onCollider, which turns it into the active walking collider.
 
 const PLY = /\.ply$/i;
 const SIDECAR = /\.collision\.json$/i;
+const OBJ = /\.obj$/i;
 
-export function initDropzone({ stage, hint, fileInput, openButton, onFile, onSidecar }) {
+export function initDropzone({
+  stage, hint, fileInput, openButton, onFile, onSidecar, onCollider,
+}) {
   async function handleFile(file) {
     if (!file) { onFile(null, ''); return; }
     if (SIDECAR.test(file.name)) {
@@ -14,6 +19,10 @@ export function initDropzone({ stage, hint, fileInput, openButton, onFile, onSid
         const text = await file.text();
         onSidecar(text, { name: file.name, size: file.size });
       }
+      return;
+    }
+    if (OBJ.test(file.name)) {
+      if (onCollider) onCollider(await file.text(), file.name);
       return;
     }
     if (PLY.test(file.name)) { onFile(file); return; }

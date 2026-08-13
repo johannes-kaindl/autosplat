@@ -46,3 +46,36 @@ export function extractSplatPositions(splatEntity) {
 
   return null;
 }
+
+/**
+ * Lift model-space positions into world space using an entity's world
+ * transform. Only `getWorldTransform().data` is read, so this stays free of
+ * PlayCanvas types and testable in plain node.
+ */
+export function transformPositions(local, entity) {
+  const m = entity.getWorldTransform();
+  const d = m.data;  // column-major: see PlayCanvas Mat4
+  const out = new Float32Array(local.length);
+  for (let i = 0; i < local.length; i += 3) {
+    const x = local[i], y = local[i + 1], z = local[i + 2];
+    out[i]     = d[0] * x + d[4] * y + d[8]  * z + d[12];
+    out[i + 1] = d[1] * x + d[5] * y + d[9]  * z + d[13];
+    out[i + 2] = d[2] * x + d[6] * y + d[10] * z + d[14];
+  }
+  return out;
+}
+
+export function boundsFromPositions(positions) {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  }
+  return {
+    min: { x: minX, y: minY, z: minZ },
+    max: { x: maxX, y: maxY, z: maxZ },
+  };
+}
