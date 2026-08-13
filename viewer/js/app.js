@@ -174,19 +174,29 @@ viewer.onWalkingEyeChange?.((value) => {
   hud.setEyeHeight(value);
 });
 
-viewer.onLoad?.(() => {
-  hud.showCTA(async () => {
-    try {
-      await viewer.enterWalking?.(input);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[walking] enter failed:', err);
-      const msg = err?.message === 'heightmap-build-failed'
+// The CTA fades after a few seconds of pointer idle, so it cannot be the only
+// way in: dropping a collider or fiddling with the editor outlasts it, and
+// reloading a multi-gigabyte splat to get the button back is not an option.
+// The stage-controls button is the durable entry point; both share this.
+async function enterWalking() {
+  try {
+    await viewer.enterWalking?.(input);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[walking] enter failed:', err);
+    const msg = err?.message === 'no-splat-loaded'
+      ? 'Load a splat before entering walking mode.'
+      : err?.message === 'heightmap-build-failed'
         ? 'Splat has no usable geometry for walking-mode.'
         : 'Could not enter walking mode.';
-      showError(msg);
-    }
-  });
+    showError(msg);
+  }
+}
+
+document.getElementById('btn-walk')?.addEventListener('click', enterWalking);
+
+viewer.onLoad?.(() => {
+  hud.showCTA(enterWalking);
 });
 
 // Re-acquire pointer-lock if it's lost while still in walking-mode (clicking

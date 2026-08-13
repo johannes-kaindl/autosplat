@@ -112,3 +112,21 @@ test('collision editor: HUD enterCollisionUI shows toolbar; wiring fires callbac
   assert.equal(result.hidden, true, 'toolbar hidden after exitCollisionUI');
   await page.close();
 });
+
+test('stage controls: a persistent walk button exists next to the collider one', async () => {
+  const page = await browser.newPage();
+  await page.goto(URL_BASE + '/', { waitUntil: 'domcontentloaded' });
+  const info = await page.evaluate(() => {
+    const btn = document.getElementById('btn-walk');
+    return {
+      present: !!btn,
+      // Must not be a CTA clone that fades — it lives in the control bar.
+      inStageControls: !!document.querySelector('#stage-controls #btn-walk'),
+      label: btn?.textContent?.trim() ?? '',
+    };
+  });
+  assert.ok(info.present, 'btn-walk exists');
+  assert.ok(info.inStageControls, 'btn-walk sits in #stage-controls');
+  assert.match(info.label, /walk/i);
+  await page.close();
+});

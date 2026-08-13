@@ -177,11 +177,16 @@ export class CollisionMode {
     pcMesh.update(PRIMITIVE_TRIANGLES);
 
     const mat = new StandardMaterial();
+    // The scene has no lights — gaussian splats are emissive by nature, so
+    // none were ever added. A lit StandardMaterial therefore renders black,
+    // which is what the collision mesh did: visible, but impossible to judge
+    // alignment against. Drive the colour through emissive instead.
+    mat.useLighting = false;
+    mat.emissive = color;
     mat.diffuse = color;
     mat.opacity = 0.35;
     mat.blendType = BLEND_NORMAL;
     mat.cull = CULLFACE_NONE;  // 2-sided so MC normal direction doesn't matter
-    mat.useLighting = true;
     mat.update();
 
     const meshInstance = new MeshInstance(pcMesh, mat);
