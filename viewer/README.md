@@ -92,8 +92,14 @@ For full per-release notes see [`CHANGELOG.md`](CHANGELOG.md).
   cubes on a 64³ voxel-density grid), voxel-brush-edit it (Add / Remove /
   Iso slider), export as `.obj`, save/reload via JSON sidecar. Can replace
   the heightmap as the walking-mode collider — gives you real walls.
+- **Imported collision mesh** — drop an `.obj` authored elsewhere (e.g.
+  a Blender-built collider) and it becomes the walking collider, taking
+  precedence over the voxelised one. The 64³ grid resolves a single
+  building fine, but a street spanning hundreds of metres gets ~6 m
+  voxels, which cannot represent a pavement.
 - **Drag-and-drop** or file-picker for your own `.ply` splats (or a
-  `.collision.json` sidecar to re-attach a saved collision mesh)
+  `.collision.json` sidecar to re-attach a saved collision mesh, or an
+  `.obj` collision mesh)
 - **Fullscreen mode** — distraction-free, intro overlay hidden; on iPhone
   Safari a CSS pseudo-fullscreen fallback fills the gap left by missing
   Fullscreen API support for non-`<video>` elements
@@ -111,7 +117,10 @@ For full per-release notes see [`CHANGELOG.md`](CHANGELOG.md).
 ## Walking-mode
 
 After a splat loads, a **"▶ Walk through this scene"** prompt appears
-on the stage. Click it to drop into first-person mode. The viewer
+on the stage; it fades after a few seconds of pointer idle. The
+**🚶 Walk** button in the stage controls does the same thing and stays
+put — reloading a multi-gigabyte splat just to get the prompt back is
+not a reasonable ask. The viewer
 builds a 128×128 heightmap from the splat's own point positions
 (~30 ms for 1 M splats) and uses it as the walkable surface.
 
