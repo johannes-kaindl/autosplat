@@ -1,8 +1,18 @@
-# Root-level ignores only — pipeline/ and viewer/ keep their own .gitignore
-# for their respective subtrees.
-
+# Build-Artefakte und Umgebungen der pipeline-/embed-Bäume. Beide Verzeichnisse
+# sind bewusst nicht getrackt (das Repo trägt viewer/); was dort liegt, ist
+# ausschließlich Erzeugtes — 2026-08-14 nachgemessen: kein einziges Quellcode-File
+# außerhalb von .venv/, build/, dist/, target/, __pycache__/ und node_modules/.
 .DS_Store
-**/.DS_Store
 
-# Session-handoff working buffer (kurobot/Claude Code) — not source.
-.remember/
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Erzeugte Baumverzeichnisse
+build/
+dist/
+target/
