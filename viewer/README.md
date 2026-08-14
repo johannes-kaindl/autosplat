@@ -114,6 +114,24 @@ For full per-release notes see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
+## Usage
+
+Open the viewer and **drop a `.ply` or `.sog` splat onto the page** — or use the file
+picker. Nothing is uploaded: the file is read locally and rendered in your browser. A
+bundled demo scene loads on first visit, so there is something to look at before you
+have a capture of your own.
+
+| Action | Input |
+|---|---|
+| Orbit | left-drag |
+| Pan | right-drag |
+| Zoom | mouse wheel |
+| Walk into the scene | the **▶ Walk through this scene** prompt, or the **🚶 Walk** button |
+
+The camera auto-orbits while idle and honours the OS-level `prefers-reduced-motion`
+setting. First-person controls are listed under *Walking-mode* below; installing the
+viewer as an app is described under *Install as an app*.
+
 ## Walking-mode
 
 After a splat loads, a **"▶ Walk through this scene"** prompt appears
@@ -176,8 +194,8 @@ offline once the shell has been seen.
 ## Quick start (local development)
 
 ```bash
-git clone https://codeberg.org/jkaindl/autosplat-viewer.git
-cd autosplat-viewer
+git clone https://git.jkaindl.de/jkaindl/autosplat.git
+cd autosplat/viewer
 
 ./serve.sh                       # → http://localhost:8123/
 ./tests/run.sh                   # unit + e2e
@@ -215,6 +233,24 @@ All asset paths are relative, so the site works under the
 is added to or removed from `SHELL_FILES` so installed clients re-fetch.
 
 ---
+
+## No build step
+
+There is no bundler, no transpiler and no `npm install` between the source and what
+the browser runs: the viewer is plain ES modules, and the one heavy dependency — the
+PlayCanvas Engine — is pulled at runtime from a CDN via importmap rather than vendored
+into a bundle. Three things follow, and each is the reason to keep it that way:
+
+- **A CDN update needs no deploy.** The engine sits outside the cached app shell, so
+  it moves independently of the site.
+- **The repository is the artefact.** What you read is what runs; there is no build
+  output whose provenance you have to trust.
+- **Nothing rots on the shelf.** A static site with zero runtime dependencies still
+  serves years later, when a toolchain of the same age would need archaeology first.
+
+The price is paid knowingly: no tree-shaking, no type checking across modules, and
+the CDN is a third party in the load path (mitigated by the service worker, which
+keeps the shell available offline once seen).
 
 ## Tech
 
